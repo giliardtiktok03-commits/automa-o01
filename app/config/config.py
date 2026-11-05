@@ -612,6 +612,7 @@ def save_config():
     with _config_save_lock:
         config_to_save = dict(_cfg)
         config_to_save["app"] = dict(app)
+        config_to_save["whisper"] = dict(whisper)
         config_to_save["azure"] = dict(azure)
         config_to_save["siliconflow"] = dict(siliconflow)
         config_to_save["minimax_tts"] = dict(minimax_tts)
@@ -670,7 +671,7 @@ def save_config():
 _cfg = load_config()
 diagnostics = _SynchronizedConfig(_cfg.get("diagnostics", {}))
 app = _SynchronizedConfig(_cfg.get("app", {}))
-whisper = _cfg.get("whisper", {})
+whisper = _SynchronizedConfig(_cfg.get("whisper", {}))
 proxy = _cfg.get("proxy", {})
 azure = _SynchronizedConfig(_cfg.get("azure", {}))
 siliconflow = _SynchronizedConfig(_cfg.get("siliconflow", {}))

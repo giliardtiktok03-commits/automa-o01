@@ -33,17 +33,22 @@ def _ensure_model_loaded() -> bool:
     with _model_init_lock:
         if model is not None:
             return True
-        model_path = f"{utils.root_dir()}/models/whisper-{model_size}"
+        # Read settings on first use: the WebUI may select a smaller model after
+        # importing this module. Already loaded models remain until restart.
+        selected_size = config.whisper.get("model_size", model_size)
+        selected_device = config.whisper.get("device", device)
+        selected_compute = config.whisper.get("compute_type", compute_type)
+        model_path = f"{utils.root_dir()}/models/whisper-{selected_size}"
         model_bin_file = f"{model_path}/model.bin"
         if not os.path.isdir(model_path) or not os.path.isfile(model_bin_file):
-            model_path = model_size
+            model_path = selected_size
 
         logger.info(
-            f"loading model: {model_path}, device: {device}, compute_type: {compute_type}"
+            f"loading model: {model_path}, device: {selected_device}, compute_type: {selected_compute}"
         )
         try:
             model = WhisperModel(
-                model_size_or_path=model_path, device=device, compute_type=compute_type
+                model_size_or_path=model_path, device=selected_device, compute_type=selected_compute
             )
         except Exception as e:
             logger.error(

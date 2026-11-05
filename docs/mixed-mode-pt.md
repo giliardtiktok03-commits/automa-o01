@@ -20,6 +20,11 @@ uma fonte a cada cena.
    desejada de cada cena (padrão: 10 segundos).
 5. Mantenha um vídeo por execução. Para este primeiro teste, use o roteiro curto
    já aprovado e mantenha as legendas ativadas para obter tempos mais precisos.
+6. Para narração externa, em **Configurações de Legendas → Provedor de legendas**,
+   escolha **Whisper — transcrever áudio**. Selecione o modelo **small** para um
+   primeiro teste mais leve. O primeiro uso baixa o modelo; se mudar um modelo
+   que já estava carregado, reinicie o MPT. Edge usa os tempos da voz gerada e
+   não fornece tempos para arquivos de áudio enviados.
 
 O Pixabay já possuía integração no MPT. A mudança permite combiná-lo com Pexels
 no mesmo vídeo, em vez de escolher apenas um banco por execução. Configure as
@@ -64,8 +69,12 @@ reiniciado em cada parte. Imagens previstas para passagens históricas têm verb
 reservada antes de gastar o restante com buscas de banco sem resultado.
 
 Se o plano precisar de mais imagens do que o limite permite, o trabalho para
-antes das primeiras encomendas de imagens. Ajuste o limite ou o roteiro para
-prosseguir. Limite zero permite somente cenas de banco; um trecho histórico que
+antes de novas encomendas de imagens e informa quantas são necessárias, o
+limite e quantas solicitações já começaram. O planejamento pelo modelo de texto
+pode ter custo mesmo quando esse bloqueio ocorre. Tente cenas de 15–20 segundos
+para reduzir a quantidade de cenas ou revise o roteiro. Aumente o limite somente
+se aceitar possíveis cobranças adicionais. A duração é desejada: mudanças de
+contexto podem exigir cortes extras. Limite zero permite somente cenas de banco; um trecho histórico que
 exija imagem interromperá a geração em vez de receber uma substituição moderna.
 
 O plano e os arquivos concluídos ficam em `storage/tasks/<id>/mixed-scenes.json`

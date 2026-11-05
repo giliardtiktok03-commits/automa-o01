@@ -251,6 +251,7 @@ _WINDOWS_RESERVED_FILENAMES = frozenset(
 )
 _RUNTIME_CONFIG_SECTIONS = {
     "app": config.app,
+    "whisper": config.whisper,
     "azure": config.azure,
     "chatterbox": config.chatterbox,
     "kokoro": config.kokoro,
@@ -2150,7 +2151,7 @@ def _render_generation_task_snapshot(task_id, task):
         error_params = task.get("error_params") or {}
         if (
             isinstance(error_key, str)
-            and error_key.startswith("codex.")
+            and error_key.startswith(("codex.", "mixed."))
             and isinstance(error_params, Mapping)
         ):
             error = tr(error_key).format(**error_params)
@@ -8796,6 +8797,26 @@ def _render_subtitle_settings(panel, params):
             )
             _set_runtime_config("ui", "subtitle_enabled", params.subtitle_enabled)
             subtitle_settings_disabled = not params.subtitle_enabled
+            provider_labels = {"edge": tr("Subtitle Voice Timings"), "whisper": tr("Subtitle Whisper Transcription")}
+            subtitle_provider = stable_selectbox(
+                tr("Subtitle Provider"), options=["edge", "whisper"],
+                default_value=_saved_ui_choice("subtitle_provider", ["edge", "whisper"], "edge",
+                                                section=config.snapshot_config_with_pending(config.app)),
+                key="subtitle_provider_select", format_func=provider_labels.get,
+                disabled=subtitle_settings_disabled,
+            )
+            _set_runtime_config("app", "subtitle_provider", subtitle_provider)
+            if subtitle_provider == "whisper":
+                selected_whisper = str(config.whisper.get("model_size", "large-v3"))
+                whisper_models = list(dict.fromkeys(["tiny", "base", "small", "medium", "large-v3", selected_whisper]))
+                whisper_model = stable_selectbox(
+                    tr("Whisper Model"), options=whisper_models, default_value=selected_whisper,
+                    key="whisper_model_select", disabled=subtitle_settings_disabled,
+                )
+                _set_runtime_config("whisper", "model_size", whisper_model)
+                st.caption(tr("Whisper Model Help"))
+            else:
+                st.caption(tr("External Audio Subtitle Help"))
             font_names = get_all_fonts()
             saved_font_name = config.ui.get(
                 "font_name", DEFAULT_SUBTITLE_SETTINGS["font_name"]
@@ -9257,10 +9278,11 @@ def _render_generation_controls(
             from app.services import mixed_materials
 
             try:
-                mixed_materials.validate(params, config.snapshot_config_with_pending(config.app))
+                mixed_materials.validate(params, config.snapshot_config_with_pending(config.app),
+                                         external_audio=bool(uploaded_audio_file))
             except mixed_materials.MixedError as exc:
                 _remove_active_generation_task(task_id)
-                st.error(str(exc))
+                st.error(tr(exc.key).format(**exc.params) if exc.key else str(exc))
                 st.stop()
 
         if params.video_source == "pexels" and not config.app.get(

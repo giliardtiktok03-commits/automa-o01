@@ -825,6 +825,15 @@
     "Mixed Scene Duration": "Target scene duration (seconds)",
     "Mixed Materials Help": "Plans scenes from narration and preserves their order. Uses configured Pexels/Pixabay APIs and AI images for historical passages or empty stock searches. Configure image URL, model and key in material source settings. The limit applies to the entire video, including chapters, and counts started requests; failed requests can still incur charges. Without timed subtitles, timing is estimated. Uses hard cuts and normal playback speed. This mode does not visually inspect stock clips.",
     "Mixed Scene Progress": "Scene {current}/{total}",
-    "Mixed Estimated Timing": "Scene timings were estimated from text. Enable timed subtitles for closer narration alignment."
+    "Mixed Estimated Timing": "Scene timings were estimated from text. Enable timed subtitles for closer narration alignment.",
+    "Subtitle Provider": "Subtitle provider",
+    "Subtitle Voice Timings": "Generated voice timings (Edge/Azure)",
+    "Subtitle Whisper Transcription": "Whisper — transcribe audio",
+    "Whisper Model": "Whisper model",
+    "Whisper Model Help": "For an initial computer test, small is lighter than large-v3. First use may download a model and take time. Restart MPT if changing the model after transcription in the current session.",
+    "External Audio Subtitle Help": "Uploaded narration needs Whisper to produce subtitles. Generated-voice timings are not available for external audio files.",
+    "mixed.external_subtitles": "For imported narration with subtitles in mixed mode, select Whisper transcription in Subtitle Settings. Alternatively disable subtitles to use estimated scene timings.",
+    "mixed.image_budget": "The plan needs {required} AI images, but this generation limit is {limit}. Requests already started: {started}. No new images were requested. Increase target scene duration, revise the script, or raise the limit if accepting the additional cost.",
+    "mixed.whisper_failed": "Whisper did not produce timed subtitles for the imported audio. Check the model and transcription logs before retrying. Image generation was not started."
   }
 }

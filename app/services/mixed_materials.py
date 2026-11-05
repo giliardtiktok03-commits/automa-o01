@@ -24,10 +24,24 @@ _HISTORICAL = re.compile(
     r"século\s+(?:XX|XIX|XVIII|XVII|XVI|XV|XIV|XIII|XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)\b|"
     r"\b(?:[1-9]|1\d|20)(?:st|nd|rd|th)?\s+century\b|\b(?:1[0-8]\d{2}|19[0-4]\d)\b", re.I,
 )
+_CURRENT = re.compile(r"\b(?:hoje|atualmente|today|nowadays|present day|século XXI|21st century)\b", re.I)
 
 
 class MixedError(ValueError):
-    pass
+    def __init__(self, message, *, key=None, params=None):
+        super().__init__(message)
+        self.key = key
+        self.params = params or {}
+
+
+class MixedBudgetError(MixedError):
+    def __init__(self, required, limit, started):
+        super().__init__(
+            f"The scene plan exceeds the AI image limit: requires {required}, limit {limit}, "
+            f"requests already started {started}. No new images were requested.",
+            key="mixed.image_budget",
+            params={"required": required, "limit": limit, "started": started},
+        )
 
 
 class SceneChoice(BaseModel):
@@ -53,8 +67,12 @@ def providers(settings=None):
     return result
 
 
-def validate(params, settings=None):
+def validate(params, settings=None, *, external_audio=False):
     settings = config.app if settings is None else settings
+    if ((external_audio or params.custom_audio_file) and params.subtitle_enabled
+            and settings.get("subtitle_provider", "edge") != "whisper"):
+        raise MixedError("Uploaded narration with subtitles requires Whisper; select Whisper or disable subtitles for estimated timing",
+                         key="mixed.external_subtitles")
     if params.video_count != 1:
         raise MixedError("Mixed mode requires one output video")
     if not providers(settings):
@@ -105,8 +123,12 @@ def timeline(script, duration, subtitle_file, desired_duration):
     desired = max(float(desired_duration), duration / 120)
     groups = []
     for (start, end), text in cues:
+        # Absence of a date in the next sentence does not mean that the story
+        # returned to the present. Only explicit present-day cues end a past unit.
+        previous_past = bool(groups and _HISTORICAL.search(groups[-1]["text"]))
         context_change = (groups and len(text.split()) >= 4
-                          and bool(_HISTORICAL.search(text)) != bool(_HISTORICAL.search(groups[-1]["text"])))
+                          and ((_HISTORICAL.search(text) and not previous_past and not _CURRENT.search(text))
+                               or (_CURRENT.search(text) and previous_past)))
         if not groups or start - groups[-1]["start"] >= desired or context_change:
             groups.append({"start": start, "text": text})
         else:
@@ -239,9 +261,11 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         "image_requests": 0, "scenes": _plan(units, script)}
             _save(manifest_file, manifest)
         pending_images = sum(s["source"] == "image" and not s.get("image_file")
+                             and not s.get("image_request_started")
                              for s in manifest["scenes"])
         if manifest["image_requests"] + pending_images > params.mixed_max_images:
-            raise MixedError("The scene plan exceeds the remaining AI image limit; increase the limit or revise the script")
+            raise MixedBudgetError(manifest["image_requests"] + pending_images,
+                                   params.mixed_max_images, manifest["image_requests"])
         output_paths, records, used = [], [], set()
         available = providers()
         stock_turn = 0

@@ -284,3 +284,70 @@ def test_current_century_is_not_forced_into_a_historical_reconstruction(setup):
                            "start_frame": 0, "end_frame": 300}], "Café atual")
     assert scenes[0]["source"] == "stock"
     assert scenes[0]["context"] == "current"
+
+
+def test_budget_failure_reports_the_exact_required_limit_and_started_counts(setup):
+    _, subtitles, params, _, _, images, _ = setup
+    params.mixed_max_images = 0
+    with pytest.raises(mixed.MixedBudgetError) as captured:
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert captured.value.key == "mixed.image_budget"
+    assert captured.value.params == {"required": 1, "limit": 0, "started": 0}
+    images.assert_not_called()
+
+
+def test_imported_narration_requires_whisper_before_script_audio_or_scene_calls(setup, monkeypatch):
+    from app.services import task as tm
+    _, _, params, model, _, images, _ = setup
+    params.custom_audio_file = "narration.mp3"
+    params.subtitle_enabled = True
+    script = Mock()
+    audio = Mock()
+    monkeypatch.setattr(tm, "generate_script", script)
+    monkeypatch.setattr(tm, "generate_audio", audio)
+    result = tm.start("external", params)
+    assert result["failed_stage"] == "preflight"
+    assert result["error_key"] == "mixed.external_subtitles"
+    script.assert_not_called()
+    audio.assert_not_called()
+    model.assert_not_called()
+    images.assert_not_called()
+
+
+def test_budget_failure_is_a_material_failure_not_a_truthy_material_list(setup):
+    from app.services import task as tm
+    _, subtitles, params, _, _, images, _ = setup
+    params.mixed_max_images = 0
+    result = tm.get_video_materials("job", params, [], 30, mixed_script=SCRIPT, mixed_subtitle=str(subtitles))
+    assert result is None
+    failure = tm.sm.state.get_task("job")
+    assert failure["failed_stage"] == "materials"
+    assert failure["error_key"] == "mixed.image_budget"
+    assert failure["error_params"]["required"] == 1
+    images.assert_not_called()
+
+
+def test_failed_whisper_stops_before_paid_scene_planning(setup, monkeypatch):
+    from app.services import task as tm
+    _, _, params, model, _, images, _ = setup
+    params.custom_audio_file = "narration.mp3"
+    params.subtitle_enabled = True
+    monkeypatch.setitem(mixed.config.app, "subtitle_provider", "whisper")
+    monkeypatch.setattr(tm, "generate_audio", lambda *args, **kwargs: ("narration.mp3", 30, None))
+    monkeypatch.setattr(tm, "generate_subtitle", lambda *args, **kwargs: "")
+    result = tm.start("external", params)
+    assert result["failed_stage"] == "subtitle"
+    assert result["error_key"] == "mixed.whisper_failed"
+    model.assert_not_called()
+    images.assert_not_called()
+
+
+def test_neutral_sentences_do_not_split_a_continuing_historical_passage(tmp_path):
+    subtitles = tmp_path / "continuous-history.srt"
+    subtitles.write_text(
+        "1\n00:00:00,000 --> 00:00:04,000\nNo século XIX, o café se expandiu.\n\n"
+        "2\n00:00:04,000 --> 00:00:08,000\nEssa expansão estimulou ferrovias e cidades.\n\n"
+        "3\n00:00:08,000 --> 00:00:12,000\nO trabalho de pessoas escravizadas sustentava as lavouras.\n\n", encoding="utf-8")
+    units, _ = mixed.timeline("", 12, str(subtitles), 20)
+    assert len(units) == 1
+    assert "ferrovias" in units[0]["text"]

@@ -570,3 +570,15 @@ class TestSubtitleService(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_whisper_reads_model_selected_after_module_import(monkeypatch):
+    from unittest.mock import Mock
+    constructor = Mock()
+    monkeypatch.setattr(subtitle, "model", None)
+    monkeypatch.setattr(subtitle, "WhisperModel", constructor)
+    monkeypatch.setattr(subtitle.config, "whisper", {"model_size": "small", "device": "cpu", "compute_type": "int8"})
+    monkeypatch.setattr(subtitle.os.path, "isdir", lambda _: False)
+    assert subtitle._ensure_model_loaded()
+    assert constructor.call_args.kwargs["model_size_or_path"] == "small"
+    assert constructor.call_args.kwargs["compute_type"] == "int8"

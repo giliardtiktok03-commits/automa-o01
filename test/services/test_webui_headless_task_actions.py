@@ -115,3 +115,18 @@ def test_mixed_mode_shows_budget_and_forces_narrative_order(headless_task_app, m
     assert app.slider(key="mixed_scene_duration").value == 10
     assert app.checkbox(key="match_materials_to_script").value is True
     assert app.checkbox(key="match_materials_to_script").disabled
+
+
+def test_subtitle_settings_offer_whisper_and_a_small_model(headless_task_app, monkeypatch):
+    app, _ = headless_task_app
+    monkeypatch.setitem(config.app, "subtitle_provider", config.app.get("subtitle_provider", "edge"))
+    monkeypatch.setitem(config.whisper, "model_size", config.whisper.get("model_size", "large-v3"))
+    language = app.session_state["ui_language"]
+    app.selectbox(key=f"subtitle_provider_select_{language}").set_value("whisper")
+    app.run()
+    assert not app.exception
+    app.selectbox(key=f"whisper_model_select_{language}").set_value("small")
+    app.run()
+    assert not app.exception
+    assert config.app["subtitle_provider"] == "whisper"
+    assert config.whisper["model_size"] == "small"

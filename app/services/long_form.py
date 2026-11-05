@@ -28,7 +28,7 @@ def validate(params, *, external_audio=False):
     if params.video_source == "mixed":
         from app.services import mixed_materials
 
-        mixed_materials.validate(params)
+        mixed_materials.validate(params, external_audio=external_audio)
     if params.video_count != 1:
         raise ValueError("Chapter mode generates one final video; set video_count=1")
     has_audio = bool(params.custom_audio_file) or external_audio

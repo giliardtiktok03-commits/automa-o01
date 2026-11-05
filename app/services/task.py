@@ -741,7 +741,13 @@ def get_video_materials(
     if params.video_source == "mixed":
         from app.services import mixed_materials
 
-        return mixed_materials.prepare(task_id, params, mixed_script, audio_duration, mixed_subtitle)
+        try:
+            return mixed_materials.prepare(task_id, params, mixed_script, audio_duration, mixed_subtitle)
+        except (mixed_materials.MixedError, material.OpenAIImagePaidResultError) as exc:
+            details = ({"error_key": exc.key, "error_params": exc.params}
+                       if getattr(exc, "key", None) else None)
+            _mark_task_failed(task_id, "materials", str(exc), details=details)
+            return None
     elif params.video_source == "local":
         logger.info("\n\n## preprocess local materials")
         materials = video.preprocess_video(
@@ -1585,7 +1591,11 @@ def _run_pipeline(
     if getattr(params, "video_source", None) == "mixed":
         from app.services import mixed_materials
 
-        mixed_materials.validate(params)
+        try:
+            mixed_materials.validate(params)
+        except mixed_materials.MixedError as exc:
+            details = {"error_key": exc.key, "error_params": exc.params} if exc.key else None
+            return _mark_task_failed(task_id, "preflight", str(exc), details=details)
 
     if stop_at == "video" and params.subtitle_enabled:
         try:
@@ -1850,6 +1860,10 @@ def _run_pipeline(
         task_id, params, video_script, sub_maker, audio_file,
         **({"correct_to_script": False} if preserve_audio_subtitles else {}),
     )
+    if (getattr(params, "video_source", None) == "mixed" and params.custom_audio_file
+            and params.subtitle_enabled and not subtitle_path):
+        return _mark_task_failed(task_id, "subtitle", "Whisper did not produce timed subtitles for the imported narration",
+                                 details={"error_key": "mixed.whisper_failed", "error_params": {}})
 
     if stop_at == "subtitle":
         if not subtitle_path:

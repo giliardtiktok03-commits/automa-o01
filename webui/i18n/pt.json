@@ -570,6 +570,15 @@
     "Mixed Scene Duration": "Duração desejada de cada cena (segundos)",
     "Mixed Materials Help": "Planeja as cenas pela narração e mantém a ordem. Usa as APIs de Pexels/Pixabay que tiverem chave configurada e imagens IA para passagens históricas ou buscas sem resultado. Configure a URL, o modelo e a chave de imagens em Configurar fontes de material. O limite vale para o vídeo inteiro, incluindo os capítulos, e conta solicitações iniciadas. Podem existir cobranças mesmo se uma solicitação falhar. Sem legendas temporizadas, os tempos são estimados. As cenas usam cortes simples e velocidade normal. Este modo não faz inspeção visual automática dos clipes encontrados.",
     "Mixed Scene Progress": "Cena {current}/{total}",
-    "Mixed Estimated Timing": "Os tempos das cenas foram estimados pelo texto. Ative legendas temporizadas para alinhar melhor com a voz."
+    "Mixed Estimated Timing": "Os tempos das cenas foram estimados pelo texto. Ative legendas temporizadas para alinhar melhor com a voz.",
+    "Subtitle Provider": "Provedor de legendas",
+    "Subtitle Voice Timings": "Tempos da voz gerada (Edge/Azure)",
+    "Subtitle Whisper Transcription": "Whisper — transcrever áudio",
+    "Whisper Model": "Modelo Whisper",
+    "Whisper Model Help": "Para o primeiro teste no computador, small é uma opção mais leve que large-v3. O primeiro uso pode baixar o modelo e demorar. Se trocar o modelo depois de já transcrever nesta sessão, reinicie o MPT para aplicar.",
+    "External Audio Subtitle Help": "Narração enviada pelo usuário precisa do Whisper para gerar legendas. Os tempos da voz gerada não estão disponíveis em arquivos externos.",
+    "mixed.external_subtitles": "Para usar áudio externo com legendas no modo misto, selecione Whisper — transcrever áudio em Configurações de Legendas. Se preferir desativar legendas, os tempos das cenas serão estimados.",
+    "mixed.image_budget": "O plano exige {required} imagens de IA, mas o limite desta geração é {limit}. Solicitações já iniciadas: {started}. Nenhuma nova imagem foi solicitada. Você pode aumentar a duração desejada das cenas, revisar o roteiro ou aumentar o limite se aceitar o custo adicional.",
+    "mixed.whisper_failed": "O Whisper não produziu legendas temporizadas para o áudio enviado. Verifique o modelo e o erro de transcrição nos logs antes de tentar novamente. A geração de imagens não foi iniciada."
   }
 }
