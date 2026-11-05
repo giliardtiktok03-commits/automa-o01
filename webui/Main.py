@@ -2129,6 +2129,11 @@ def _render_generation_task_snapshot(task_id, task):
         ))
         if task.get("mixed_timing") == "estimated":
             st.caption(tr("Mixed Estimated Timing"))
+    if isinstance(task.get("mixed_source_counts"), Mapping):
+        counts = task["mixed_source_counts"]
+        st.caption(tr("Mixed Source Counts").format(**{
+            name: counts.get(name, 0) for name in ("pexels", "pixabay", "coverr", "openai_image")
+        }))
     if task.get("chapter_count"):
         st.caption(tr("Chapter Progress").format(
             current=task.get("current_chapter", 0), total=task["chapter_count"],

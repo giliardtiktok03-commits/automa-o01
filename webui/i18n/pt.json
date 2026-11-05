@@ -565,10 +565,10 @@
     "Reference Title Analysis": "Análise do título de referência",
     "Reference Narrative Format": "Formato narrativo",
     "Mixed Materials": "Modo misto",
-    "Mixed Material Source": "Misto: Pexels + Pixabay + imagens IA",
+    "Mixed Material Source": "Misto: Pexels + Pixabay + Coverr + imagens IA",
     "Mixed Image Limit": "Máximo de imagens IA no vídeo completo",
     "Mixed Scene Duration": "Duração desejada de cada cena (segundos)",
-    "Mixed Materials Help": "Planeja as cenas pela narração e mantém a ordem. Usa as APIs de Pexels/Pixabay que tiverem chave configurada e imagens IA para passagens históricas ou buscas sem resultado. Configure a URL, o modelo e a chave de imagens em Configurar fontes de material. O limite vale para o vídeo inteiro, incluindo os capítulos, e conta solicitações iniciadas. Podem existir cobranças mesmo se uma solicitação falhar. Sem legendas temporizadas, os tempos são estimados. As cenas usam cortes simples e velocidade normal. Este modo não faz inspeção visual automática dos clipes encontrados.",
+    "Mixed Materials Help": "Prioriza vídeos de Pexels, Pixabay e Coverr com chave configurada. Trechos históricos podem usar detalhes de apoio sem elementos de época; IA fica reservada às reconstituições necessárias. O plano permite até 25% das cenas com IA (mínimo de uma cena permitido em vídeos curtos), além do limite de solicitações abaixo. Buscas sem resultado interrompem a tarefa sem encomendar imagens extras. O planejamento de texto pode ter custo. Configure a API de imagens nas fontes de material. O limite de solicitações vale para o vídeo inteiro, inclusive capítulos; falhas podem ser cobradas. Sem legendas temporizadas, os tempos são estimados. Usa cortes simples e velocidade normal. Não faz inspeção visual automática dos clipes.",
     "Mixed Scene Progress": "Cena {current}/{total}",
     "Mixed Estimated Timing": "Os tempos das cenas foram estimados pelo texto. Ative legendas temporizadas para alinhar melhor com a voz.",
     "Subtitle Provider": "Provedor de legendas",
@@ -579,6 +579,9 @@
     "External Audio Subtitle Help": "Narração enviada pelo usuário precisa do Whisper para gerar legendas. Os tempos da voz gerada não estão disponíveis em arquivos externos.",
     "mixed.external_subtitles": "Para usar áudio externo com legendas no modo misto, selecione Whisper — transcrever áudio em Configurações de Legendas. Se preferir desativar legendas, os tempos das cenas serão estimados.",
     "mixed.image_budget": "O plano exige {required} imagens de IA, mas o limite desta geração é {limit}. Solicitações já iniciadas: {started}. Nenhuma nova imagem foi solicitada. Você pode aumentar a duração desejada das cenas, revisar o roteiro ou aumentar o limite se aceitar o custo adicional.",
-    "mixed.whisper_failed": "O Whisper não produziu legendas temporizadas para o áudio enviado. Verifique o modelo e o erro de transcrição nos logs antes de tentar novamente. A geração de imagens não foi iniciada."
+    "mixed.whisper_failed": "O Whisper não produziu legendas temporizadas para o áudio enviado. Verifique o modelo e o erro de transcrição nos logs antes de tentar novamente. A geração de imagens não foi iniciada.",
+    "mixed.stock_priority": "O plano reservou {images} de {total} cenas para IA, acima do máximo de {limit} neste modo que prioriza bancos. Nenhuma nova imagem foi solicitada. Revise o roteiro/plano visual para usar cenas de apoio sem elementos de época ou tente uma nova tarefa. O planejamento de texto pode ter custo.",
+    "mixed.stock_missing": "Não foi possível obter um clipe dos bancos para a cena {scene}. A tarefa parou sem gerar uma imagem IA para substituí-lo. Confira as chaves, os resultados e os logs das buscas antes de tentar novamente.",
+    "Mixed Source Counts": "Cenas utilizadas — Pexels: {pexels} · Pixabay: {pixabay} · Coverr: {coverr} · IA: {openai_image}"
   }
 }

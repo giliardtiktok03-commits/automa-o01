@@ -128,21 +128,13 @@ def test_a_failed_stock_provider_falls_back_to_the_other_bank(setup):
     assert images.call_count == 1
 
 
-def test_stock_only_scene_falls_back_to_image_within_budget(setup):
-    folder, subtitles, params, _, search, images, _ = setup
-    search.side_effect = lambda provider, method, query, *args: [] if query.endswith("1") else [MaterialInfo(provider=provider, url="https://stock.example.test/clip.mp4", duration=10)]
-    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
-    assert images.call_count == 2
-    assert json.loads((folder / "mixed-scenes.json").read_text())["scenes"][0]["provenance"]["provider"] == "openai_image"
-
-
-def test_stock_fallback_does_not_consume_budget_reserved_for_historical_passage(setup):
+def test_failed_stock_search_never_silently_spends_image_budget(setup):
     _, subtitles, params, _, search, images, _ = setup
-    params.mixed_max_images = 1
     search.return_value = []
     search.side_effect = None
-    with pytest.raises(mixed.MixedError, match="reserved"):
+    with pytest.raises(mixed.MixedError) as captured:
         mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert captured.value.key == "mixed.stock_missing"
     images.assert_not_called()
 
 
@@ -351,3 +343,74 @@ def test_neutral_sentences_do_not_split_a_continuing_historical_passage(tmp_path
     units, _ = mixed.timeline("", 12, str(subtitles), 20)
     assert len(units) == 1
     assert "ferrovias" in units[0]["text"]
+
+
+def test_coverr_is_rotated_alongside_pexels_and_pixabay(setup, monkeypatch):
+    folder, _, params, model, search, images, _ = setup
+    monkeypatch.setitem(mixed.config.app, "coverr_api_keys", ["test-coverr"])
+    choices = json.loads(model.return_value)
+    for row in choices:
+        row.update(context="current", period="today", source="image")
+    model.return_value = json.dumps(choices)
+    script = "Hoje torramos café. Hoje embalamos café. Hoje preparamos café."
+    mixed.prepare("job", params, script, 30)
+    assert [call.args[0] for call in search.call_args_list] == ["pexels", "pixabay", "coverr"]
+    assert search.call_args_list[-1].args[1] is mixed.material.search_videos_coverr
+    scenes = json.loads((folder / "mixed-scenes.json").read_text())["scenes"]
+    assert [s["provenance"]["provider"] for s in scenes] == ["pexels", "pixabay", "coverr"]
+    images.assert_not_called()
+    assert mixed.sm.state.get_task("job")["mixed_source_counts"] == {
+        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0}
+
+
+def test_coverr_can_be_the_only_configured_bank(setup, monkeypatch):
+    _, subtitles, params, _, search, _, _ = setup
+    monkeypatch.delitem(mixed.config.app, "pexels_api_keys")
+    monkeypatch.delitem(mixed.config.app, "pixabay_api_keys")
+    monkeypatch.setitem(mixed.config.app, "coverr_api_keys", "test-coverr")
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert all(call.args[0] == "coverr" for call in search.call_args_list)
+
+
+def test_historical_narration_can_use_approved_timeless_stock_details(setup):
+    _, subtitles, params, model, search, images, _ = setup
+    choices = json.loads(model.return_value)
+    choices[1].update(source="image", context="historical", stock_safe=True,
+                      search_query="coffee beans close up", reason="Timeless supporting detail, no depiction of labor")
+    model.return_value = json.dumps(choices)
+    params.mixed_max_images = 0
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert search.call_count == 3
+    images.assert_not_called()
+
+
+def test_stock_search_tries_alternate_query_and_coverr_before_stopping(setup, monkeypatch):
+    _, subtitles, params, model, search, images, _ = setup
+    monkeypatch.setitem(mixed.config.app, "coverr_api_keys", ["test-coverr"])
+    choices = json.loads(model.return_value)
+    choices[0]["alternate_queries"] = ["coffee beans"]
+    model.return_value = json.dumps(choices)
+    search.side_effect = lambda provider, method, query, *args: (
+        [MaterialInfo(provider=provider, url="https://stock.example.test/clip.mp4", duration=10)]
+        if provider == "coverr" and query == "coffee beans" else [])
+    # First scene succeeds on the alternate query at Coverr; second is a reconstruction;
+    # last stock scene then fails and must not trigger more paid requests.
+    with pytest.raises(mixed.MixedError) as captured:
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert captured.value.key == "mixed.stock_missing"
+    assert [(c.args[0], c.args[2]) for c in search.call_args_list[:6]] == [
+        (p, q) for q in ["coffee scene 1", "coffee beans"] for p in ["pexels", "pixabay", "coverr"]]
+    assert images.call_count == 1
+
+
+def test_image_dominated_plan_is_blocked_before_paid_images(setup):
+    _, subtitles, params, model, search, images, _ = setup
+    choices = json.loads(model.return_value)
+    for row in choices:
+        row.update(context="historical", source="image")
+    model.return_value = json.dumps(choices)
+    with pytest.raises(mixed.MixedError) as captured:
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert captured.value.key == "mixed.stock_priority"
+    search.assert_not_called()
+    images.assert_not_called()

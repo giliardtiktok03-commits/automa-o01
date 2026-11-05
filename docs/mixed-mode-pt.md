@@ -1,21 +1,21 @@
-# Modo misto: Pexels + Pixabay + imagens IA
+# Modo misto: Pexels + Pixabay + Coverr + imagens IA
 
 O modo misto planeja cenas a partir das passagens da narração. Ele mantém a
-sequência e pode combinar vídeos dos dois bancos com imagens geradas no mesmo
+sequência e pode combinar vídeos dos bancos com imagens geradas no mesmo
 vídeo final. A alternância depende do contexto, não de uma regra mecânica de
 uma fonte a cada cena.
 
 ## Configuração no Windows
 
 1. Em **Configurar fontes de material**, preencha sua chave do Pexels e sua chave
-   do Pixabay, selecionando cada serviço na seção de bancos de vídeo. Basta um
-   banco configurado para executar; com os dois, o modo distribui as buscas e
+   do Pixabay e da Coverr, selecionando cada serviço na seção de bancos de vídeo. Basta um
+   banco configurado para executar; com mais de um, o modo distribui as buscas e
    tenta a outra fonte quando a primeira não entrega material utilizável.
 2. Na seção de imagens, configure **Texto-para-imagem compatível com OpenAI**:
    endereço real da API, modelo disponível na sua conta e chave quando exigida.
    Os textos cinza de exemplo não contam como valores preenchidos.
 3. Volte a **Configurações do Vídeo → Fonte do Vídeo** e selecione
-   **Misto: Pexels + Pixabay + imagens IA**.
+   **Misto: Pexels + Pixabay + Coverr + imagens IA**.
 4. Escolha o **máximo de imagens IA no vídeo completo** (padrão: 12) e a duração
    desejada de cada cena (padrão: 10 segundos).
 5. Mantenha um vídeo por execução. Para este primeiro teste, use o roteiro curto
@@ -41,18 +41,33 @@ marcadores, agrupando falas próximas. Sem SRT válido, os tempos são estimados
 pela distribuição do texto e a interface informa essa limitação. Não há garantia
 de sincronização exata no modo estimado.
 
-Passagens classificadas como históricas — e menções explícitas a escravidão,
-abolição, séculos ou datas históricas — são direcionadas para ilustrações, em vez
-de clipes modernos de banco. Os prompts pedem contexto de época e evitam prédios,
-roupas, veículos e máquinas contemporâneos. As imagens são reconstituições
-ilustrativas; não constituem documentos históricos autênticos.
+A prioridade é buscar vídeos em Pexels, Pixabay e Coverr, usando somente os
+provedores com chave configurada e alternando a primeira fonte entre as cenas.
+Uma passagem histórica pode usar detalhes de apoio sem elementos de época —
+por exemplo, grãos de café em close. O planejador precisa aprovar explicitamente
+essa opção como segura, sem representar pessoas, trabalho, máquinas ou cidades
+de outra época. Datas e contexto histórico, por si só, não exigem uma imagem IA.
+Quando a cena requer uma reconstituição de época, usa uma ilustração com prompt
+específico. Essas imagens não são documentos históricos autênticos.
 
-Para passagens atuais, as buscas são específicas de cada cena. O modo prioriza
-candidatos ainda não usados quando disponíveis. Se nenhum banco devolver um
-arquivo utilizável, pode gerar uma ilustração, dentro do orçamento disponível.
-Uma busca sem resultado também pode decorrer de falha da API: consulte os logs.
-Não há inspeção visual automática dos clipes nesta versão. A qualidade ainda
-depende dos resultados do banco, do planejamento e do modelo de imagem.
+Para impedir planos dominados por IA, cada plano admite no máximo um quarto das
+cenas com imagens geradas, arredondado para baixo, permitindo uma cena em planos
+curtos. O limite de solicitações configurado continua valendo e pode ser menor.
+Em vídeos por capítulos, a proporção é validada em cada capítulo e o limite de
+solicitações continua compartilhado. A proporção conta cenas, não segundos de vídeo.
+Planos que excedam essa proporção param antes de encomendar imagens; o
+planejamento de texto pode ter custo. Novas tarefas usam essa política; não
+reutilize IDs de checkpoints anteriores à atualização.
+
+As buscas tentam todos os bancos disponíveis e até duas consultas alternativas
+aprovadas para a mesma cena. Sem um arquivo utilizável, o trabalho interrompe
+com aviso: **uma busca vazia ou falha de API não encomenda uma imagem IA extra**.
+Os logs mostram cena, provedor e consulta para diagnóstico, sem imprimir chaves.
+Ao concluir cada plano, a interface e o log mostram quantas cenas vieram de
+Pexels, Pixabay, Coverr e IA. Um banco sem resultados pode terminar com zero
+cenas; estar cadastrado não garante que seu acervo tenha material utilizável.
+Não há inspeção visual automática dos clipes: revise o vídeo final, pois os
+resultados do banco e a avaliação do planejador ainda podem estar incorretos.
 
 As cenas são renderizadas em sequência, com duração controlada em quadros. O
 modo usa cortes simples e velocidade normal para preservar a linha do tempo;
@@ -65,8 +80,7 @@ globais antigas não são usadas para planejar as cenas desse modo.
 O limite de imagens conta solicitações **iniciadas**, incluindo uma solicitação
 que possa ter sido cobrada e falhado antes de disponibilizar o resultado. Nos
 vídeos por capítulos, o orçamento é compartilhado entre os capítulos, não
-reiniciado em cada parte. Imagens previstas para passagens históricas têm verba
-reservada antes de gastar o restante com buscas de banco sem resultado.
+reiniciado em cada parte. Não há substituição paga automática quando as buscas de banco falham.
 
 Se o plano precisar de mais imagens do que o limite permite, o trabalho para
 antes de novas encomendas de imagens e informa quantas são necessárias, o
@@ -74,8 +88,8 @@ limite e quantas solicitações já começaram. O planejamento pelo modelo de te
 pode ter custo mesmo quando esse bloqueio ocorre. Tente cenas de 15–20 segundos
 para reduzir a quantidade de cenas ou revise o roteiro. Aumente o limite somente
 se aceitar possíveis cobranças adicionais. A duração é desejada: mudanças de
-contexto podem exigir cortes extras. Limite zero permite somente cenas de banco; um trecho histórico que
-exija imagem interromperá a geração em vez de receber uma substituição moderna.
+contexto podem exigir cortes extras. Limite zero permite somente cenas de banco; um trecho que precise de
+reconstituição interromperá a geração em vez de receber uma substituição inadequada.
 
 O plano e os arquivos concluídos ficam em `storage/tasks/<id>/mixed-scenes.json`
 e `storage/tasks/<id>/mixed/`. Resultados reutilizáveis são verificados por hash.
@@ -110,7 +124,7 @@ estar configurados normalmente. Para vídeos longos, combine com `--long-form`.
 
 ## Validação
 
-Os testes cobrem Pexels/Pixabay na mesma sequência, cenas históricas, limites,
+Os testes cobrem Pexels/Pixabay/Coverr na mesma sequência, cenas históricas, limites,
 reserva de orçamento, reutilização de imagens, falhas com resultado desconhecido,
 interface e orçamento compartilhado entre capítulos. Um teste integrado usa
 clipes e áudio reais gerados por FFmpeg e verifica cor, ordem e duração do vídeo

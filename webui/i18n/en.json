@@ -820,10 +820,10 @@
     "Reference Title Analysis": "Title analysis",
     "Reference Narrative Format": "Narrative format",
     "Mixed Materials": "Mixed mode",
-    "Mixed Material Source": "Mixed: Pexels + Pixabay + AI images",
+    "Mixed Material Source": "Mixed: Pexels + Pixabay + Coverr + AI images",
     "Mixed Image Limit": "Maximum AI images for the entire video",
     "Mixed Scene Duration": "Target scene duration (seconds)",
-    "Mixed Materials Help": "Plans scenes from narration and preserves their order. Uses configured Pexels/Pixabay APIs and AI images for historical passages or empty stock searches. Configure image URL, model and key in material source settings. The limit applies to the entire video, including chapters, and counts started requests; failed requests can still incur charges. Without timed subtitles, timing is estimated. Uses hard cuts and normal playback speed. This mode does not visually inspect stock clips.",
+    "Mixed Materials Help": "Prioritizes configured Pexels, Pixabay and Coverr stock APIs. Historical narration can use timeless supporting details; AI is reserved for necessary reconstructions. Up to 25% of scenes may use AI (one allowed for short plans), subject to the request limit below. Empty stock searches stop without paid image fallback. Text planning may incur charges. Configure the image API in material settings. Request limits cover the whole video including chapters; failures may incur charges. Timing without timed subtitles is estimated. Uses hard cuts and normal speed. Stock clips are not visually inspected.",
     "Mixed Scene Progress": "Scene {current}/{total}",
     "Mixed Estimated Timing": "Scene timings were estimated from text. Enable timed subtitles for closer narration alignment.",
     "Subtitle Provider": "Subtitle provider",
@@ -834,6 +834,9 @@
     "External Audio Subtitle Help": "Uploaded narration needs Whisper to produce subtitles. Generated-voice timings are not available for external audio files.",
     "mixed.external_subtitles": "For imported narration with subtitles in mixed mode, select Whisper transcription in Subtitle Settings. Alternatively disable subtitles to use estimated scene timings.",
     "mixed.image_budget": "The plan needs {required} AI images, but this generation limit is {limit}. Requests already started: {started}. No new images were requested. Increase target scene duration, revise the script, or raise the limit if accepting the additional cost.",
-    "mixed.whisper_failed": "Whisper did not produce timed subtitles for the imported audio. Check the model and transcription logs before retrying. Image generation was not started."
+    "mixed.whisper_failed": "Whisper did not produce timed subtitles for the imported audio. Check the model and transcription logs before retrying. Image generation was not started.",
+    "mixed.stock_priority": "The plan assigned {images}/{total} scenes to AI, above the stock-first maximum of {limit}. No new images were ordered. Revise the visual plan to use timeless supporting stock details or start a new task. Text planning may incur charges.",
+    "mixed.stock_missing": "No usable stock clip was found for scene {scene}. The task stopped without ordering a replacement AI image. Check API keys, search results and logs before trying again.",
+    "Mixed Source Counts": "Scenes used — Pexels: {pexels} · Pixabay: {pixabay} · Coverr: {coverr} · AI: {openai_image}"
   }
 }
