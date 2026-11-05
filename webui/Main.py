@@ -1483,7 +1483,7 @@ def _load_task_restore_payload(task_id):
         return None
 
     params_input = dict(raw_params)
-    if script_data.get("script"):
+    if script_data.get("script") and not raw_params.get("long_form"):
         params_input["video_script"] = script_data["script"]
     if script_data.get("search_terms"):
         params_input["video_terms"] = script_data["search_terms"]
@@ -1563,6 +1563,10 @@ def _apply_restored_params(params):
         "script_language_select", params.get("video_language") or ""
     )
     st.session_state["paragraph_number_input"] = params.get("paragraph_number", 1)
+    st.session_state["long_form_enabled"] = params.get("long_form", False)
+    st.session_state["long_form_target_minutes"] = params.get("target_duration_minutes", 10)
+    st.session_state["long_form_chapter_minutes"] = params.get("chapter_duration_minutes", 3)
+    st.session_state["long_form_resume_task_id"] = ""
     st.session_state["video_script_prompt"] = params.get("video_script_prompt") or ""
     st.session_state["custom_system_prompt"] = (
         params.get("custom_system_prompt") or llm.DEFAULT_SCRIPT_SYSTEM_PROMPT
@@ -2116,6 +2120,12 @@ def _render_generation_task_snapshot(task_id, task):
 
     state = _normalize_task_state(task.get("state"))
     progress = max(0, min(100, int(task.get("progress", 0) or 0)))
+    if task.get("chapter_count"):
+        st.caption(tr("Chapter Progress").format(
+            current=task.get("current_chapter", 0), total=task["chapter_count"],
+            title=task.get("chapter_title", ""),
+        ))
+        st.caption(tr("Chapter Task ID").format(task_id=task_id))
     if state == const.TASK_STATE_PROCESSING:
         _render_generation_activity(task)
         st.progress(
@@ -5829,11 +5839,115 @@ def _render_loomloom_script_generation(params):
     _render_loomloom_candidates()
 
 
+def _render_reference_research():
+    from app.services import reference_research as research
+
+    with st.expander(tr("Reference Research")):
+        st.caption(tr("Reference Research Help"))
+        provider_labels = {"ollama": tr("Reference Ollama"), "openai": tr("Reference OpenAI")}
+        provider = st.radio(
+            tr("Reference Analysis Provider"), options=["ollama", "openai"], horizontal=True,
+            format_func=provider_labels.__getitem__,
+            key="reference_analysis_provider",
+        )
+        if provider == "openai":
+            st.caption(tr("Reference OpenAI Help"))
+        st.button(
+            tr("Configure LLM"), key="reference_configure_llm",
+            on_click=_open_settings_dialog, args=("llm",),
+        )
+        title = st.text_input(tr("Reference Title"), max_chars=300, key="reference_title")
+        source_labels = {"paste": tr("Reference Paste"), "upload": tr("Reference Upload")}
+        source_mode = st.radio(
+            tr("Reference Source"), options=["paste", "upload"], horizontal=True,
+            format_func=source_labels.__getitem__,
+            key="reference_source_mode",
+        )
+        transcript, uploaded = "", None
+        if source_mode == "paste":
+            transcript = st.text_area(
+                tr("Reference Transcript"), height=180,
+                max_chars=research.MAX_TRANSCRIPT_CHARS, key="reference_transcript",
+            )
+        else:
+            uploaded = st.file_uploader(
+                tr("Reference Transcript File"), type=["txt", "srt"],
+                max_upload_size=1, key="reference_transcript_file",
+                help=tr("Reference File Help"),
+            )
+        topic = st.session_state.get("video_subject", "").strip()
+        language = st.session_state.get("ui_language", "pt") or "pt-BR"
+        signature = hashlib.sha256(json.dumps({
+            "title": title, "topic": topic, "language": language, "mode": source_mode,
+            "provider": provider,
+            "source": transcript if source_mode == "paste" else getattr(uploaded, "file_id", ""),
+        }, sort_keys=True).encode()).hexdigest()
+        if st.button(tr("Analyze Reference"), key="analyze_reference"):
+            st.session_state.pop("reference_research_result", None)
+            try:
+                if source_mode == "upload":
+                    if uploaded is None:
+                        raise research.ResearchError("Reference Select File")
+                    transcript = research.read_transcript(uploaded.name, uploaded)
+                with st.spinner(tr("Analyzing Reference")):
+                    report = _run_llm_read_operation(
+                        "reference_research",
+                        lambda settings: research.analyze(
+                            transcript, title=title, topic=topic, language=language,
+                            provider=provider, app_config=settings,
+                        ),
+                    )
+                st.session_state["reference_research_result"] = {
+                    "signature": signature, "report": report,
+                }
+            except research.ResearchError as exc:
+                st.error(tr(str(exc)))
+        saved = st.session_state.get("reference_research_result")
+        if not saved:
+            return
+        if saved["signature"] != signature:
+            st.info(tr("Reference Input Changed"))
+            return
+        report = saved["report"]
+        lines = [f"## {tr('Reference Summary')}", report["summary"],
+                 f"## {tr('Reference Title Analysis')}", report["title_analysis"],
+                 f"## {tr('Reference Narrative Format')}", report["narrative_format"],
+                 f"## {tr('Reference Hook')}", report["hook_analysis"],
+                 f"> {report['hook_excerpt']}",
+                 f"## {tr('Reference Audience')}", report["audience"],
+                 f"## {tr('Reference Structure')}"]
+        for index, step in enumerate(report["structure"], 1):
+            lines.extend([f"{index}. **{step['name']}**: {step['purpose']}", f"> {step['evidence']}"])
+        lines.extend([f"## {tr('Reference Pacing')}", report["pacing"]])
+        for key, label in (
+            ("strengths", "Reference Strengths"), ("improvements", "Reference Improvements"),
+            ("title_suggestions", "Reference New Titles"), ("original_outline", "Reference New Outline"),
+        ):
+            lines.append(f"## {tr(label)}")
+            lines.extend(f"- {item}" for item in report[key])
+        lines.extend([f"## {tr('Reference Script Brief')}", report["script_brief"]])
+        document = "\n\n".join(lines)
+        st.markdown(document)
+        st.download_button(
+            tr("Download Reference Analysis"), data=document, file_name="reference-analysis.md",
+            mime="text/markdown", key="download_reference_analysis", on_click="ignore",
+        )
+        if st.button(tr("Use Reference Brief"), key="use_reference_brief"):
+            try:
+                st.session_state["video_script_prompt"] = research.merge_brief(
+                    st.session_state.get("video_script_prompt", ""), report["script_brief"],
+                )
+                st.success(tr("Reference Brief Applied"))
+            except research.ResearchError as exc:
+                st.error(tr(str(exc)))
+
+
 def _render_script_settings(panel, params):
     """渲染文案设置并更新生成参数。"""
     with panel:
         with st.container(border=True):
             st.write(tr("Video Script Settings"))
+            _render_reference_research()
             # 标签行需要容纳“配置大模型”入口，因此无法继续使用 text_area
             # 内置标签。把标签和输入框收进同一个字段容器后，可覆盖内部间距，
             # 同时让该字段与页面上的其它表单控件保持一致的外部节奏。
@@ -8601,6 +8715,7 @@ def _render_audio_settings(panel, params):
                     + [file_type.upper() for file_type in custom_audio_file_types],
                     accept_multiple_files=False,
                     key="custom_audio_file_uploader",
+                    max_upload_size=500,
                     help=tr("Upload Voiceover File Help"),
                 )
                 params.voice_volume = stable_selectbox(
@@ -8615,7 +8730,12 @@ def _render_audio_settings(panel, params):
                 )
                 _set_runtime_config("ui", "voice_volume", params.voice_volume)
                 if uploaded_audio_file:
-                    st.audio(uploaded_audio_file, format="audio/mp3")
+                    if uploaded_audio_file.size <= 30 * 1024 * 1024:
+                        st.audio(uploaded_audio_file, format="audio/mp3")
+                    else:
+                        st.caption(tr("Large Narration Loaded").format(
+                            size=f"{uploaded_audio_file.size / (1024 * 1024):.1f}",
+                        ))
                     st.info(
                         tr(
                             "Custom audio will be used directly. TTS synthesis will be skipped for this task."
@@ -9001,6 +9121,18 @@ def _render_generation_controls(
         # 已经得到明确处理，清除标记，避免后续普通生成继续显示旧提示。
         st.session_state.pop("task_restore_upload_requirements", None)
 
+    with st.expander(tr("Long Video Chapters")):
+        params.long_form = st.checkbox(tr("Enable Chapter Mode"), key="long_form_enabled")
+        if params.long_form:
+            st.info(tr("Chapter Mode Help"))
+            params.target_duration_minutes = st.slider(
+                tr("Target Duration Minutes"), 1, 30, 10, key="long_form_target_minutes",
+            )
+            params.chapter_duration_minutes = st.slider(
+                tr("Chapter Duration Minutes"), 1, 5, 3, key="long_form_chapter_minutes",
+            )
+            st.text_input(tr("Resume Chapter Task ID"), key="long_form_resume_task_id")
+
     _render_settings_transfer(params)
 
     generation_busy = _generation_is_busy(_current_generation_task_id())
@@ -9016,6 +9148,23 @@ def _render_generation_controls(
     if start_button:
         _save_runtime_config()
         task_id = st.session_state.get("pending_generation_task_id") or str(uuid4())
+        if params.long_form:
+            try:
+                from app.services import long_form
+
+                long_form.validate(params, external_audio=bool(uploaded_audio_file))
+                if not uploaded_audio_file and voice_mode in {VOICE_MODE_NONE, VOICE_MODE_UPLOAD}:
+                    raise ValueError(tr("Chapter Voice Required"))
+                resume_id = st.session_state.get("long_form_resume_task_id", "").strip()
+                if resume_id:
+                    task_id = str(UUID(resume_id))
+                    if not os.path.isfile(os.path.join(utils.task_dir(task_id), "chapters.json")):
+                        raise ValueError(tr("Chapter Checkpoint Not Found"))
+                    if webui_task.is_generation_active(task_id):
+                        raise ValueError(tr("Generating Video"))
+            except ValueError as exc:
+                st.error(str(exc))
+                st.stop()
         _add_active_generation_task(
             task_id,
             subject=params.video_subject or params.video_script or task_id,
@@ -9317,20 +9466,12 @@ def _render_generation_controls(
 
         if uploaded_audio_file:
             try:
+                from app.services import narration
+
                 task_dir = utils.task_dir(task_id)
-                custom_audio_path = _build_uploaded_file_path(
-                    uploaded_audio_file,
-                    task_dir,
-                    CUSTOM_AUDIO_EXTENSIONS,
-                    "custom-audio",
+                custom_audio_path = narration.save_upload(
+                    uploaded_audio_file.name, uploaded_audio_file, task_dir,
                 )
-                # Voiceover uploads previously bypassed the same full-decode
-                # and size checks used for background-music uploads. Validate
-                # before storing or scheduling the generation task.
-                bgm_service.validate_bgm_upload(
-                    uploaded_audio_file.name, uploaded_audio_file
-                )
-                _stage_task_audio(custom_audio_path, uploaded_audio_file.getbuffer())
             except OSError as exc:
                 _remove_active_generation_task(task_id)
                 logger.error(f"failed to persist uploaded task audio: {exc}")
@@ -9386,7 +9527,7 @@ def _render_generation_controls(
         reusable_voice_preview = _get_reusable_full_voice_preview(
             params,
             voice_mode,
-        )
+        ) if not params.long_form else None
         if reusable_voice_preview:
             # 试听缓存只存在当前 Streamlit 会话。提交前把音频写入目标任务目录，
             # 后台线程随后只读取任务自己的文件；即使页面 rerun、浏览器关闭或

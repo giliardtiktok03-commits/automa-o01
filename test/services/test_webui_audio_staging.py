@@ -1,4 +1,5 @@
 import ast
+import io
 import os
 import tempfile
 import unittest
@@ -37,8 +38,10 @@ class TestWebuiAudioStaging(unittest.TestCase):
         removed = Mock()
         preview = {"audio_bytes": b"complete narration", "duration": 1.0}
         st = SimpleNamespace(stop=Mock(side_effect=_StopGeneration), error=Mock())
+        uploaded = io.BytesIO(b"complete narration")
+        uploaded.name = "voice.mp3"
         namespace = {
-            "os": os, "tempfile": tempfile, "uploaded_audio_file": SimpleNamespace(name="voice.mp3", getbuffer=lambda: b"complete narration"),
+            "os": os, "tempfile": tempfile, "uploaded_audio_file": uploaded,
             "reusable_voice_preview": preview, "task_id": "test-task", "params": SimpleNamespace(),
             "utils": SimpleNamespace(task_dir=lambda _id: directory),
             "_build_uploaded_file_path": lambda *_args: str(target), "CUSTOM_AUDIO_EXTENSIONS": (".mp3",),

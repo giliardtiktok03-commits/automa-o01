@@ -1,0 +1,36 @@
+{
+  "workflow_id": "d9b877c7-b069-48aa-8466-964e09e8049b",
+  "reference": {
+    "title": "Como o café chegou ao Brasil",
+    "url": "https://www.youtube.com/watch?v=abcdefghijk",
+    "transcript": ""
+  },
+  "nexlev": {
+    "source": "nexlev",
+    "observed_at": "2026-11-05T10:00:00Z",
+    "notes": "EXEMPLO FICTÍCIO de formato. Substitua títulos, links, métricas e padrões por resultados reais da sua pesquisa no Nexlev antes de executar.",
+    "videos": [
+      {
+        "title": "Como o café chegou ao Brasil",
+        "url": "https://www.youtube.com/watch?v=abcdefghijk",
+        "views": 100000,
+        "channel_median_views": 20000
+      }
+    ],
+    "demand": [
+      {
+        "keyword": "história do café",
+        "search_volume": 10000,
+        "period": "monthly",
+        "region": "BR"
+      }
+    ],
+    "recurring_patterns": ["Exemplo fictício: uma pergunta histórica como abertura"]
+  },
+  "target_topic": "A história do café no Brasil",
+  "outlier_threshold": 2,
+  "provider": "ollama",
+  "language": "pt-BR",
+  "requirements": "Tom acessível e abordagem original. Não transformar números de pesquisa em fatos narrativos.",
+  "target_duration_minutes": 10
+}

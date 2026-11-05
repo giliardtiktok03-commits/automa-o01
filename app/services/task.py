@@ -652,7 +652,7 @@ def generate_audio(
         return custom_audio_file, audio_duration, None
 
 
-def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
+def generate_subtitle(task_id, params, video_script, sub_maker, audio_file, *, correct_to_script=True):
     """
     Generate subtitle for the video script.
     If subtitle generation is disabled or no subtitle maker is provided, it will return an empty string.
@@ -713,7 +713,7 @@ def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
             if not subtitle.file_to_subtitles(subtitle_path):
                 logger.warning("whisper produced no usable subtitle cues")
                 return ""
-            if not is_word_level:
+            if not is_word_level and correct_to_script:
                 logger.info("\n\n## correcting subtitle")
                 subtitle.correct(subtitle_file=subtitle_path, video_script=video_script)
 
@@ -1558,6 +1558,8 @@ def _run_pipeline(
     voxcpm_prompt_text: str = "",
     jalapeno_video_endpoint: volcengine_seedance.SeedanceEndpoint | None = None,
     codex_image_context: codex_image.CodexImageContext | None = None,
+    publish: bool = True,
+    preserve_audio_subtitles: bool = False,
 ):
     logger.info(f"start task: {task_id}, stop_at: {stop_at}")
     sm.state.update_task(
@@ -1829,7 +1831,8 @@ def _run_pipeline(
     generation_progress.stage("subtitle")
     # 4. Generate subtitle
     subtitle_path = generate_subtitle(
-        task_id, params, video_script, sub_maker, audio_file
+        task_id, params, video_script, sub_maker, audio_file,
+        **({"correct_to_script": False} if preserve_audio_subtitles else {}),
     )
 
     if stop_at == "subtitle":
@@ -1924,7 +1927,7 @@ def _run_pipeline(
     # 7. 先完成视频生成任务，再按需提交跨平台发布。第三方上传可能耗时
     # 数分钟，不应阻塞视频结果返回，也不能反向影响已经生成的成片。
     cross_post_enabled = (
-        upload_post.upload_post_service.is_configured()
+        publish and upload_post.upload_post_service.is_configured()
         and upload_post.upload_post_service.auto_upload
     )
     platforms = (
@@ -2002,6 +2005,31 @@ def start(
     """
     with generation_progress.task_scope(task_id):
         try:
+            if getattr(params, "long_form", False):
+                from app.services import long_form
+
+                if stop_at != "video":
+                    raise ValueError("Chapter mode requires stop_at=video")
+                if loomloom_video_request is not None:
+                    raise ValueError("Chapter mode does not support LoomLoom batches")
+                return long_form.run(
+                    task_id, params,
+                    render_chapter=partial(
+                        _run_pipeline,
+                        allow_server_file_input=allow_server_file_input,
+                        voxcpm_reference_audio=voxcpm_reference_audio,
+                        voxcpm_prompt_audio=voxcpm_prompt_audio,
+                        voxcpm_prompt_text=voxcpm_prompt_text,
+                        jalapeno_video_endpoint=jalapeno_video_endpoint,
+                        codex_image_context=codex_image_context,
+                        publish=False,
+                        preserve_audio_subtitles=bool(params.custom_audio_file),
+                    ),
+                    reference_audio=voxcpm_reference_audio,
+                    prompt_audio=voxcpm_prompt_audio,
+                    prompt_text=voxcpm_prompt_text,
+                    allow_server_file_input=allow_server_file_input,
+                )
             return _run_pipeline(
                 task_id,
                 params,

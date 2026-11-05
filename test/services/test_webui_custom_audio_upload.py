@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.models.schema import VideoParams
 from app.services import bgm as bgm_service
+from app.services import narration
 from app.utils import utils
 
 
@@ -120,7 +121,7 @@ def test_webui_enforces_custom_audio_size_limit():
         stage_dir = Path(temp_dir, "bgm")
         task_dir.mkdir()
         stage_dir.mkdir()
-        with patch.object(bgm_service, "MAX_BGM_UPLOAD_BYTES", 4):
+        with patch.object(narration, "MAX_NARRATION_UPLOAD_BYTES", 4):
             params, st = _run_webui_audio_block(
                 _upload("voice.wav", _wav_bytes()), str(task_dir), str(stage_dir)
             )

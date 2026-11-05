@@ -68,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
             f"--server.headless={str(args.headless).lower()}",
             "--browser.gatherUsageStats=false", "--client.toolbarMode=minimal",
             "--logger.hideWelcomeMessage=true", "--server.showEmailPrompt=false",
+            # 500 MiB file + multipart envelope; the narration widget enforces 500.
+            "--server.maxUploadSize=501",
         ])
     except OSError as exc:
         parser.exit(1, f"mpt: {exc}\n")

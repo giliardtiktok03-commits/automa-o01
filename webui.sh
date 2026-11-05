@@ -77,4 +77,5 @@ echo "***** WebUI address: http://$MPT_WEBUI_HOST:$MPT_WEBUI_PORT *****"
   --client.toolbarMode=minimal \
   --logger.hideWelcomeMessage=True \
   --server.showEmailPrompt=False \
+  --server.maxUploadSize=501 \
   --server.enableCORS=True

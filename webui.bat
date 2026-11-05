@@ -60,4 +60,4 @@ set "BROWSER_WEBUI_HOST=%MPT_WEBUI_HOST%"
 if "%MPT_WEBUI_HOST%"=="0.0.0.0" set "BROWSER_WEBUI_HOST=127.0.0.1"
 
 echo ***** WebUI address: http://%BROWSER_WEBUI_HOST%:%MPT_WEBUI_PORT% *****
-%STREAMLIT_CMD% run .\webui\Main.py --server.address=%MPT_WEBUI_HOST% --server.port=%MPT_WEBUI_PORT% --browser.serverAddress=%BROWSER_WEBUI_HOST% --browser.gatherUsageStats=False --client.toolbarMode=minimal --logger.hideWelcomeMessage=True --server.showEmailPrompt=False --server.enableCORS=True
+%STREAMLIT_CMD% run .\webui\Main.py --server.address=%MPT_WEBUI_HOST% --server.port=%MPT_WEBUI_PORT% --browser.serverAddress=%BROWSER_WEBUI_HOST% --browser.gatherUsageStats=False --client.toolbarMode=minimal --logger.hideWelcomeMessage=True --server.showEmailPrompt=False --server.maxUploadSize=501 --server.enableCORS=True

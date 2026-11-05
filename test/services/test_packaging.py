@@ -80,6 +80,7 @@ def test_webui_launch_uses_current_python_and_bundled_ui(monkeypatch):
     assert launcher.main(["webui", "--headless"]) == 0
     command = called[0]
     assert command[:3] == [launcher.sys.executable, "-m", "streamlit"]
+    assert "--server.maxUploadSize=501" in command
     assert Path(command[4]) == paths.SOURCE_ROOT / "webui/Main.py"
     assert "--server.address=127.0.0.1" in command
     assert "--server.port=8504" in command

@@ -1,0 +1,29 @@
+TESTE DA VERSAO MODIFICADA NO WINDOWS
+
+1. Extraia este ZIP em uma pasta NOVA. Nao extraia sobre sua instalacao atual.
+2. Se desejar reutilizar suas configuracoes, copie apenas config.toml da instalacao antiga
+   para esta nova pasta. O arquivo pode aparecer como "config" no Explorador.
+   Nao envie esse arquivo para outras pessoas, pois pode conter suas chaves.
+3. Execute PREPARAR_TESTE_WINDOWS.bat. Ele instala as dependencias fixadas em um
+   ambiente Windows proprio. Nao copie .venv de Linux ou de outra instalacao.
+   Se nao houver uv, com Python instalado execute no terminal:
+       py -m pip install --user uv
+   Depois execute PREPARAR_TESTE_WINDOWS.bat novamente.
+4. Abra webui.bat DESTA pasta nova.
+5. Confira Pesquisa de referencia (leve) nas configuracoes de roteiro e
+   Video longo: capitulos automaticos junto aos controles de geracao.
+6. Comece com um video de 2 a 3 minutos antes do teste de 30 minutos.
+
+A pasta storage da instalacao antiga nao precisa ser copiada para o primeiro teste.
+Se ja tiver modelos Whisper baixados, a pasta models pode ser copiada separadamente,
+caso deseje reutiliza-los.
+
+A API editorial pode ser iniciada por INICIAR_API_TESTE.bat em outra janela.
+Consulte docs/editorial-automation-pt.md para o fluxo de pesquisa, tres adaptacoes
+com escolha automatica e roteiro. O Nexlev ainda precisa fornecer os dados pela
+sua automacao externa; nao existe consulta direta configurada neste pacote.
+
+Este pacote inclui o codigo modificado e os arquivos originais do projeto.
+Nao inclui configuracoes particulares, chaves de API, videos gerados, modelos,
+Git ou dependencias Linux. O teste real no Windows e com os provedores ainda
+precisa ser feito; os testes automatizados foram executados na nuvem Linux.

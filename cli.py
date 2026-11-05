@@ -341,6 +341,18 @@ Batch manifests:
         help="number of generated script paragraphs, from 1 to 10 (default: 1)",
     )
     content_group.add_argument(
+        "--long-form", action="store_true",
+        help="generate one video automatically in resumable chapters (up to 30 minutes)",
+    )
+    content_group.add_argument(
+        "--target-duration-minutes", type=int, choices=range(1, 31), default=10,
+        metavar="1-30", help="approximate narration duration in chapter mode",
+    )
+    content_group.add_argument(
+        "--chapter-duration-minutes", type=int, choices=range(1, 6), default=3,
+        metavar="1-5", help="approximate duration of each chapter",
+    )
+    content_group.add_argument(
         "--video-script-prompt",
         default=None,
         help="additional requirements for LLM script generation",
@@ -962,6 +974,9 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
         "video_source": args.video_source,
         "video_materials": video_materials,
         "video_count": args.video_count,
+        "long_form": args.long_form,
+        "target_duration_minutes": args.target_duration_minutes,
+        "chapter_duration_minutes": args.chapter_duration_minutes,
         "video_aspect": args.video_aspect,
         "voice_name": _resolve_voice_name(args, ui_config),
         "subtitle_enabled": _resolve_subtitle_enabled(args, ui_config),

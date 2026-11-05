@@ -80,3 +80,24 @@ def test_headless_open_folder_shows_host_mapped_path(headless_task_app):
     assert any(
         f"./storage/{expected_folder}" in toast.value for toast in app.get("toast")
     )
+
+
+def test_chapter_mode_exposes_duration_and_resume_controls(headless_task_app):
+    app, _ = headless_task_app
+    app.checkbox(key="long_form_enabled").check()
+    app.run()
+    assert not app.exception
+    assert app.slider(key="long_form_target_minutes").max == 30
+    assert app.slider(key="long_form_chapter_minutes").max == 5
+    assert app.text_input(key="long_form_resume_task_id").value == ""
+
+
+def test_narration_picker_allows_500_mb(headless_task_app, monkeypatch):
+    app, _ = headless_task_app
+    monkeypatch.setitem(config.ui, "voice_mode", config.ui.get("voice_mode"))
+    language = app.session_state["ui_language"]
+    app.session_state[f"voice_mode_control_{language}"] = "upload"
+    app.run()
+    assert not app.exception
+    uploaders = app.get("file_uploader")
+    assert any(element.proto.max_upload_size_mb == 500 for element in uploaders)

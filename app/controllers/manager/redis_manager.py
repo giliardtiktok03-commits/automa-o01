@@ -12,11 +12,14 @@ from pydantic import ValidationError
 from app.controllers.manager.base_manager import TaskManager, TaskQueueFullError
 from app.models import const
 from app.models.schema import AudioRequest, SubtitleRequest, VideoParams
+from app.models.editorial import WorkflowRequest
 from app.services import state as sm
 from app.services import task as tm
+from app.services import editorial
 
 FUNC_MAP = {
     "start": tm.start,
+    "start_editorial": editorial.start_editorial,
     # 'start_test': tm.start_test
 }
 
@@ -334,11 +337,11 @@ class RedisTaskManager(TaskManager):
         task_with_serializable_params["kwargs"] = task_kwargs.copy()
 
         if "params" in task_kwargs and isinstance(
-            task_kwargs["params"], (VideoParams, AudioRequest, SubtitleRequest)
+            task_kwargs["params"], (VideoParams, AudioRequest, SubtitleRequest, WorkflowRequest)
         ):
             task_with_serializable_params["kwargs"]["params"] = task_kwargs[
                 "params"
-            ].model_dump(warnings=False)
+            ].model_dump(mode="json", warnings=False)
 
         # 将函数对象转换为其名称
         task_with_serializable_params["func"] = task["func"].__name__
@@ -415,10 +418,12 @@ class RedisTaskManager(TaskManager):
         if "params" in task_kwargs and isinstance(task_kwargs["params"], dict):
             try:
                 params_model = VideoParams
+                if task_info["func"] is editorial.start_editorial:
+                    params_model = WorkflowRequest
                 # /audio and /subtitle use short-form request models without
                 # video_subject. Preserve those schemas at the queue boundary;
                 # full VideoParams can also stop at either of these stages.
-                if "video_subject" not in task_kwargs["params"]:
+                elif "video_subject" not in task_kwargs["params"]:
                     if task_kwargs.get("stop_at") == "audio":
                         params_model = AudioRequest
                     elif task_kwargs.get("stop_at") == "subtitle":
