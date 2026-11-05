@@ -818,6 +818,13 @@
     "Reference Invalid Provider": "Select Ollama or the OpenAI API.",
     "Reference Provider Unavailable": "The selected provider did not return an analysis. Check its configuration and connection.",
     "Reference Title Analysis": "Title analysis",
-    "Reference Narrative Format": "Narrative format"
+    "Reference Narrative Format": "Narrative format",
+    "Mixed Materials": "Mixed mode",
+    "Mixed Material Source": "Mixed: Pexels + Pixabay + AI images",
+    "Mixed Image Limit": "Maximum AI images for the entire video",
+    "Mixed Scene Duration": "Target scene duration (seconds)",
+    "Mixed Materials Help": "Plans scenes from narration and preserves their order. Uses configured Pexels/Pixabay APIs and AI images for historical passages or empty stock searches. Configure image URL, model and key in material source settings. The limit applies to the entire video, including chapters, and counts started requests; failed requests can still incur charges. Without timed subtitles, timing is estimated. Uses hard cuts and normal playback speed. This mode does not visually inspect stock clips.",
+    "Mixed Scene Progress": "Scene {current}/{total}",
+    "Mixed Estimated Timing": "Scene timings were estimated from text. Enable timed subtitles for closer narration alignment."
   }
 }

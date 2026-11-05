@@ -25,6 +25,10 @@ class ChapterError(RuntimeError):
 
 
 def validate(params, *, external_audio=False):
+    if params.video_source == "mixed":
+        from app.services import mixed_materials
+
+        mixed_materials.validate(params)
     if params.video_count != 1:
         raise ValueError("Chapter mode generates one final video; set video_count=1")
     has_audio = bool(params.custom_audio_file) or external_audio
@@ -67,6 +71,9 @@ def _digest(file):
 
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
+    if params.video_source != "mixed":
+        for key in ("mixed_max_images", "mixed_scene_duration"):
+            payload["params"].pop(key, None)
     if params.custom_audio_file:
         # Re-uploading the same recording from another path must still resume.
         payload["params"]["custom_audio_file"] = "<external-narration>"
@@ -277,6 +284,14 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
                 "video_terms": params.video_terms,
                 "custom_audio_file": chapter_audio,
             })
+            if params.video_source == "mixed":
+                from app.services import mixed_materials
+
+                spent_elsewhere = sum(
+                    mixed_materials.image_requests(f"{task_id}/chapters/{other + 1:03d}")
+                    for other in range(len(chapters)) if other != index
+                )
+                child_params.mixed_max_images = max(0, params.mixed_max_images - spent_elsewhere)
             with generation_progress.task_scope(child_id):
                 result = render_chapter(child_id, child_params)
             if not result or not result.get("videos") or result.get("state") == const.TASK_STATE_FAILED:
@@ -308,6 +323,13 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
               "warnings": [dict(warning, chapter_index=index + 1)
                            for index, chapter in enumerate(chapters)
                            for warning in chapter.get("warnings", [])] or None}
+    if params.video_source == "mixed":
+        from app.services import mixed_materials
+
+        result["mixed_image_requests"] = sum(
+            mixed_materials.image_requests(f"{task_id}/chapters/{index + 1:03d}")
+            for index in range(len(chapters))
+        )
     task_artifacts.patch_script_data(task_id, script=result["script"])
     # Chapters are never automatically published to social networks.
     sm.state.update_task(task_id, state=const.TASK_STATE_COMPLETE, progress=100, **result)

@@ -409,3 +409,24 @@ def test_imported_chapter_subtitles_preserve_whisper_words(setup, monkeypatch):
                                 "narration.wav", correct_to_script=False)
     assert "Actual spoken words." in Path(file).read_text()
     correction.assert_not_called()
+
+
+def test_mixed_image_budget_is_shared_across_chapters(setup, monkeypatch):
+    from app.services import mixed_materials
+    root, params, renderer, _, _ = setup
+    params.video_source = "mixed"
+    params.mixed_max_images = 2
+    monkeypatch.setattr(mixed_materials, "validate", lambda *args, **kwargs: None)
+    render_original = renderer.side_effect
+    budgets = []
+
+    def render(task_id, chapter_params):
+        budgets.append(chapter_params.mixed_max_images)
+        result = render_original(task_id, chapter_params)
+        (root / task_id / "mixed-scenes.json").write_text(json.dumps({"image_requests": 1}))
+        return result
+
+    renderer.side_effect = render
+    lf.run("job", params, render_chapter=renderer)
+    assert budgets == [2, 1]
+    assert params.mixed_max_images == 2

@@ -101,3 +101,17 @@ def test_narration_picker_allows_500_mb(headless_task_app, monkeypatch):
     assert not app.exception
     uploaders = app.get("file_uploader")
     assert any(element.proto.max_upload_size_mb == 500 for element in uploaders)
+
+
+def test_mixed_mode_shows_budget_and_forces_narrative_order(headless_task_app, monkeypatch):
+    app, _ = headless_task_app
+    monkeypatch.setitem(config.app, "video_source", config.app.get("video_source", "pexels"))
+    monkeypatch.setitem(config.app, "match_materials_to_script", config.app.get("match_materials_to_script", False))
+    language = app.session_state["ui_language"]
+    app.session_state[f"video_source_select_{language}"] = "mixed"
+    app.run()
+    assert not app.exception
+    assert app.number_input(key="mixed_max_images").value == 12
+    assert app.slider(key="mixed_scene_duration").value == 10
+    assert app.checkbox(key="match_materials_to_script").value is True
+    assert app.checkbox(key="match_materials_to_script").disabled

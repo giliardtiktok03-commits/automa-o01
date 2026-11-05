@@ -38,6 +38,7 @@ _BATCH_TASK_MAX_COUNT = 100
 # openai_image 只在单任务入口可用；集中定义后，新增 Provider 不会再次遗漏
 # 批量校验。这里仅包含 CLI 已公开支持的来源，不强行暴露 WebUI 专属流程。
 _CLI_VIDEO_SOURCES = (
+    "mixed",
     "pexels",
     "pixabay",
     "coverr",
@@ -364,6 +365,10 @@ Batch manifests:
     )
 
     material_group = parser.add_argument_group("materials and pipeline")
+    material_group.add_argument("--mixed-max-images", type=int, default=None,
+                                help="maximum AI image requests for the entire mixed-mode video (default: 12)")
+    material_group.add_argument("--mixed-scene-duration", type=int, default=None,
+                                help="target scene duration in mixed mode, 5-30 seconds (default: 10)")
     material_group.add_argument(
         "--video-source",
         default="pexels",
@@ -983,6 +988,8 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
     }
 
     optional_arg_names = [
+        "mixed_max_images",
+        "mixed_scene_duration",
         "video_language",
         "paragraph_number",
         "video_script_prompt",

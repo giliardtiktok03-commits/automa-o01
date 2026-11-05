@@ -1567,6 +1567,8 @@ def _apply_restored_params(params):
     st.session_state["long_form_target_minutes"] = params.get("target_duration_minutes", 10)
     st.session_state["long_form_chapter_minutes"] = params.get("chapter_duration_minutes", 3)
     st.session_state["long_form_resume_task_id"] = ""
+    st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
+    st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["video_script_prompt"] = params.get("video_script_prompt") or ""
     st.session_state["custom_system_prompt"] = (
         params.get("custom_system_prompt") or llm.DEFAULT_SCRIPT_SYSTEM_PROMPT
@@ -2120,6 +2122,12 @@ def _render_generation_task_snapshot(task_id, task):
 
     state = _normalize_task_state(task.get("state"))
     progress = max(0, min(100, int(task.get("progress", 0) or 0)))
+    if task.get("mixed_scene_count"):
+        st.caption(tr("Mixed Scene Progress").format(
+            current=task.get("mixed_scene", 0), total=task["mixed_scene_count"],
+        ))
+        if task.get("mixed_timing") == "estimated":
+            st.caption(tr("Mixed Estimated Timing"))
     if task.get("chapter_count"):
         st.caption(tr("Chapter Progress").format(
             current=task.get("current_chapter", 0), total=task["chapter_count"],
@@ -3413,6 +3421,7 @@ def _initialize_material_navigation(target, settings):
 
 def _material_provider_labels():
     return {
+        "mixed": tr("Mixed Material Source"),
         "pexels": tr("Pexels"),
         "pixabay": tr("Pixabay"),
         "coverr": tr("Coverr"),
@@ -6149,6 +6158,7 @@ def _render_video_settings(panel, params):
                 (tr("Random"), "random"),
             ]
             video_source_labels = {
+                "mixed": tr("Mixed Material Source"),
                 "pexels": tr("Pexels"),
                 "pixabay": tr("Pixabay"),
                 "coverr": tr("Coverr"),
@@ -6175,6 +6185,7 @@ def _render_video_settings(panel, params):
                     (tr("AI Video"), VIDEO_SOURCE_GROUPS["ai_video"]),
                     (tr("AI Image"), VIDEO_SOURCE_GROUPS["ai_image"]),
                     (tr("Local Material"), VIDEO_SOURCE_GROUPS["local"]),
+                    (tr("Mixed Materials"), ("mixed",)),
                 ),
                 default_value=saved_video_source_name,
                 key="video_source_select",
@@ -6183,6 +6194,16 @@ def _render_video_settings(panel, params):
                 on_settings=_open_material_settings_dialog,
             )
             _set_runtime_config("app", "video_source", params.video_source)
+            if params.video_source == "mixed":
+                st.info(tr("Mixed Materials Help"))
+                params.mixed_max_images = st.number_input(
+                    tr("Mixed Image Limit"), min_value=0, max_value=120,
+                    value=12, step=1, key="mixed_max_images",
+                )
+                params.mixed_scene_duration = st.slider(
+                    tr("Mixed Scene Duration"), min_value=5, max_value=30,
+                    value=10, key="mixed_scene_duration",
+                )
 
             loomloom_video_capability = None
             if params.video_source == "loomloom":
@@ -6229,6 +6250,11 @@ def _render_video_settings(panel, params):
             # 文案顺序匹配会从关键词生成到最终合成全程保持叙事顺序，因此开启时
             # 顺序拼接是唯一符合实际执行逻辑的选项。同步控件值可避免界面仍显示
             # “随机拼接”，同时保留用户原选择，关闭后自动恢复。
+            if params.video_source == "mixed":
+                st.session_state.setdefault("mixed_previous_match", st.session_state.get("match_materials_to_script", False))
+                st.session_state["match_materials_to_script"] = True
+            elif "mixed_previous_match" in st.session_state:
+                st.session_state["match_materials_to_script"] = st.session_state.pop("mixed_previous_match")
             sync_script_order_concat_mode()
             selected_concat_mode = stable_selectbox(
                 tr("Video Concat Mode"),
@@ -6250,6 +6276,7 @@ def _render_video_settings(panel, params):
                 tr("Match Materials to Script Order"),
                 help=tr("Match Materials to Script Order Help"),
                 key="match_materials_to_script",
+                disabled=params.video_source == "mixed",
                 on_change=sync_script_order_concat_mode,
             )
             _set_runtime_config(
@@ -6284,6 +6311,7 @@ def _render_video_settings(panel, params):
                     VideoTransitionMode.none.value,
                 ),
                 key="video_transition_mode_select",
+                disabled=params.video_source == "mixed",
                 format_func=lambda value: dict(
                     (v, label) for label, v in video_transition_modes
                 )[value],
@@ -6355,7 +6383,7 @@ def _render_video_settings(panel, params):
                 "ui", "video_fit_mode", params.video_fit_mode.value
             )
 
-            if params.video_source in {"local", "openai_image", "codex_image"}:
+            if params.video_source in {"local", "openai_image", "codex_image", "mixed"}:
                 image_motion_labels = {
                     ImageMotion.static.value: tr("Static Image"),
                     ImageMotion.zoom.value: tr("Slow Zoom"),
@@ -6409,6 +6437,7 @@ def _render_video_settings(panel, params):
                     else 3,
                 ),
                 key="video_clip_duration_select",
+                disabled=params.video_source == "mixed",
                 help=tr("Clip Duration Help"),
             )
             _set_runtime_config(
@@ -6431,6 +6460,7 @@ def _render_video_settings(panel, params):
                 step=0.05,
                 format="%.2fx",
                 key=clip_speed_key,
+                disabled=params.video_source == "mixed",
                 help=tr("Clip Speed Help"),
             )
             _set_runtime_config("ui", "video_clip_speed", params.video_clip_speed)
@@ -9203,6 +9233,7 @@ def _render_generation_controls(
             voxcpm_prompt_text = _get_voxcpm_prompt_text()
 
         if params.video_source not in [
+            "mixed",
             "infistar",
             "jalapeno",
             "pexels",
@@ -9221,6 +9252,16 @@ def _render_generation_controls(
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
             st.stop()
+
+        if params.video_source == "mixed":
+            from app.services import mixed_materials
+
+            try:
+                mixed_materials.validate(params, config.snapshot_config_with_pending(config.app))
+            except mixed_materials.MixedError as exc:
+                _remove_active_generation_task(task_id)
+                st.error(str(exc))
+                st.stop()
 
         if params.video_source == "pexels" and not config.app.get(
             "pexels_api_keys", ""

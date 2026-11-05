@@ -123,6 +123,8 @@ class VideoParams(BaseModel):
     long_form: bool = False
     target_duration_minutes: int = Field(default=10, ge=1, le=30)
     chapter_duration_minutes: int = Field(default=3, ge=1, le=5)
+    mixed_max_images: int = Field(default=12, ge=0, le=120)
+    mixed_scene_duration: int = Field(default=10, ge=5, le=30)
 
     video_source: Optional[str] = "pexels"
     video_materials: Optional[List[MaterialInfo]] = (

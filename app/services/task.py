@@ -100,6 +100,7 @@ _VIDEO_MUSIC_PROVIDERS = {
 
 
 _SUPPORTED_VIDEO_SOURCES = frozenset({
+    "mixed",
     "pexels", "pixabay", "coverr", "local", "wavespeed",
     "volcengine_seedance", "ofox", "metaso_minimax", "muapi",
     "loomloom", "openai_image", "codex_image", "infistar", "jalapeno",
@@ -734,8 +735,14 @@ def get_video_materials(
     loomloom_video_request: loomloom.LoomLoomConfirmedVideoRequest | None = None,
     jalapeno_video_endpoint: volcengine_seedance.SeedanceEndpoint | None = None,
     codex_image_context: codex_image.CodexImageContext | None = None,
+    mixed_script: str = "",
+    mixed_subtitle: str = "",
 ):
-    if params.video_source == "local":
+    if params.video_source == "mixed":
+        from app.services import mixed_materials
+
+        return mixed_materials.prepare(task_id, params, mixed_script, audio_duration, mixed_subtitle)
+    elif params.video_source == "local":
         logger.info("\n\n## preprocess local materials")
         materials = video.preprocess_video(
             materials=params.video_materials,
@@ -1068,22 +1075,27 @@ def generate_final_videos(
         # 每条视频占 50% 进度中的一份，合成与最终编码各占一半。片段处理是
         # 合成里最耗时的部分，逐段推进这一半的进度。
         combine_share = 50 / params.video_count / 2
-        video.combine_videos(
-            combined_video_path=combined_video_path,
-            video_paths=downloaded_videos,
-            audio_file=audio_file,
-            video_aspect=params.video_aspect,
-            video_fit_mode=params.video_fit_mode,
-            video_concat_mode=video_concat_mode,
-            video_transition_mode=video_transition_mode,
-            max_clip_duration=params.video_clip_duration,
-            threads=params.n_threads,
-            clip_speed=params.video_clip_speed,
-            progress_callback=_stage_progress_reporter(
-                task_id, _progress, _progress + combine_share
-            ),
-            **batch_options,
-        )
+        if params.video_source == "mixed":
+            from app.services import mixed_materials
+
+            mixed_materials.join(downloaded_videos, combined_video_path)
+        else:
+            video.combine_videos(
+                combined_video_path=combined_video_path,
+                video_paths=downloaded_videos,
+                audio_file=audio_file,
+                video_aspect=params.video_aspect,
+                video_fit_mode=params.video_fit_mode,
+                video_concat_mode=video_concat_mode,
+                video_transition_mode=video_transition_mode,
+                max_clip_duration=params.video_clip_duration,
+                threads=params.n_threads,
+                clip_speed=params.video_clip_speed,
+                progress_callback=_stage_progress_reporter(
+                    task_id, _progress, _progress + combine_share
+                ),
+                **batch_options,
+            )
         if allocate_batch_materials:
             selected_sources = list(dict.fromkeys(used_video_paths))
             reused_sources = [file for file in selected_sources if source_usage.get(file, 0)]
@@ -1570,6 +1582,10 @@ def _run_pipeline(
     )
 
     generation_progress.stage("preparing")
+    if getattr(params, "video_source", None) == "mixed":
+        from app.services import mixed_materials
+
+        mixed_materials.validate(params)
 
     if stop_at == "video" and params.subtitle_enabled:
         try:
@@ -1754,7 +1770,7 @@ def _run_pipeline(
     generation_progress.stage("terms")
     # 2. Generate terms
     video_terms = ""
-    if stop_at in {"terms", "materials", "video"} and params.video_source != "local":
+    if stop_at in {"terms", "materials", "video"} and params.video_source not in {"local", "mixed"}:
         video_terms = generate_terms(task_id, params, video_script)
         if not video_terms:
             return _mark_task_failed(
@@ -1859,6 +1875,8 @@ def _run_pipeline(
         params,
         video_terms,
         audio_duration,
+        **({"mixed_script": video_script, "mixed_subtitle": subtitle_path}
+           if params.video_source == "mixed" else {}),
         loomloom_video_request=loomloom_video_request,
         **({"codex_image_context": codex_image_context}
            if codex_image_context is not None else {}),
@@ -1955,6 +1973,10 @@ def _run_pipeline(
         "cross_post_owner": _cross_post_process_owner if should_cross_post else None,
         "warnings": generation_warnings or None,
     }
+    if params.video_source == "mixed":
+        from app.services import mixed_materials
+
+        kwargs["mixed_image_requests"] = mixed_materials.image_requests(task_id)
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
     )
