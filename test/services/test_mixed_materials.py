@@ -36,18 +36,18 @@ def setup(tmp_path, monkeypatch):
                for i in (1, 2, 3)]
     model = Mock(return_value=json.dumps(choices))
     monkeypatch.setattr(mixed.llm, "_generate_response", model)
-    search = Mock(side_effect=lambda provider, *args: [MaterialInfo(provider=provider, url=f"https://stock.example.test/{provider}.mp4", duration=10)])
+    search = Mock(side_effect=lambda provider, *args: [MaterialInfo(provider=provider, url=f"https://stock.example.test/{provider}.mp4", duration=60)])
     monkeypatch.setattr(mixed.material, "_search_videos_with_cache", search)
 
     def save(url, directory):
         path = Path(directory) / (url.rsplit('/', 1)[-1])
-        path.write_bytes(b"stock clip")
+        path.write_bytes(url.encode())
         return str(path)
     monkeypatch.setattr(mixed.material, "save_video", save)
 
     def image(**kwargs):
-        path = Path(kwargs["save_dir"]) / "generated.png"
-        path.write_bytes(b"paid image")
+        path = Path(kwargs["save_dir"]) / (str(images.call_count) + "-generated.png")
+        path.write_bytes(str(images.call_count).encode())
         return [MaterialInfo(provider="openai_image", url=str(path), duration=1)]
     images = Mock(side_effect=image)
     monkeypatch.setattr(mixed.material, "generate_images_openai", images)
@@ -57,7 +57,7 @@ def setup(tmp_path, monkeypatch):
         output.write_bytes((str(source)+str(frames)).encode())
     rendering = Mock(side_effect=render)
     monkeypatch.setattr(mixed, "render", rendering)
-    params = VideoParams(video_subject="Café", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, mixed_scene_duration=5)
+    params = VideoParams(video_subject="Café", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, mixed_variable_pacing=False, mixed_scene_duration=5)
     return folder, subtitles, params, model, search, images, rendering
 
 
@@ -121,7 +121,7 @@ def test_render_failure_reuses_the_saved_paid_image(setup, monkeypatch):
 
 def test_a_failed_stock_provider_falls_back_to_the_other_bank(setup):
     folder, subtitles, params, _, search, images, _ = setup
-    search.side_effect = lambda provider, *args: [] if provider == "pexels" else [MaterialInfo(provider=provider, url="https://stock.example.test/pixabay.mp4", duration=10)]
+    search.side_effect = lambda provider, *args: [] if provider == "pexels" else [MaterialInfo(provider=provider, url="https://stock.example.test/pixabay.mp4", duration=60)]
     mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
     scenes = json.loads((folder / "mixed-scenes.json").read_text())["scenes"]
     assert scenes[0]["provenance"]["provider"] == "pixabay"
@@ -210,7 +210,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
     for provider, color in (("pexels", "red"), ("openai_image", "blue"), ("pixabay", "green")):
         target = tmp_path / (provider + ".mp4")
         subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
-                        f"color=c={color}:s=160x90:r=30:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(target)], check=True)
+                        f"color=c={color}:s=160x90:r=30:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(target)], check=True)
         clips[provider] = str(target)
     audio = tmp_path / "voice.wav"
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
@@ -226,7 +226,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
                 "location": "Brazil", "search_query": f"scene {i}", "image_prompt": "Contextual coffee illustration", "reason": "Narrative fit"}
                for i in (1, 2, 3)]
     monkeypatch.setattr(mixed.llm, "_generate_response", lambda **kwargs: json.dumps(choices))
-    monkeypatch.setattr(mixed.material, "_search_videos_with_cache", lambda provider, *args: [MaterialInfo(provider=provider, url=provider, duration=1)])
+    monkeypatch.setattr(mixed.material, "_search_videos_with_cache", lambda provider, *args: [MaterialInfo(provider=provider, url=provider, duration=3)])
     monkeypatch.setattr(mixed.material, "save_video", lambda url, directory: clips[url])
     image = tmp_path / "generated.png"
     image.write_bytes(b"simulated downloaded image")
@@ -238,7 +238,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
     terms = Mock(side_effect=AssertionError("Mixed mode must plan from narration, not global search terms"))
     monkeypatch.setattr(tm, "generate_terms", terms)
     monkeypatch.setattr(tm.upload_post.upload_post_service, "is_configured", lambda: False)
-    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, subtitle_enabled=False,
+    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
                          bgm_type="", n_threads=1, video_clip_speed=2.0)
     result = tm.start("integration", params)
     assert result.get("videos"), result
@@ -399,7 +399,7 @@ def test_stock_search_tries_alternate_query_and_coverr_before_stopping(setup, mo
     choices[0]["alternate_queries"] = ["coffee beans"]
     model.return_value = json.dumps(choices)
     search.side_effect = lambda provider, method, query, *args: (
-        [MaterialInfo(provider=provider, url="https://stock.example.test/clip.mp4", duration=10)]
+        [MaterialInfo(provider=provider, url="https://stock.example.test/clip.mp4", duration=60)]
         if provider == "coverr" and query == "coffee beans" else [])
     mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
     assert [(c.args[0], c.args[2]) for c in search.call_args_list[:6]] == [
@@ -450,34 +450,37 @@ def test_visual_candidates_have_a_hard_per_scene_limit(setup, monkeypatch):
     scene = {**json.loads(model.return_value)[0], "text": "Hoje preparamos café.", "start_frame": 0, "end_frame": 300}
     inspect = Mock(return_value=(False, {}))
     monkeypatch.setattr(mixed.visual_validation, "inspect_clip", inspect)
-    assert mixed._stock(scene, params, setup[0], ["pexels", "pixabay"], set()) == (None, None)
+    assert mixed._stock(scene, params, setup[0], ["pexels", "pixabay"], {}) == (None, None)
     assert inspect.call_count == 1
 
 
-@pytest.mark.parametrize("start_time", [0, 27, 32, 177, 187])
-def test_reframing_changes_at_global_boundary_without_new_media(tmp_path, monkeypatch, start_time):
-    import numpy as np
-    from PIL import Image
-    from moviepy import VideoFileClip
-    if not shutil.which("ffmpeg"):
-        pytest.skip("FFmpeg required")
-    monkeypatch.setattr(VideoAspect, "to_resolution", lambda self: (160, 90))
-    x, y = np.meshgrid(np.arange(320), np.arange(180))
-    pattern = np.stack([(x % 40 < 20) * 255, (y % 40 < 20) * 255, (x % 30 < 15) * 255], axis=-1).astype("uint8")
-    image = tmp_path / "approved.png"
-    Image.fromarray(pattern).save(image)
-    params = VideoParams(video_subject="test", mixed_variable_pacing=True, n_threads=1)
-    output = tmp_path / "cuts.mp4"
-    mixed.render(image, output, 180, params, start_time=start_time)
-    with VideoFileClip(str(output)) as clip:
-        assert abs(clip.duration - 6) < 0.05
-        before = clip.get_frame(2.5).astype(float)
-        earlier = clip.get_frame(1.5).astype(float)
-        after = clip.get_frame(3.5).astype(float)
-        assert np.abs(before - earlier).mean() < 2
-        assert np.abs(after - before).mean() > 3
-    params.mixed_variable_pacing = False
-    output = tmp_path / "fixed.mp4"
-    mixed.render(image, output, 180, params, start_time=start_time)
-    with VideoFileClip(str(output)) as clip:
-        assert np.abs(clip.get_frame(3.5).astype(float) - clip.get_frame(2.5).astype(float)).mean() < 2
+
+def test_variable_pacing_requires_distinct_material_units():
+    units = [{"id": 1, "text": "Coffee history", "start_frame": 0, "end_frame": 6000}]
+    shots = mixed.shot_timeline(units, 200, 0, 10)
+    assert [s["end_frame"] - s["start_frame"] for s in shots[:10]] == [90] * 10
+    assert [s["end_frame"] - s["start_frame"] for s in shots[10:40]] == [150] * 30
+    assert [s["end_frame"] - s["start_frame"] for s in shots[40:]] == [300] * 2
+    assert shots[-1]["end_frame"] == 6000
+
+
+def test_variable_pacing_uses_global_chapter_clock():
+    units = [{"id": 1, "text": "Coffee history", "start_frame": 0, "end_frame": 300}]
+    shots = mixed.shot_timeline(units, 10, 177, 10)
+    assert [(s["start_frame"], s["end_frame"]) for s in shots] == [(0, 90), (90, 300)]
+
+
+@pytest.mark.parametrize("position,allowed", [(59, False), (60, True)])
+def test_stock_reuse_only_after_sixty_percent_and_from_unused_segment(setup, position, allowed):
+    folder, _, params, model, _, _, _ = setup
+    params.mixed_total_duration = 100
+    scene = {**json.loads(model.return_value)[0], "text": "Coffee", "start_frame": position * 30, "end_frame": (position + 3) * 30}
+    # The same ID is blocked regardless of the download URL.
+    def first_record():
+        return mixed._stock(scene, params, folder, ["pexels"], {})
+    _, record = first_record()
+    used = {record["source_digest"]: 3, record["source_identity"]: 3}
+    path, again = mixed._stock(scene, params, folder, ["pexels"], used)
+    assert bool(path) is allowed
+    if allowed:
+        assert again["source_start"] == 3 and again["source_end"] == 6

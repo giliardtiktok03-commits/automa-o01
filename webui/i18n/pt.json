@@ -590,6 +590,6 @@
     "mixed.vision_config": "Para validar os clipes, configure a chave e URL do OpenAI em Configurar modelo de IA e escolha um modelo que aceite imagens. A chave de geração de imagens é uma configuração separada.",
     "mixed.vision_failed": "A análise visual falhou ou não retornou uma avaliação válida. A tarefa parou sem aprovar o clipe nem encomendar uma imagem para substituir essa falha. Confira o acesso ao modelo visual, a configuração da API e os logs.",
     "Mixed Variable Pacing": "Ritmo variável na abertura",
-    "Mixed Pacing Help": "Reenquadra o mesmo material aprovado a cada 3s nos primeiros 30s e a cada 5s até 3min; depois usa a duração desejada abaixo. Não encomenda novas imagens nem faz novas análises por corte. Os trechos da narração ainda definem as trocas de material. Respeita o tempo total entre capítulos. Usa zoom e recorte discretos no modo Preencher; em Conter fica sem reenquadramentos para preservar o quadro inteiro. Pode acrescentar tempo de renderização; não garante retenção."
+    "Mixed Pacing Help": "Troca real de material: 3s nos primeiros 30s, 5s até 3min, depois na duração configurada. Mesmo arquivo/ID bloqueado antes de 60%. Depois, só outro trecho ainda não usado, nunca consecutivo. Mais materiais podem aumentar custo e tempo; o limite de imagens continua valendo."
   }
 }

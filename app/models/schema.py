@@ -126,6 +126,9 @@ class VideoParams(BaseModel):
     mixed_max_images: int = Field(default=12, ge=0, le=120)
     mixed_scene_duration: int = Field(default=10, ge=5, le=30)
     mixed_variable_pacing: bool = True
+    mixed_is_chapter: bool = False
+    mixed_total_duration: float = Field(default=0, ge=0, allow_inf_nan=False)
+    mixed_previous_sources: list[dict[str, Any]] = Field(default_factory=list)
     mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
     mixed_visual_validation: bool = True
     mixed_vision_model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=200)

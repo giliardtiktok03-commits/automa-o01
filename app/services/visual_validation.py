@@ -26,16 +26,16 @@ class Verdict(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
-def inspect_clip(path, scene, directory, settings, model):
+def inspect_clip(path, scene, directory, settings, model, *, source_start=0):
     """One API call for three reduced frames. API failures never approve footage."""
     try:
         with VideoFileClip(str(path), audio=False) as clip:
-            duration = min(float(clip.duration), (scene["end_frame"] - scene["start_frame"]) / 30)
+            duration = min(float(clip.duration) - source_start, (scene["end_frame"] - scene["start_frame"]) / 30)
             if duration <= 0:
                 raise ValueError("duration")
             frames = []
             for fraction in (0.1, 0.5, 0.9):
-                frame = Image.fromarray(clip.get_frame(duration * fraction)).convert("RGB")
+                frame = Image.fromarray(clip.get_frame(source_start + duration * fraction)).convert("RGB")
                 frame.thumbnail((512, 512))
                 stream = io.BytesIO()
                 frame.save(stream, format="JPEG", quality=65)

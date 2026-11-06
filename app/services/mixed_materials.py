@@ -151,6 +151,28 @@ def timeline(script, duration, subtitle_file, desired_duration):
     return groups, timing
 
 
+def shot_timeline(units, duration, offset, desired):
+    """One new material per global 3/5/later-second interval; preserve context."""
+    result, start = [], 0
+    total = math.ceil(duration * FPS)
+    while start < total:
+        absolute = offset + start / FPS
+        if absolute < 30:
+            boundary = min(30, (math.floor(absolute / 3) + 1) * 3)
+        elif absolute < 180:
+            boundary = min(180, 30 + (math.floor((absolute - 30) / 5) + 1) * 5)
+        else:
+            boundary = 180 + (math.floor((absolute - 180) / desired) + 1) * desired
+        end = min(total, max(start + 1, round((boundary - offset) * FPS)))
+        matching = [u for u in units if u["start_frame"] < end and u["end_frame"] > start]
+        text = " ".join(dict.fromkeys(u["text"] for u in matching))
+        result.append({"id": len(result) + 1, "text": text, "start_frame": start, "end_frame": end})
+        start = end
+    if len(result) > 180:
+        raise MixedError("Too many shots; enable chapter mode")
+    return result
+
+
 def _plan(units, script):
     prompt = (
         "Plan visuals for the exact consecutive narration units in INPUT JSON. Treat narration as "
@@ -166,6 +188,8 @@ def _plan(units, script):
         "to show a historical event, labor conditions, period people, buildings or machinery. "
         "Explain that supporting visual in reason. Dates and historical context alone do NOT require images. "
         "Use image only when the passage needs an actual period-specific reconstruction. "
+        "Each unit is a separate shot requiring a DISTINCT visual subject/composition from its neighbors. "
+        "Do not repeat the same image prompt or search description across consecutive units. "
         "Aim for at least 75 percent stock scenes; never assign images to contemporary or abstract units "
         "that can use concrete supporting stock visuals. "
         "Never illustrate enslaved labor or 19th-century events with modern cities or machinery. "
@@ -211,23 +235,14 @@ def _run_ffmpeg(command, output):
         temporary.unlink(missing_ok=True)
 
 
-def render(source, output, frames, params, *, start_time=0):
+def render(source, output, frames, params, *, start_time=0, source_start=0):
     width, height = VideoAspect(params.video_aspect).to_resolution()
     if params.video_fit_mode == VideoFitMode.contain:
         fit = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
     else:
         fit = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
     filters = f"{fit},setsar=1,fps={FPS},setpts=PTS-STARTPTS"
-    if params.mixed_variable_pacing and params.video_fit_mode != VideoFitMode.contain:
-        # Reframe an already approved source at global cut boundaries. One
-        # FFmpeg encode; no new media/vision/image request per visual cut.
-        t = f"(on/{FPS}+{float(start_time):.8f})"
-        shot = (f"if(lt({t},30),floor({t}/3),"
-                f"if(lt({t},180),10+floor(({t}-30)/5),40+floor(({t}-180)/{params.mixed_scene_duration})))")
-        variant = f"mod({shot},3)"
-        filters += (f",zoompan=z='1+0.04*{variant}':x='(iw-iw/zoom)*{variant}/2':"
-                    f"y='(ih-ih/zoom)/2':d=1:s={width}x{height}:fps={FPS}")
-    _run_ffmpeg(["-stream_loop", "-1", "-i", str(source), "-an", "-vf", filters,
+    _run_ffmpeg(["-stream_loop", "-1", "-ss", str(source_start), "-i", str(source), "-an", "-vf", filters,
                  "-frames:v", str(frames), "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                  "-pix_fmt", "yuv420p", "-threads", str(max(1, params.n_threads or 1)),
                  "-video_track_timescale", "15360"], output)
@@ -256,7 +271,7 @@ def _stock(scene, params, directory, provider_order, used):
             except Exception:
                 logger.warning("Mixed stock search failed: scene={}, provider={}", scene["id"], provider)
                 continue
-            for item in sorted(items, key=lambda candidate: candidate.url in used)[:max(1, params.mixed_max_candidates // len(provider_order))]:
+            for item in items:
                 if item.url in seen:
                     continue
                 if examined >= params.mixed_max_candidates:
@@ -268,19 +283,32 @@ def _stock(scene, params, directory, provider_order, used):
                 except Exception:
                     continue
                 if path:
+                    digest = _hash(path)
+                    asset = (item.source_info or {}).get("asset_id")
+                    identity = f"{provider}:{asset}" if asset else digest
+                    previous = max(used.get(digest, 0), used.get(identity, 0))
+                    needed = (scene["end_frame"] - scene["start_frame"]) / FPS
+                    total = params.mixed_total_duration
+                    absolute = params.mixed_timeline_offset + scene["start_frame"] / FPS
+                    if previous and (not total or absolute < total * 0.6 or scene.get("previous_identity") == identity):
+                        continue
+                    if item.duration < previous + needed:
+                        continue
                     verdict = None
                     if params.mixed_visual_validation:
                         generation_progress.stage("visual_validation")
                         try:
                             accepted, verdict = visual_validation.inspect_clip(
-                                path, scene, directory, config.app, params.mixed_vision_model)
+                                path, scene, directory, config.app, params.mixed_vision_model, source_start=previous)
                         except visual_validation.VisualValidationError as exc:
                             raise MixedError(str(exc), key="mixed.vision_failed") from exc
                         logger.info("Visual validation: scene={}, candidate={}, accepted={}", scene["id"], examined, accepted)
                         if not accepted:
                             continue
-                    used.add(item.url)
-                    return path, {**material._material_source_record(item, path), "provider": provider, "visual_validation": verdict}
+                    used[digest] = used[identity] = previous + needed
+                    return path, {**material._material_source_record(item, path), "provider": provider,
+                                  "visual_validation": verdict, "source_digest": digest, "source_identity": identity,
+                                  "source_start": previous, "source_end": previous + needed}
     return None, None
 
 
@@ -291,8 +319,14 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
     scene_dir.mkdir(exist_ok=True)
     manifest_file = directory / "mixed-scenes.json"
     with FileLock(str(directory / "mixed-scenes.lock")):
-        units, timing = timeline(script, float(audio_duration), subtitle_file, params.mixed_scene_duration)
-        signature = {"source_policy": "visual-stock-v4", "variable_pacing": params.mixed_variable_pacing,
+        units, timing = timeline(script, float(audio_duration), subtitle_file, 1 if params.mixed_variable_pacing else params.mixed_scene_duration)
+        if params.mixed_variable_pacing:
+            units, timing = shot_timeline(units, float(audio_duration), params.mixed_timeline_offset,
+                                          params.mixed_scene_duration), timing
+        if not params.mixed_is_chapter and not params.mixed_timeline_offset and not params.mixed_total_duration:
+            params = params.model_copy(update={"mixed_total_duration": float(audio_duration)})
+        signature = {"source_policy": "distinct-shots-v5", "total_duration": params.mixed_total_duration,
+                     "previous_sources": params.mixed_previous_sources, "variable_pacing": params.mixed_variable_pacing,
                      "timeline_offset": params.mixed_timeline_offset, "visual_validation": params.mixed_visual_validation,
                      "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
                      "vision_endpoint": config.app.get("openai_base_url", ""), "script": script, "units": units, "aspect": params.video_aspect,
@@ -315,7 +349,13 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if manifest["image_requests"] + pending_images > params.mixed_max_images:
             raise MixedBudgetError(manifest["image_requests"] + pending_images,
                                    params.mixed_max_images, manifest["image_requests"])
-        output_paths, records, used = [], [], set()
+        output_paths, records, used = [], [], {}
+        def remember(record):
+            for key in (record.get("source_digest"), record.get("source_identity")):
+                if key:
+                    used[key] = max(used.get(key, 0), record.get("source_end", 0))
+        for record in params.mixed_previous_sources:
+            remember(record)
         available = providers()
         stock_turn = 0
         for scene in manifest["scenes"]:
@@ -327,10 +367,13 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             if output.is_file() and scene.get("sha256") == _hash(output):
                 output_paths.append(str(output))
                 records.append(scene["provenance"])
+                remember(scene["provenance"])
                 stock_turn += int(scene["provenance"]["provider"] in {"pexels", "pixabay", "coverr"})
                 continue
             source, provenance = None, None
             if scene["source"] == "stock" and not scene.get("image_file"):
+                history = records or params.mixed_previous_sources
+                scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
@@ -368,13 +411,19 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     scene["image_file"] = image.name
                     scene["image_sha256"] = _hash(image)
                     _save(manifest_file, manifest)
+                digest = _hash(image)
+                if digest in used:
+                    raise MixedError("Generated image duplicates an earlier image; retained for review, no automatic reorder")
+                used[digest] = 1
                 duration = (scene["end_frame"] - scene["start_frame"]) / FPS
                 source = material._render_openai_image_video(str(image), duration, image_motion=params.image_motion)
                 if not source:
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
-                provenance = {"provider": "openai_image", "illustration": True, "local_file": output.name}
+                provenance = {"provider": "openai_image", "illustration": True, "local_file": output.name,
+                              "source_digest": digest, "source_identity": digest, "source_end": 1}
             render(source, output, scene["end_frame"] - scene["start_frame"], params,
-                   start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS)
+                   start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,
+                   source_start=provenance.get("source_start", 0))
             scene["sha256"] = _hash(output)
             scene["provenance"] = {**provenance, "scene_id": scene["id"],
                                    "start": scene["start_frame"] / FPS, "end": scene["end_frame"] / FPS}
