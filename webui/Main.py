@@ -1567,6 +1567,9 @@ def _apply_restored_params(params):
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
+    _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "openai"))
+    st.session_state["flow_profile"] = params.get("flow_profile", "principal")
+    st.session_state["flow_project_url"] = params.get("flow_project_url", "")
     for key, default in (("mixed_visual_validation", True), ("mixed_vision_model", "gpt-4.1-mini"), ("mixed_max_candidates", 3)):
         st.session_state[key] = params.get(key, default)
     st.session_state["video_script_prompt"] = params.get("video_script_prompt") or ""
@@ -2092,6 +2095,7 @@ def _render_generation_activity(task):
         "downloading": "Generation Downloading",
         "verifying": "Generation Verifying",
         "visual_validation": "Mixed Visual Validation",
+        "flow_browser": "Flow Browser",
         "rendering": "Generation Rendering",
     }
     st.info(tr(labels.get(phase, "Generating Video")))
@@ -2129,6 +2133,8 @@ def _render_generation_task_snapshot(task_id, task):
         ))
         if task.get("mixed_timing") == "estimated":
             st.caption(tr("Mixed Estimated Timing"))
+    if (task.get("mixed_source_counts") or {}).get("flow_browser"):
+        st.caption(tr("Flow Used").format(count=task["mixed_source_counts"]["flow_browser"]))
     if (task.get("mixed_source_counts") or {}).get("editorial_card"):
         st.warning(tr("Mixed Editorial Cards").format(count=task["mixed_source_counts"]["editorial_card"]))
     if isinstance(task.get("mixed_source_counts"), Mapping):
@@ -6204,6 +6210,25 @@ def _render_video_settings(panel, params):
             _set_runtime_config("app", "video_source", params.video_source)
             if params.video_source == "mixed":
                 st.info(tr("Mixed Materials Help"))
+                image_provider_labels = {"openai": tr("Flow OpenAI API"), "flow_browser": tr("Flow Browser")}
+                params.mixed_image_provider = stable_selectbox(
+                    tr("Mixed Image Provider"), options=["openai", "flow_browser"],
+                    default_value=config.ui.get("mixed_image_provider", "openai"),
+                    key="mixed_image_provider", format_func=image_provider_labels.get)
+                _set_runtime_config("ui", "mixed_image_provider", params.mixed_image_provider)
+                if params.mixed_image_provider == "flow_browser":
+                    st.info(tr("Flow Browser Help"))
+                    params.flow_profile = st.text_input(tr("Flow Profile"), value=config.ui.get("flow_profile", "principal"), key="flow_profile")
+                    params.flow_project_url = st.text_input(tr("Flow Project"), value=config.ui.get("flow_project_url", ""), key="flow_project_url")
+                    _set_runtime_config("ui", "flow_profile", params.flow_profile)
+                    _set_runtime_config("ui", "flow_project_url", params.flow_project_url)
+                    if st.button(tr("Flow Connect"), key="flow_connect", disabled=bool(webui_task.queue_snapshot())):
+                        from app.services import flow_browser
+                        try:
+                            flow_browser.connect(params.flow_profile, params.flow_project_url)
+                            st.success(tr("Flow Connect Started"))
+                        except (ValueError, OSError) as exc:
+                            st.error(str(exc))
                 params.mixed_variable_pacing = st.checkbox(
                     tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
                 st.caption(tr("Mixed Pacing Help"))

@@ -139,3 +139,26 @@ def test_stages_have_distinct_numbered_colors(headless_task_app):
     for number, color in [("01", "#6d28d9"), ("02", "#0369a1"), ("03", "#b45309"), ("04", "#047857")]:
         assert number in headings and color in headings
     assert not app.button(key="generate_video_button").disabled
+
+
+def test_flow_profile_controls_open_manual_login_without_password_field(headless_task_app, monkeypatch):
+    from app.services import flow_browser
+    from unittest.mock import Mock
+    app, _ = headless_task_app
+    for key in ('mixed_image_provider','flow_profile','flow_project_url'):
+        monkeypatch.setitem(config.ui, key, config.ui.get(key, ''))
+    language = app.session_state['ui_language']
+    app.session_state[f'video_source_select_{language}'] = 'mixed'
+    app.run()
+    app.session_state[f'mixed_image_provider_{language}'] = 'flow_browser'
+    app.run()
+    assert not app.exception
+    app.text_input(key='flow_profile').set_value('principal')
+    url = 'https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
+    app.text_input(key='flow_project_url').set_value(url)
+    connect = Mock()
+    monkeypatch.setattr(flow_browser, 'connect', connect)
+    app.button(key='flow_connect').click().run()
+    assert not app.exception
+    connect.assert_called_once_with('principal', url)
+    assert config.ui['flow_profile'] == 'principal'

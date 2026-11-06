@@ -15,8 +15,8 @@ from PIL import Image, ImageDraw, ImageFont
 import textwrap
 
 from app.config import config
-from app.models.schema import VideoAspect, VideoFitMode
-from app.services import generation_progress, llm, material, task_artifacts, visual_validation
+from app.models.schema import MaterialInfo, VideoAspect, VideoFitMode
+from app.services import generation_progress, llm, material, task_artifacts, visual_validation, flow_browser
 from app.services import state as sm
 from app.utils import utils
 from app.utils.subtitle_reader import moviepy_subtitles
@@ -84,7 +84,12 @@ def validate(params, settings=None, *, external_audio=False):
         raise MixedError("Mixed mode requires one output video")
     if not providers(settings):
         raise MixedError("Configure at least one stock API: Pexels, Pixabay or Coverr")
-    if params.mixed_max_images and not material.is_openai_image_enabled(settings):
+    if params.mixed_max_images and params.mixed_image_provider == "flow_browser":
+        try:
+            flow_browser.validate(params.flow_profile, params.flow_project_url)
+        except flow_browser.FlowError as exc:
+            raise MixedError(str(exc), key="mixed.flow_config", params={"detail": str(exc)}) from exc
+    if params.mixed_max_images and params.mixed_image_provider == "openai" and not material.is_openai_image_enabled(settings):
         raise MixedError("Configure the OpenAI-compatible image URL and model, or set the mixed image limit to zero")
 
 
@@ -370,7 +375,8 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                                           params.mixed_scene_duration), timing
         if not params.mixed_is_chapter and not params.mixed_timeline_offset and not params.mixed_total_duration:
             params = params.model_copy(update={"mixed_total_duration": float(audio_duration)})
-        signature = {"source_policy": "distinct-shots-v5", "total_duration": params.mixed_total_duration,
+        signature = {"source_policy": "distinct-shots-v5", "image_provider": params.mixed_image_provider,
+                     "flow_profile": params.flow_profile, "flow_project_url": params.flow_project_url, "total_duration": params.mixed_total_duration,
                      "previous_sources": params.mixed_previous_sources, "variable_pacing": params.mixed_variable_pacing,
                      "timeline_offset": params.mixed_timeline_offset, "visual_validation": params.mixed_visual_validation,
                      "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
@@ -452,13 +458,20 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                               "No unrelated animals or symbolic substitutes for human conditions. "
                               "No captions, logos or text. This is an illustration, not archival evidence.")
                     try:
-                        items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
-                            video_aspect=params.video_aspect, save_dir=str(scene_dir), raise_on_refusal=True)
-                    except material.OpenAIImageRefusalError:
+                        if params.mixed_image_provider == "flow_browser":
+                            generation_progress.stage("flow_browser")
+                            image = flow_browser.generate(prompt, scene_dir, params.flow_profile, params.flow_project_url)
+                            items = [MaterialInfo(provider="flow_browser", url=str(image), duration=1)]
+                        else:
+                            items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
+                                video_aspect=params.video_aspect, save_dir=str(scene_dir), raise_on_refusal=True)
+                    except (material.OpenAIImageRefusalError, flow_browser.FlowRefusal):
                         scene["image_refused"] = True
                         _save(manifest_file, manifest)
                         image = _context_card(scene, params, scene_dir)
                         logger.warning("Scene {}: image refused; using a labeled editorial card, no retry", scene["id"])
+                    except flow_browser.FlowError as exc:
+                        raise MixedError(str(exc), key="mixed.flow_failed") from exc
                     else:
                         if not items:
                             raise MixedError("Image generation did not yield a usable result; no further images were ordered")
@@ -474,7 +487,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 source = str(image) if scene.get("image_refused") else material._render_openai_image_video(str(image), duration, image_motion=params.image_motion)
                 if not source:
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
-                provenance = {"provider": "editorial_card" if scene.get("image_refused") else "openai_image", "illustration": True, "local_file": output.name,
+                provenance = {"provider": "editorial_card" if scene.get("image_refused") else ("flow_browser" if params.mixed_image_provider == "flow_browser" else "openai_image"), "illustration": True, "local_file": output.name,
                               "source_digest": digest, "source_identity": digest, "source_end": 1}
             render(source, output, scene["end_frame"] - scene["start_frame"], params,
                    start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,
@@ -490,6 +503,9 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
         cards = sum(record["provider"] == "editorial_card" for record in records)
         if cards:
             counts["editorial_card"] = cards
+        flow_count = sum(record["provider"] == "flow_browser" for record in records)
+        if flow_count:
+            counts["flow_browser"] = flow_count
         logger.info("Mixed sources used: Pexels={}, Pixabay={}, Coverr={}, AI={}",
                     counts["pexels"], counts["pixabay"], counts["coverr"], counts["openai_image"])
         sm.state.update_task(task_id, mixed_source_counts=counts)

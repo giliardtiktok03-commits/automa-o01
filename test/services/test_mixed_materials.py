@@ -541,3 +541,44 @@ def test_local_editorial_card_renders_without_image_api(tmp_path, monkeypatch):
         frame = clip.get_frame(0.5)
         assert frame.max() > 200
         assert frame.mean() > 20
+
+
+def test_flow_is_explicit_provider_and_keeps_existing_api_unused(setup, monkeypatch):
+    folder, subtitles, params, _, _, images, _ = setup
+    params.mixed_image_provider = 'flow_browser'
+    params.flow_project_url = 'https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
+    monkeypatch.setattr(mixed.flow_browser, 'validate', lambda *_: None)
+    picture = folder/'flow.png'
+    picture.write_bytes(b'flow image')
+    generate = Mock(return_value=picture)
+    monkeypatch.setattr(mixed.flow_browser, 'generate', generate)
+    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    assert generate.call_count == 1
+    images.assert_not_called()
+    assert mixed.sm.state.get_task('job')['mixed_source_counts']['flow_browser'] == 1
+
+
+def test_explicit_flow_refusal_keeps_editorial_card_behavior(setup, monkeypatch):
+    folder, subtitles, params, _, _, images, _ = setup
+    params.mixed_image_provider = 'flow_browser'
+    monkeypatch.setattr(mixed.flow_browser, 'validate', lambda *_: None)
+    generate = Mock(side_effect=mixed.flow_browser.FlowRefusal('refused'))
+    monkeypatch.setattr(mixed.flow_browser, 'generate', generate)
+    result = mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    assert len(result) == 3
+    assert mixed.sm.state.get_task('job')['mixed_source_counts']['editorial_card'] == 1
+    assert mixed.prepare('job', params, SCRIPT, 30, str(subtitles)) == result
+    assert generate.call_count == 1
+    images.assert_not_called()
+
+
+def test_missing_flow_setup_stops_in_preflight_before_narration_or_requests(setup, monkeypatch):
+    from app.services import task as tm
+    _, _, params, model, _, images, _ = setup
+    params.mixed_image_provider = 'flow_browser'
+    monkeypatch.setattr(mixed.flow_browser, 'validate', Mock(side_effect=mixed.flow_browser.FlowError('Missing optional dependency')))
+    result = tm.start('missing-flow-setup', params)
+    assert result['failed_stage'] == 'preflight'
+    assert result['error_key'] == 'mixed.flow_config'
+    model.assert_not_called()
+    images.assert_not_called()

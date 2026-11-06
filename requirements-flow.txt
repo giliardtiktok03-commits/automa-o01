@@ -1,0 +1,2 @@
+# Optional, installed only for the assisted Google Flow browser integration.
+playwright>=1.49,<2

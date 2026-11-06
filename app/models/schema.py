@@ -130,6 +130,9 @@ class VideoParams(BaseModel):
     mixed_total_duration: float = Field(default=0, ge=0, allow_inf_nan=False)
     mixed_previous_sources: list[dict[str, Any]] = Field(default_factory=list)
     mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
+    mixed_image_provider: Literal["openai", "flow_browser"] = "openai"
+    flow_profile: str = Field(default="principal", pattern=r"^[A-Za-z0-9_-]{1,48}$")
+    flow_project_url: str = Field(default="", max_length=512)
     mixed_visual_validation: bool = True
     mixed_vision_model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=200)
     mixed_max_candidates: int = Field(default=3, ge=1, le=6)
