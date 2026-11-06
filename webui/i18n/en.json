@@ -843,6 +843,8 @@
     "Mixed Vision Model": "Vision model (OpenAI-compatible API)",
     "Mixed Candidates": "Maximum inspected candidates per scene",
     "mixed.vision_config": "Configure the OpenAI key and URL in AI model settings and select a model that accepts images. The image generation API key is a separate setting.",
-    "mixed.vision_failed": "Visual validation failed or returned an invalid verdict. The task stopped without approving the clip or ordering an image to replace the failed assessment. Check model access, API configuration and logs."
+    "mixed.vision_failed": "Visual validation failed or returned an invalid verdict. The task stopped without approving the clip or ordering an image to replace the failed assessment. Check model access, API configuration and logs.",
+    "Mixed Variable Pacing": "Variable opening pacing",
+    "Mixed Pacing Help": "Reframes the same approved material every 3s for the first 30s, every 5s until 3min, then at the target duration below. No additional image or inspection requests per cut. Narration units still determine source changes. Uses the full timeline across chapters. Applies subtle zoom/crop in Fill mode; Contain preserves the full frame without reframing. May add rendering time; retention is not guaranteed."
   }
 }

@@ -53,7 +53,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(mixed.material, "generate_images_openai", images)
     monkeypatch.setattr(mixed.material, "_render_openai_image_video", lambda *args, **kwargs: "image-clip.mp4")
 
-    def render(source, output, frames, params):
+    def render(source, output, frames, params, **kwargs):
         output.write_bytes((str(source)+str(frames)).encode())
     rendering = Mock(side_effect=render)
     monkeypatch.setattr(mixed, "render", rendering)
@@ -452,3 +452,32 @@ def test_visual_candidates_have_a_hard_per_scene_limit(setup, monkeypatch):
     monkeypatch.setattr(mixed.visual_validation, "inspect_clip", inspect)
     assert mixed._stock(scene, params, setup[0], ["pexels", "pixabay"], set()) == (None, None)
     assert inspect.call_count == 1
+
+
+@pytest.mark.parametrize("start_time", [0, 27, 32, 177, 187])
+def test_reframing_changes_at_global_boundary_without_new_media(tmp_path, monkeypatch, start_time):
+    import numpy as np
+    from PIL import Image
+    from moviepy import VideoFileClip
+    if not shutil.which("ffmpeg"):
+        pytest.skip("FFmpeg required")
+    monkeypatch.setattr(VideoAspect, "to_resolution", lambda self: (160, 90))
+    x, y = np.meshgrid(np.arange(320), np.arange(180))
+    pattern = np.stack([(x % 40 < 20) * 255, (y % 40 < 20) * 255, (x % 30 < 15) * 255], axis=-1).astype("uint8")
+    image = tmp_path / "approved.png"
+    Image.fromarray(pattern).save(image)
+    params = VideoParams(video_subject="test", mixed_variable_pacing=True, n_threads=1)
+    output = tmp_path / "cuts.mp4"
+    mixed.render(image, output, 180, params, start_time=start_time)
+    with VideoFileClip(str(output)) as clip:
+        assert abs(clip.duration - 6) < 0.05
+        before = clip.get_frame(2.5).astype(float)
+        earlier = clip.get_frame(1.5).astype(float)
+        after = clip.get_frame(3.5).astype(float)
+        assert np.abs(before - earlier).mean() < 2
+        assert np.abs(after - before).mean() > 3
+    params.mixed_variable_pacing = False
+    output = tmp_path / "fixed.mp4"
+    mixed.render(image, output, 180, params, start_time=start_time)
+    with VideoFileClip(str(output)) as clip:
+        assert np.abs(clip.get_frame(3.5).astype(float) - clip.get_frame(2.5).astype(float)).mean() < 2

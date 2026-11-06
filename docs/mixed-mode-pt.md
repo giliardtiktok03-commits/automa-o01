@@ -102,6 +102,28 @@ os controles de transição, duração máxima de clipe e velocidade comuns fica
 inativos. A duração de cena do modo misto é a opção relevante. As palavras-chave
 globais antigas não são usadas para planejar as cenas desse modo.
 
+## Ritmo variável da abertura
+
+No modo misto, **Ritmo variável na abertura** vem ativado. O mesmo material já
+aprovado recebe cortes de enquadramento a cada 3 segundos nos primeiros 30s,
+a cada 5 segundos entre 30s e 3 minutos, e depois na duração desejada configurada.
+São variações discretas de zoom/recorte (até 8%), não novos arquivos de banco nem
+novas imagens geradas. As trocas de assunto/material continuam acompanhando as
+unidades da narração: o controle de duração de cena ainda orienta esse planejamento.
+Isso evita multiplicar buscas, análises visuais e imagens pagas por corte.
+
+A contagem de fontes continua sendo de materiais/cenas planejadas, não desses
+reenquadramentos. A programação usa o tempo global do vídeo e não reinicia a cada
+capítulo; capítulos concluídos preservam seu tempo ao retomar. A opção só
+reenquadra no ajuste **Preencher**; **Conter** preserva o quadro inteiro. Desmarcar
+a opção mantém o enquadramento anterior. Pode acrescentar custo de processamento
+na renderização e não garante melhoria de retenção. Teste uma nova geração para
+comparar a abertura; checkpoints antigos não são compatíveis com a nova política.
+
+API: `mixed_variable_pacing: true` (padrão). CLI: `--mixed-variable-pacing` ou
+`--no-mixed-variable-pacing`. O campo `mixed_timeline_offset` é usado internamente
+para posicionar cada capítulo no tempo total; deixe zero para um vídeo único.
+
 ## Controle de custo e retomada
 
 O limite de imagens conta solicitações **iniciadas**, incluindo uma solicitação

@@ -211,13 +211,22 @@ def _run_ffmpeg(command, output):
         temporary.unlink(missing_ok=True)
 
 
-def render(source, output, frames, params):
+def render(source, output, frames, params, *, start_time=0):
     width, height = VideoAspect(params.video_aspect).to_resolution()
     if params.video_fit_mode == VideoFitMode.contain:
         fit = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
     else:
         fit = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
     filters = f"{fit},setsar=1,fps={FPS},setpts=PTS-STARTPTS"
+    if params.mixed_variable_pacing and params.video_fit_mode != VideoFitMode.contain:
+        # Reframe an already approved source at global cut boundaries. One
+        # FFmpeg encode; no new media/vision/image request per visual cut.
+        t = f"(on/{FPS}+{float(start_time):.8f})"
+        shot = (f"if(lt({t},30),floor({t}/3),"
+                f"if(lt({t},180),10+floor(({t}-30)/5),40+floor(({t}-180)/{params.mixed_scene_duration})))")
+        variant = f"mod({shot},3)"
+        filters += (f",zoompan=z='1+0.04*{variant}':x='(iw-iw/zoom)*{variant}/2':"
+                    f"y='(ih-ih/zoom)/2':d=1:s={width}x{height}:fps={FPS}")
     _run_ffmpeg(["-stream_loop", "-1", "-i", str(source), "-an", "-vf", filters,
                  "-frames:v", str(frames), "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                  "-pix_fmt", "yuv420p", "-threads", str(max(1, params.n_threads or 1)),
@@ -283,7 +292,8 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
     manifest_file = directory / "mixed-scenes.json"
     with FileLock(str(directory / "mixed-scenes.lock")):
         units, timing = timeline(script, float(audio_duration), subtitle_file, params.mixed_scene_duration)
-        signature = {"source_policy": "visual-stock-v3", "visual_validation": params.mixed_visual_validation,
+        signature = {"source_policy": "visual-stock-v4", "variable_pacing": params.mixed_variable_pacing,
+                     "timeline_offset": params.mixed_timeline_offset, "visual_validation": params.mixed_visual_validation,
                      "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
                      "vision_endpoint": config.app.get("openai_base_url", ""), "script": script, "units": units, "aspect": params.video_aspect,
                      "fit": params.video_fit_mode, "motion": params.image_motion,
@@ -363,7 +373,8 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 if not source:
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
                 provenance = {"provider": "openai_image", "illustration": True, "local_file": output.name}
-            render(source, output, scene["end_frame"] - scene["start_frame"], params)
+            render(source, output, scene["end_frame"] - scene["start_frame"], params,
+                   start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS)
             scene["sha256"] = _hash(output)
             scene["provenance"] = {**provenance, "scene_id": scene["id"],
                                    "start": scene["start_frame"] / FPS, "end": scene["end_frame"] / FPS}

@@ -1570,6 +1570,7 @@ def _apply_restored_params(params):
     st.session_state["long_form_resume_task_id"] = ""
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
+    st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
     for key, default in (("mixed_visual_validation", True), ("mixed_vision_model", "gpt-4.1-mini"), ("mixed_max_candidates", 3)):
         st.session_state[key] = params.get(key, default)
     st.session_state["video_script_prompt"] = params.get("video_script_prompt") or ""
@@ -6205,6 +6206,9 @@ def _render_video_settings(panel, params):
             _set_runtime_config("app", "video_source", params.video_source)
             if params.video_source == "mixed":
                 st.info(tr("Mixed Materials Help"))
+                params.mixed_variable_pacing = st.checkbox(
+                    tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
+                st.caption(tr("Mixed Pacing Help"))
                 params.mixed_visual_validation = st.checkbox(
                     tr("Mixed Visual Validation"), value=True, key="mixed_visual_validation")
                 st.caption(tr("Mixed Vision Help"))

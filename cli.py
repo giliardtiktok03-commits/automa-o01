@@ -371,6 +371,8 @@ Batch manifests:
                                 help="Inspect candidate frames using the configured OpenAI-compatible vision API")
     material_group.add_argument("--mixed-vision-model", default=None, help="Model accepting image inputs (default gpt-4.1-mini)")
     material_group.add_argument("--mixed-max-candidates", type=int, default=None, help="Maximum candidates inspected per scene (1-6)")
+    material_group.add_argument("--mixed-variable-pacing", action=argparse.BooleanOptionalAction, default=None,
+                                help="Reframe approved material every 3s before 30s, 5s before 3min, then at scene duration")
     material_group.add_argument("--mixed-scene-duration", type=int, default=None,
                                 help="target scene duration in mixed mode, 5-30 seconds (default: 10)")
     material_group.add_argument(
@@ -994,6 +996,7 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
     optional_arg_names = [
         "mixed_max_images",
         "mixed_scene_duration",
+        "mixed_variable_pacing",
         "mixed_visual_validation",
         "mixed_vision_model",
         "mixed_max_candidates",

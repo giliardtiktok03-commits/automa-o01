@@ -113,6 +113,7 @@ def test_mixed_mode_shows_budget_and_forces_narrative_order(headless_task_app, m
     assert not app.exception
     assert app.number_input(key="mixed_max_images").value == 12
     assert app.slider(key="mixed_scene_duration").value == 10
+    assert app.checkbox(key="mixed_variable_pacing").value is True
     assert app.checkbox(key="match_materials_to_script").value is True
     assert app.checkbox(key="match_materials_to_script").disabled
 

@@ -418,9 +418,10 @@ def test_mixed_image_budget_is_shared_across_chapters(setup, monkeypatch):
     params.mixed_max_images = 2
     monkeypatch.setattr(mixed_materials, "validate", lambda *args, **kwargs: None)
     render_original = renderer.side_effect
-    budgets = []
+    budgets, offsets = [], []
 
     def render(task_id, chapter_params):
+        offsets.append(chapter_params.mixed_timeline_offset)
         budgets.append(chapter_params.mixed_max_images)
         result = render_original(task_id, chapter_params)
         (root / task_id / "mixed-scenes.json").write_text(json.dumps({"image_requests": 1}))
@@ -429,4 +430,5 @@ def test_mixed_image_budget_is_shared_across_chapters(setup, monkeypatch):
     renderer.side_effect = render
     lf.run("job", params, render_chapter=renderer)
     assert budgets == [2, 1]
+    assert offsets == [0, 2.0]
     assert params.mixed_max_images == 2

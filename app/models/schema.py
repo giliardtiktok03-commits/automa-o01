@@ -125,6 +125,8 @@ class VideoParams(BaseModel):
     chapter_duration_minutes: int = Field(default=3, ge=1, le=5)
     mixed_max_images: int = Field(default=12, ge=0, le=120)
     mixed_scene_duration: int = Field(default=10, ge=5, le=30)
+    mixed_variable_pacing: bool = True
+    mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
     mixed_visual_validation: bool = True
     mixed_vision_model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=200)
     mixed_max_candidates: int = Field(default=3, ge=1, le=6)
