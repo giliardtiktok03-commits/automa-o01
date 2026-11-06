@@ -57,7 +57,7 @@ def setup(tmp_path, monkeypatch):
         output.write_bytes((str(source)+str(frames)).encode())
     rendering = Mock(side_effect=render)
     monkeypatch.setattr(mixed, "render", rendering)
-    params = VideoParams(video_subject="Café", video_script=SCRIPT, video_source="mixed", mixed_scene_duration=5)
+    params = VideoParams(video_subject="Café", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, mixed_scene_duration=5)
     return folder, subtitles, params, model, search, images, rendering
 
 
@@ -128,13 +128,21 @@ def test_a_failed_stock_provider_falls_back_to_the_other_bank(setup):
     assert images.call_count == 1
 
 
-def test_failed_stock_search_never_silently_spends_image_budget(setup):
+def test_empty_stock_search_falls_back_within_budget(setup):
     _, subtitles, params, _, search, images, _ = setup
     search.return_value = []
     search.side_effect = None
-    with pytest.raises(mixed.MixedError) as captured:
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert images.call_count == 3
+
+
+def test_empty_stock_search_cannot_spend_budget_reserved_for_reconstruction(setup):
+    _, subtitles, params, _, search, images, _ = setup
+    params.mixed_max_images = 1
+    search.return_value = []
+    search.side_effect = None
+    with pytest.raises(mixed.MixedError, match="reserved"):
         mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
-    assert captured.value.key == "mixed.stock_missing"
     images.assert_not_called()
 
 
@@ -230,7 +238,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
     terms = Mock(side_effect=AssertionError("Mixed mode must plan from narration, not global search terms"))
     monkeypatch.setattr(tm, "generate_terms", terms)
     monkeypatch.setattr(tm.upload_post.upload_post_service, "is_configured", lambda: False)
-    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source="mixed", subtitle_enabled=False,
+    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, subtitle_enabled=False,
                          bgm_type="", n_threads=1, video_clip_speed=2.0)
     result = tm.start("integration", params)
     assert result.get("videos"), result
@@ -393,24 +401,54 @@ def test_stock_search_tries_alternate_query_and_coverr_before_stopping(setup, mo
     search.side_effect = lambda provider, method, query, *args: (
         [MaterialInfo(provider=provider, url="https://stock.example.test/clip.mp4", duration=10)]
         if provider == "coverr" and query == "coffee beans" else [])
-    # First scene succeeds on the alternate query at Coverr; second is a reconstruction;
-    # last stock scene then fails and must not trigger more paid requests.
-    with pytest.raises(mixed.MixedError) as captured:
-        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
-    assert captured.value.key == "mixed.stock_missing"
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
     assert [(c.args[0], c.args[2]) for c in search.call_args_list[:6]] == [
         (p, q) for q in ["coffee scene 1", "coffee beans"] for p in ["pexels", "pixabay", "coverr"]]
-    assert images.call_count == 1
+    assert images.call_count == 2
 
 
-def test_image_dominated_plan_is_blocked_before_paid_images(setup):
+def test_needed_images_are_allowed_above_soft_stock_target(setup):
     _, subtitles, params, model, search, images, _ = setup
     choices = json.loads(model.return_value)
     for row in choices:
         row.update(context="historical", source="image")
     model.return_value = json.dumps(choices)
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    search.assert_not_called()
+    assert images.call_count == 3
+
+
+def test_visual_rejection_tries_other_provider_then_uses_ai_within_limit(setup, monkeypatch):
+    _, subtitles, params, _, search, images, _ = setup
+    params.mixed_visual_validation = True
+    monkeypatch.setitem(mixed.config.app, "openai_api_key", "test-key")
+    inspect = Mock(return_value=(False, {"relevant": False, "confidence": 0.99, "reason": "Unrelated insects"}))
+    monkeypatch.setattr(mixed.visual_validation, "inspect_clip", inspect)
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert inspect.call_count == 4  # two configured banks for each stock scene
+    assert images.call_count == 3
+    assert search.call_args_list[0].args[0] == "pexels"
+    assert search.call_args_list[1].args[0] == "pixabay"
+
+
+def test_visual_api_failure_never_approves_or_falls_back_to_paid_image(setup, monkeypatch):
+    _, subtitles, params, _, _, images, _ = setup
+    params.mixed_visual_validation = True
+    monkeypatch.setitem(mixed.config.app, "openai_api_key", "test-key")
+    monkeypatch.setattr(mixed.visual_validation, "inspect_clip", Mock(side_effect=
+        mixed.visual_validation.VisualValidationError("API unavailable")))
     with pytest.raises(mixed.MixedError) as captured:
         mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
-    assert captured.value.key == "mixed.stock_priority"
-    search.assert_not_called()
+    assert captured.value.key == "mixed.vision_failed"
     images.assert_not_called()
+
+
+def test_visual_candidates_have_a_hard_per_scene_limit(setup, monkeypatch):
+    _, _, params, model, search, _, _ = setup
+    params.mixed_max_candidates = 1
+    params.mixed_visual_validation = True
+    scene = {**json.loads(model.return_value)[0], "text": "Hoje preparamos café.", "start_frame": 0, "end_frame": 300}
+    inspect = Mock(return_value=(False, {}))
+    monkeypatch.setattr(mixed.visual_validation, "inspect_clip", inspect)
+    assert mixed._stock(scene, params, setup[0], ["pexels", "pixabay"], set()) == (None, None)
+    assert inspect.call_count == 1

@@ -50,24 +50,51 @@ de outra época. Datas e contexto histórico, por si só, não exigem uma imagem
 Quando a cena requer uma reconstituição de época, usa uma ilustração com prompt
 específico. Essas imagens não são documentos históricos autênticos.
 
-Para impedir planos dominados por IA, cada plano admite no máximo um quarto das
-cenas com imagens geradas, arredondado para baixo, permitindo uma cena em planos
-curtos. O limite de solicitações configurado continua valendo e pode ser menor.
-Em vídeos por capítulos, a proporção é validada em cada capítulo e o limite de
-solicitações continua compartilhado. A proporção conta cenas, não segundos de vídeo.
-Planos que excedam essa proporção param antes de encomendar imagens; o
-planejamento de texto pode ter custo. Novas tarefas usam essa política; não
-reutilize IDs de checkpoints anteriores à atualização.
+A meta é usar bancos em pelo menos 75% das cenas, sem impor uma cota rígida.
+Se não houver um clipe adequado, o sistema pode gerar uma imagem mesmo acima
+dessa proporção, respeitando sempre o limite de solicitações configurado. Nos
+capítulos, esse limite continua compartilhado. Inicie uma nova tarefa ao atualizar:
+os checkpoints de políticas visuais antigas não são reutilizados.
 
-As buscas tentam todos os bancos disponíveis e até duas consultas alternativas
-aprovadas para a mesma cena. Sem um arquivo utilizável, o trabalho interrompe
-com aviso: **uma busca vazia ou falha de API não encomenda uma imagem IA extra**.
-Os logs mostram cena, provedor e consulta para diagnóstico, sem imprimir chaves.
-Ao concluir cada plano, a interface e o log mostram quantas cenas vieram de
-Pexels, Pixabay, Coverr e IA. Um banco sem resultados pode terminar com zero
-cenas; estar cadastrado não garante que seu acervo tenha material utilizável.
-Não há inspeção visual automática dos clipes: revise o vídeo final, pois os
-resultados do banco e a avaliação do planejador ainda podem estar incorretos.
+## Validação visual dos clipes
+
+A opção **Validar clipes visualmente com IA** vem ativada no modo misto. Configure
+a chave e URL do **OpenAI** em **Configurar modelo de IA**; essa configuração é
+separada da API de geração de imagens. O provedor do roteiro pode continuar sendo
+outro. No modo misto, o campo **Modelo com visão** escolhe um modelo compatível com
+imagens e Chat Completions JSON; o padrão é `gpt-4.1-mini`, se disponível na conta.
+Serviços compatíveis precisam suportar imagens e resposta JSON nesse endpoint.
+
+Para cada candidato baixado, são extraídos três quadros do trecho que será usado,
+reduzidos para no máximo 512 pixels. Uma chamada compara os quadros à fala, ao
+contexto, à época e ao lugar; aprova somente uma avaliação positiva com confiança
+mínima de 0,8. A nota é uma estimativa do modelo, não uma garantia de acerto. Não
+aceita analogias visuais que substituam o assunto central, como insetos para
+representar exploração humana. A regra é geral, sem depender do nicho do canal.
+
+O padrão permite analisar até três candidatos por cena (ajustável de 1 a 6),
+distribuídos entre os bancos disponíveis. As buscas podem usar até duas consultas
+alternativas. Avaliações são guardadas em `mixed/visual-checks.json` e reutilizadas
+na mesma tarefa quando quadros, passagem, modelo e configuração coincidem.
+Amostragem pode perder uma cena inadequada entre os quadros: revise o vídeo final.
+Desativar a opção permite usar clipes sem essa verificação.
+
+Se todos os candidatos forem rejeitados ou não houver resultado, há fallback
+para imagem gerada, dentro do orçamento disponível e sem consumir verba reservada
+às reconstituições planejadas. Se o orçamento não bastar, a tarefa para.
+Falhas na análise visual param a tarefa sem aprovação e sem fallback pago. Chamadas
+à API de análise têm timeout de 45 segundos e não usam repetição automática.
+Análise visual e geração de imagens têm custos separados; a análise acrescenta
+tempo. Não há promessa de duração ou de preço por vídeo.
+
+Os logs mostram cena, banco, consulta e aceitação visual. Ao concluir cada plano,
+a interface e o log mostram quantas cenas vieram de Pexels, Pixabay, Coverr e IA.
+Um banco sem resultados pode terminar com zero cenas. O resumo
+`generation_phase_seconds` registra os tempos por fase da execução; a fase de
+materiais pode ser subdividida por downloads, inspeção e preparação das cenas.
+A composição de legendas do modo misto reutiliza o vídeo como fundo opaco, evitando
+uma composição adicional por quadro. O ganho real depende do computador e deve
+ser comparado com uma geração equivalente no Windows.
 
 As cenas são renderizadas em sequência, com duração controlada em quadros. O
 modo usa cortes simples e velocidade normal para preservar a linha do tempo;
@@ -80,7 +107,8 @@ globais antigas não são usadas para planejar as cenas desse modo.
 O limite de imagens conta solicitações **iniciadas**, incluindo uma solicitação
 que possa ter sido cobrada e falhado antes de disponibilizar o resultado. Nos
 vídeos por capítulos, o orçamento é compartilhado entre os capítulos, não
-reiniciado em cada parte. Não há substituição paga automática quando as buscas de banco falham.
+reiniciado em cada parte. O fallback para imagem conta no mesmo limite de solicitações. Falhas da API de
+análise visual não causam esse fallback.
 
 Se o plano precisar de mais imagens do que o limite permite, o trabalho para
 antes de novas encomendas de imagens e informa quantas são necessárias, o
@@ -113,13 +141,18 @@ A API existente `POST /api/v1/videos` aceita:
   "video_count": 1,
   "mixed_max_images": 12,
   "mixed_scene_duration": 10,
+  "mixed_visual_validation": true,
+  "mixed_vision_model": "gpt-4.1-mini",
+  "mixed_max_candidates": 3,
   "voice_name": "pt-BR-AntonioNeural-Male",
   "subtitle_enabled": true
 }
 ```
 
 No CLI, use `--video-source mixed`, `--mixed-max-images 12` e
-`--mixed-scene-duration 10`. O modelo de texto e as APIs de material precisam
+`--mixed-scene-duration 10`. A análise visual usa `--mixed-vision-model
+gpt-4.1-mini` e `--mixed-max-candidates 3`; para desativá-la, use
+`--no-mixed-visual-validation`. O modelo de texto e as APIs de material precisam
 estar configurados normalmente. Para vídeos longos, combine com `--long-form`.
 
 ## Validação

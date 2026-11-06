@@ -72,7 +72,7 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     if params.video_source != "mixed":
-        for key in ("mixed_max_images", "mixed_scene_duration"):
+        for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates"):
             payload["params"].pop(key, None)
     if params.custom_audio_file:
         # Re-uploading the same recording from another path must still resume.

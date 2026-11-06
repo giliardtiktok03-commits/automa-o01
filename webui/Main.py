@@ -1570,6 +1570,8 @@ def _apply_restored_params(params):
     st.session_state["long_form_resume_task_id"] = ""
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
+    for key, default in (("mixed_visual_validation", True), ("mixed_vision_model", "gpt-4.1-mini"), ("mixed_max_candidates", 3)):
+        st.session_state[key] = params.get(key, default)
     st.session_state["video_script_prompt"] = params.get("video_script_prompt") or ""
     st.session_state["custom_system_prompt"] = (
         params.get("custom_system_prompt") or llm.DEFAULT_SCRIPT_SYSTEM_PROMPT
@@ -2092,6 +2094,7 @@ def _render_generation_activity(task):
         "generated": "Generation Remote Completed",
         "downloading": "Generation Downloading",
         "verifying": "Generation Verifying",
+        "visual_validation": "Mixed Visual Validation",
         "rendering": "Generation Rendering",
     }
     st.info(tr(labels.get(phase, "Generating Video")))
@@ -6202,6 +6205,15 @@ def _render_video_settings(panel, params):
             _set_runtime_config("app", "video_source", params.video_source)
             if params.video_source == "mixed":
                 st.info(tr("Mixed Materials Help"))
+                params.mixed_visual_validation = st.checkbox(
+                    tr("Mixed Visual Validation"), value=True, key="mixed_visual_validation")
+                st.caption(tr("Mixed Vision Help"))
+                if params.mixed_visual_validation:
+                    params.mixed_vision_model = st.text_input(
+                        tr("Mixed Vision Model"), value="gpt-4.1-mini", key="mixed_vision_model")
+                    params.mixed_max_candidates = st.number_input(
+                        tr("Mixed Candidates"), min_value=1, max_value=6, value=3,
+                        step=1, key="mixed_max_candidates")
                 params.mixed_max_images = st.number_input(
                     tr("Mixed Image Limit"), min_value=0, max_value=120,
                     value=12, step=1, key="mixed_max_images",

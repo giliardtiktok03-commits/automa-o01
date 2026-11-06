@@ -367,6 +367,10 @@ Batch manifests:
     material_group = parser.add_argument_group("materials and pipeline")
     material_group.add_argument("--mixed-max-images", type=int, default=None,
                                 help="maximum AI image requests for the entire mixed-mode video (default: 12)")
+    material_group.add_argument("--mixed-visual-validation", action=argparse.BooleanOptionalAction, default=None,
+                                help="Inspect candidate frames using the configured OpenAI-compatible vision API")
+    material_group.add_argument("--mixed-vision-model", default=None, help="Model accepting image inputs (default gpt-4.1-mini)")
+    material_group.add_argument("--mixed-max-candidates", type=int, default=None, help="Maximum candidates inspected per scene (1-6)")
     material_group.add_argument("--mixed-scene-duration", type=int, default=None,
                                 help="target scene duration in mixed mode, 5-30 seconds (default: 10)")
     material_group.add_argument(
@@ -990,6 +994,9 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
     optional_arg_names = [
         "mixed_max_images",
         "mixed_scene_duration",
+        "mixed_visual_validation",
+        "mixed_vision_model",
+        "mixed_max_candidates",
         "video_language",
         "paragraph_number",
         "video_script_prompt",

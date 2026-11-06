@@ -543,6 +543,7 @@ def _stage_heartbeat(description: str):
     finally:
         stop_event.set()
         reporter.join(timeout=1)
+        logger.info("{} stage ended: elapsed={:.2f}s", description, time.monotonic() - started_at)
 
 
 def _report_clip_progress(
@@ -1901,7 +1902,12 @@ def generate_video(
             for item in sub.subtitles:
                 clip = create_text_clip(subtitle_item=item)
                 text_clips.append(clip)
-            video_clip = CompositeVideoClip([video_clip, *text_clips])
+            # Mixed clips already provide an opaque full-size background. Avoid
+            # allocating and compositing another full canvas for every frame.
+            if params.video_source == "mixed":
+                video_clip = CompositeVideoClip([video_clip, *text_clips], use_bgclip=True)
+            else:
+                video_clip = CompositeVideoClip([video_clip, *text_clips])
             clip_stack.callback(video_clip.close)
 
         bgm_enabled = bgm_service.should_use_bgm(

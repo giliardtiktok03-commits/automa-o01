@@ -568,7 +568,7 @@
     "Mixed Material Source": "Misto: Pexels + Pixabay + Coverr + imagens IA",
     "Mixed Image Limit": "Máximo de imagens IA no vídeo completo",
     "Mixed Scene Duration": "Duração desejada de cada cena (segundos)",
-    "Mixed Materials Help": "Prioriza vídeos de Pexels, Pixabay e Coverr com chave configurada. Trechos históricos podem usar detalhes de apoio sem elementos de época; IA fica reservada às reconstituições necessárias. O plano permite até 25% das cenas com IA (mínimo de uma cena permitido em vídeos curtos), além do limite de solicitações abaixo. Buscas sem resultado interrompem a tarefa sem encomendar imagens extras. O planejamento de texto pode ter custo. Configure a API de imagens nas fontes de material. O limite de solicitações vale para o vídeo inteiro, inclusive capítulos; falhas podem ser cobradas. Sem legendas temporizadas, os tempos são estimados. Usa cortes simples e velocidade normal. Não faz inspeção visual automática dos clipes.",
+    "Mixed Materials Help": "Prioriza Pexels, Pixabay e Coverr. A meta é usar bancos na maioria das cenas; se não houver material adequado, usa IA dentro do limite abaixo, reservando orçamento às reconstituições planejadas. A meta de 75% não é um bloqueio. Imagens e análise visual podem ter custo, inclusive em falhas. Sem legendas temporizadas, os tempos são estimados. Usa cortes simples e velocidade normal.",
     "Mixed Scene Progress": "Cena {current}/{total}",
     "Mixed Estimated Timing": "Os tempos das cenas foram estimados pelo texto. Ative legendas temporizadas para alinhar melhor com a voz.",
     "Subtitle Provider": "Provedor de legendas",
@@ -582,6 +582,12 @@
     "mixed.whisper_failed": "O Whisper não produziu legendas temporizadas para o áudio enviado. Verifique o modelo e o erro de transcrição nos logs antes de tentar novamente. A geração de imagens não foi iniciada.",
     "mixed.stock_priority": "O plano reservou {images} de {total} cenas para IA, acima do máximo de {limit} neste modo que prioriza bancos. Nenhuma nova imagem foi solicitada. Revise o roteiro/plano visual para usar cenas de apoio sem elementos de época ou tente uma nova tarefa. O planejamento de texto pode ter custo.",
     "mixed.stock_missing": "Não foi possível obter um clipe dos bancos para a cena {scene}. A tarefa parou sem gerar uma imagem IA para substituí-lo. Confira as chaves, os resultados e os logs das buscas antes de tentar novamente.",
-    "Mixed Source Counts": "Cenas utilizadas — Pexels: {pexels} · Pixabay: {pixabay} · Coverr: {coverr} · IA: {openai_image}"
+    "Mixed Source Counts": "Cenas utilizadas — Pexels: {pexels} · Pixabay: {pixabay} · Coverr: {coverr} · IA: {openai_image}",
+    "Mixed Visual Validation": "Validar clipes visualmente com IA",
+    "Mixed Vision Help": "Envia três quadros reduzidos por candidato à API compatível com OpenAI configurada em Configurar modelo de IA. Usa a chave e URL do OpenAI; o modelo visual é escolhido abaixo, separado do modelo de roteiro. Até três candidatos por cena por padrão. As avaliações são guardadas nesta tarefa. Há custo de análise e tempo adicional. Desativar permite clipes sem inspeção visual. Amostragem pode deixar passar erros.",
+    "Mixed Vision Model": "Modelo com visão (API compatível com OpenAI)",
+    "Mixed Candidates": "Máximo de candidatos analisados por cena",
+    "mixed.vision_config": "Para validar os clipes, configure a chave e URL do OpenAI em Configurar modelo de IA e escolha um modelo que aceite imagens. A chave de geração de imagens é uma configuração separada.",
+    "mixed.vision_failed": "A análise visual falhou ou não retornou uma avaliação válida. A tarefa parou sem aprovar o clipe nem encomendar uma imagem para substituir essa falha. Confira o acesso ao modelo visual, a configuração da API e os logs."
   }
 }

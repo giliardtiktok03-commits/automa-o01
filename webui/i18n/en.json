@@ -823,7 +823,7 @@
     "Mixed Material Source": "Mixed: Pexels + Pixabay + Coverr + AI images",
     "Mixed Image Limit": "Maximum AI images for the entire video",
     "Mixed Scene Duration": "Target scene duration (seconds)",
-    "Mixed Materials Help": "Prioritizes configured Pexels, Pixabay and Coverr stock APIs. Historical narration can use timeless supporting details; AI is reserved for necessary reconstructions. Up to 25% of scenes may use AI (one allowed for short plans), subject to the request limit below. Empty stock searches stop without paid image fallback. Text planning may incur charges. Configure the image API in material settings. Request limits cover the whole video including chapters; failures may incur charges. Timing without timed subtitles is estimated. Uses hard cuts and normal speed. Stock clips are not visually inspected.",
+    "Mixed Materials Help": "Prioritizes Pexels, Pixabay and Coverr. Stock is preferred, but unsuitable or missing footage falls back to AI within the request limit, reserving budget for planned reconstructions. The 75% stock target is not a hard cap. Image generation and visual inspection may incur charges, including failures. Without timed subtitles, timing is estimated. Uses hard cuts and normal speed.",
     "Mixed Scene Progress": "Scene {current}/{total}",
     "Mixed Estimated Timing": "Scene timings were estimated from text. Enable timed subtitles for closer narration alignment.",
     "Subtitle Provider": "Subtitle provider",
@@ -837,6 +837,12 @@
     "mixed.whisper_failed": "Whisper did not produce timed subtitles for the imported audio. Check the model and transcription logs before retrying. Image generation was not started.",
     "mixed.stock_priority": "The plan assigned {images}/{total} scenes to AI, above the stock-first maximum of {limit}. No new images were ordered. Revise the visual plan to use timeless supporting stock details or start a new task. Text planning may incur charges.",
     "mixed.stock_missing": "No usable stock clip was found for scene {scene}. The task stopped without ordering a replacement AI image. Check API keys, search results and logs before trying again.",
-    "Mixed Source Counts": "Scenes used — Pexels: {pexels} · Pixabay: {pixabay} · Coverr: {coverr} · AI: {openai_image}"
+    "Mixed Source Counts": "Scenes used — Pexels: {pexels} · Pixabay: {pixabay} · Coverr: {coverr} · AI: {openai_image}",
+    "Mixed Visual Validation": "Validate stock clips visually with AI",
+    "Mixed Vision Help": "Sends three reduced frames per candidate to the OpenAI-compatible API in AI model settings, using the OpenAI key and URL. Select the vision model below, independently of the script model. Default: at most three candidates per scene. Assessments are cached within this task. Adds API cost and time. Disabling allows uninspected stock clips. Sampling can miss errors.",
+    "Mixed Vision Model": "Vision model (OpenAI-compatible API)",
+    "Mixed Candidates": "Maximum inspected candidates per scene",
+    "mixed.vision_config": "Configure the OpenAI key and URL in AI model settings and select a model that accepts images. The image generation API key is a separate setting.",
+    "mixed.vision_failed": "Visual validation failed or returned an invalid verdict. The task stopped without approving the clip or ordering an image to replace the failed assessment. Check model access, API configuration and logs."
   }
 }

@@ -417,3 +417,17 @@ def test_persisted_processing_job_can_be_untracked_after_service_restart(isolate
         assert "generation_task" not in app.query_params
     assert isolated_jobs.get_task(job)["state"] == const.TASK_STATE_PROCESSING
     assert isolated_jobs.get_task(job)["generation_activity"]["remote_id"] == "existing-paid-task"
+
+
+def test_phase_durations_are_recorded_without_changing_final_activity(isolated_jobs, monkeypatch):
+    isolated_jobs.update_task("timed")
+    clock = [0.0]
+    monkeypatch.setattr(progress.time, "monotonic", lambda: clock[0])
+    with progress.task_scope("timed"):
+        progress.stage("subtitle")
+        clock[0] = 3.0
+        progress.stage("rendering")
+        clock[0] = 8.0
+    task = isolated_jobs.get_task("timed")
+    assert task["generation_phase_seconds"] == {"subtitle": 3.0, "rendering": 5.0}
+    assert task["generation_activity"]["phase"] == "rendering"

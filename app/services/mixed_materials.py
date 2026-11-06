@@ -14,7 +14,7 @@ from loguru import logger
 
 from app.config import config
 from app.models.schema import VideoAspect, VideoFitMode
-from app.services import generation_progress, llm, material, task_artifacts
+from app.services import generation_progress, llm, material, task_artifacts, visual_validation
 from app.services import state as sm
 from app.utils import utils
 from app.utils.subtitle_reader import moviepy_subtitles
@@ -76,6 +76,8 @@ def validate(params, settings=None, *, external_audio=False):
             and settings.get("subtitle_provider", "edge") != "whisper"):
         raise MixedError("Uploaded narration with subtitles requires Whisper; select Whisper or disable subtitles for estimated timing",
                          key="mixed.external_subtitles")
+    if params.mixed_visual_validation and not str(settings.get("openai_api_key") or "").strip():
+        raise MixedError("Visual validation requires an OpenAI-compatible API key", key="mixed.vision_config")
     if params.video_count != 1:
         raise MixedError("Mixed mode requires one output video")
     if not providers(settings):
@@ -235,6 +237,7 @@ def join(paths, output):
 def _stock(scene, params, directory, provider_order, used):
     methods = {"pexels": material.search_videos_pexels, "pixabay": material.search_videos_pixabay,
                "coverr": material.search_videos_coverr}
+    examined, seen = 0, set()
     queries = list(dict.fromkeys([scene["search_query"], *scene.get("alternate_queries", [])]))
     for query in queries:
         for provider in provider_order:
@@ -244,14 +247,31 @@ def _stock(scene, params, directory, provider_order, used):
             except Exception:
                 logger.warning("Mixed stock search failed: scene={}, provider={}", scene["id"], provider)
                 continue
-            for item in sorted(items, key=lambda candidate: candidate.url in used)[:3]:
+            for item in sorted(items, key=lambda candidate: candidate.url in used)[:max(1, params.mixed_max_candidates // len(provider_order))]:
+                if item.url in seen:
+                    continue
+                if examined >= params.mixed_max_candidates:
+                    return None, None
+                seen.add(item.url)
+                examined += 1
                 try:
                     path = material.save_video(item.url, str(directory))
                 except Exception:
                     continue
                 if path:
+                    verdict = None
+                    if params.mixed_visual_validation:
+                        generation_progress.stage("visual_validation")
+                        try:
+                            accepted, verdict = visual_validation.inspect_clip(
+                                path, scene, directory, config.app, params.mixed_vision_model)
+                        except visual_validation.VisualValidationError as exc:
+                            raise MixedError(str(exc), key="mixed.vision_failed") from exc
+                        logger.info("Visual validation: scene={}, candidate={}, accepted={}", scene["id"], examined, accepted)
+                        if not accepted:
+                            continue
                     used.add(item.url)
-                    return path, {**material._material_source_record(item, path), "provider": provider}
+                    return path, {**material._material_source_record(item, path), "provider": provider, "visual_validation": verdict}
     return None, None
 
 
@@ -263,7 +283,9 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
     manifest_file = directory / "mixed-scenes.json"
     with FileLock(str(directory / "mixed-scenes.lock")):
         units, timing = timeline(script, float(audio_duration), subtitle_file, params.mixed_scene_duration)
-        signature = {"source_policy": "stock-first-v2", "script": script, "units": units, "aspect": params.video_aspect,
+        signature = {"source_policy": "visual-stock-v3", "visual_validation": params.mixed_visual_validation,
+                     "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
+                     "vision_endpoint": config.app.get("openai_base_url", ""), "script": script, "units": units, "aspect": params.video_aspect,
                      "fit": params.video_fit_mode, "motion": params.image_motion,
                      "image_model": config.app.get("openai_image_model", ""),
                      "image_size": config.app.get("openai_image_size", ""),
@@ -277,14 +299,6 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             manifest = {"version": 1, "fingerprint": fingerprint, "timing": timing,
                         "image_requests": 0, "scenes": _plan(units, script)}
             _save(manifest_file, manifest)
-        # Refuse an image-dominated plan before paid image requests. Short plans
-        # can use one reconstruction; larger plans reserve at most a quarter.
-        planned_images = sum(s["source"] == "image" for s in manifest["scenes"])
-        max_planned = max(1, len(manifest["scenes"]) // 4)
-        if planned_images > max_planned:
-            raise MixedError("The plan uses too many AI scenes for stock-first mode; revise the visual plan",
-                             key="mixed.stock_priority",
-                             params={"images": planned_images, "total": len(manifest["scenes"]), "limit": max_planned})
         pending_images = sum(s["source"] == "image" and not s.get("image_file")
                              and not s.get("image_request_started")
                              for s in manifest["scenes"])
@@ -310,11 +324,6 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
-                if source is None:
-                    # Empty results or API faults must not silently turn free
-                    # stock scenes into paid image orders.
-                    raise MixedError("No usable stock clip was found; no AI fallback was ordered",
-                                     key="mixed.stock_missing", params={"scene": scene["id"]})
             if source is None:
                 image = scene_dir / f"image-{scene['id']:03d}.source"
                 if scene.get("image_file"):
@@ -338,7 +347,9 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                               f"Period: {scene['period']}. Location: {scene['location']}. "
                               + ("Historical reconstruction, no contemporary buildings, clothing, vehicles or machinery. "
                                  if scene["context"] == "historical" else "")
-                              + "No captions, logos or text. This is an illustration, not archival evidence.")
+                              + "Depict the central subject and action literally, including human context when narrated. "
+                              "No unrelated animals or symbolic substitutes for human conditions. "
+                              "No captions, logos or text. This is an illustration, not archival evidence.")
                     items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
                                                             video_aspect=params.video_aspect, save_dir=str(scene_dir))
                     if not items:

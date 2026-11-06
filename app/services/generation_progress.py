@@ -25,6 +25,8 @@ class _Reporter:
         self.activity = {}
         self.lock = threading.RLock()
         self.last_log_at = 0
+        self.phase_started = time.monotonic()
+        self.timings = {}
 
     def publish(self, phase, *, reset=False, **fields):
         # 状态展示属于辅助能力。Redis 短暂不可用不能中断已付费任务，也不能
@@ -33,6 +35,8 @@ class _Reporter:
             with self.lock:
                 now = time.time()
                 previous = self.activity.get("phase")
+                if previous != phase:
+                    self._record_phase(previous)
                 if (phase == previous == "downloading"
                         and now - self.activity.get("updated_at", 0) < 1):
                     return
@@ -52,12 +56,31 @@ class _Reporter:
             logger.debug("could not publish generation activity: {}", type(exc).__name__)
 
 
+    def _record_phase(self, phase):
+        now = time.monotonic()
+        if phase:
+            self.timings[phase] = self.timings.get(phase, 0) + max(0, now - self.phase_started)
+        self.phase_started = now
+
+    def finish(self):
+        try:
+            with self.lock:
+                self._record_phase(self.activity.get("phase"))
+                seconds = {name: round(value, 2) for name, value in self.timings.items()}
+                sm.state.patch_task(self.task_id, generation_phase_seconds=seconds)
+                logger.info("Generation phase durations (seconds): {}", seconds)
+        except Exception as exc:
+            logger.debug("Could not save phase durations: {}", type(exc).__name__)
+
+
 @contextmanager
 def task_scope(task_id):
-    token = _current.set(_Reporter(task_id))
+    reporter = _Reporter(task_id)
+    token = _current.set(reporter)
     try:
         yield
     finally:
+        reporter.finish()
         _current.reset(token)
 
 
