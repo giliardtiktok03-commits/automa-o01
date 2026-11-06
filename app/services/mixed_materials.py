@@ -11,6 +11,8 @@ from typing import Literal
 from filelock import FileLock
 from pydantic import BaseModel, Field
 from loguru import logger
+from PIL import Image, ImageDraw, ImageFont
+import textwrap
 
 from app.config import config
 from app.models.schema import VideoAspect, VideoFitMode
@@ -258,57 +260,100 @@ def join(paths, output):
                  "-c:v", "copy", "-movflags", "+faststart"], output)
 
 
-def _stock(scene, params, directory, provider_order, used):
+def _stock_candidates(scene, params, provider_order):
     methods = {"pexels": material.search_videos_pexels, "pixabay": material.search_videos_pixabay,
                "coverr": material.search_videos_coverr}
-    examined, seen = 0, set()
     queries = list(dict.fromkeys([scene["search_query"], *scene.get("alternate_queries", [])]))
     for query in queries:
-        for provider in provider_order:
-            logger.info("Mixed stock search: scene={}, provider={}, query={!r}", scene["id"], provider, query)
-            try:
-                items = material._search_videos_with_cache(provider, methods[provider], query, 1, params.video_aspect)
-            except Exception:
-                logger.warning("Mixed stock search failed: scene={}, provider={}", scene["id"], provider)
+        results = {}
+        for rank in range(params.mixed_max_candidates):
+            for provider in provider_order:
+                if provider not in results:
+                    logger.info("Mixed stock search: scene={}, provider={}, query={!r}", scene["id"], provider, query)
+                    try:
+                        results[provider] = material._search_videos_with_cache(
+                            provider, methods[provider], query, 1, params.video_aspect)
+                    except Exception:
+                        logger.warning("Mixed stock search failed: scene={}, provider={}", scene["id"], provider)
+                        results[provider] = []
+                if rank < len(results[provider]):
+                    yield provider, results[provider][rank]
+
+
+def _context_card(scene, params, scene_dir):
+    """Local typography, no image-generation request and no archival claim."""
+    width, height = VideoAspect(params.video_aspect).to_resolution()
+    image = Image.new("RGB", (width, height), "#101c2c")
+    draw = ImageDraw.Draw(image)
+    font_path = Path(utils.font_dir()) / "BeVietnamPro-Medium.ttf"
+    size = max(16, int(min(width, height) * .045))
+    font = ImageFont.truetype(str(font_path), size)
+    pt = str(params.video_language or "").lower().startswith("pt")
+    title = "CONTEXTO" if pt else "CONTEXT"
+    footer = "Card informativo — sem imagem de arquivo" if pt else "Editorial card — no archival image"
+    margin = int(width * .08)
+    draw.rectangle((margin, int(height*.15), width-margin, int(height*.16)), fill="#4cb1d0")
+    draw.text((margin, int(height*.21)), title, font=font, fill="#4cb1d0")
+    text = f"{scene['period']} · {scene['location']}\n\n{scene['text']}"
+    # Fit complete text without inventing editorial facts or truncating quotes.
+    while True:
+        font = ImageFont.truetype(str(font_path), size)
+        chars = max(10, int((width - 2*margin) / (size * .58)))
+        lines = '\n'.join(textwrap.fill(paragraph, width=chars) for paragraph in text.split('\n'))
+        box = draw.multiline_textbbox((0, 0), lines, font=font, spacing=8)
+        if box[3] <= height*.47 and box[2] <= width-2*margin:
+            break
+        if size <= 10:
+            raise MixedError("Editorial card text cannot fit legibly")
+        size -= 2
+    draw.multiline_text((margin, int(height*.32)), lines, font=font, fill="white", spacing=8)
+    draw.text((margin, int(height*.85)), footer, font=ImageFont.truetype(str(font_path), max(10,int(min(width,height)*.022))), fill="#a8bfce")
+    path = scene_dir / f"card-{scene['id']:03d}.png"
+    image.save(path)
+    scene.update(image_file=path.name, image_sha256=_hash(path))
+    return path
+
+
+def _stock(scene, params, directory, provider_order, used):
+    examined, seen = 0, set()
+    for provider, item in _stock_candidates(scene, params, provider_order):
+        if item.url in seen:
+            continue
+        if examined >= params.mixed_max_candidates:
+            return None, None
+        seen.add(item.url)
+        examined += 1
+        try:
+            path = material.save_video(item.url, str(directory))
+        except Exception:
+            continue
+        if path:
+            digest = _hash(path)
+            asset = (item.source_info or {}).get("asset_id")
+            identity = f"{provider}:{asset}" if asset else digest
+            previous = max(used.get(digest, 0), used.get(identity, 0))
+            needed = (scene["end_frame"] - scene["start_frame"]) / FPS
+            total = params.mixed_total_duration
+            absolute = params.mixed_timeline_offset + scene["start_frame"] / FPS
+            if previous and (not total or absolute < total * 0.6 or scene.get("previous_identity") == identity):
                 continue
-            for item in items:
-                if item.url in seen:
-                    continue
-                if examined >= params.mixed_max_candidates:
-                    return None, None
-                seen.add(item.url)
-                examined += 1
+            if item.duration < previous + needed:
+                continue
+            verdict = None
+            if params.mixed_visual_validation:
+                generation_progress.stage("visual_validation")
                 try:
-                    path = material.save_video(item.url, str(directory))
-                except Exception:
+                    accepted, verdict = visual_validation.inspect_clip(
+                        path, scene, directory, config.app, params.mixed_vision_model, source_start=previous)
+                except visual_validation.VisualValidationError as exc:
+                    raise MixedError(str(exc), key="mixed.vision_failed") from exc
+                logger.info("Visual validation: scene={}, candidate={}, accepted={}", scene["id"], examined, accepted)
+                if not accepted:
                     continue
-                if path:
-                    digest = _hash(path)
-                    asset = (item.source_info or {}).get("asset_id")
-                    identity = f"{provider}:{asset}" if asset else digest
-                    previous = max(used.get(digest, 0), used.get(identity, 0))
-                    needed = (scene["end_frame"] - scene["start_frame"]) / FPS
-                    total = params.mixed_total_duration
-                    absolute = params.mixed_timeline_offset + scene["start_frame"] / FPS
-                    if previous and (not total or absolute < total * 0.6 or scene.get("previous_identity") == identity):
-                        continue
-                    if item.duration < previous + needed:
-                        continue
-                    verdict = None
-                    if params.mixed_visual_validation:
-                        generation_progress.stage("visual_validation")
-                        try:
-                            accepted, verdict = visual_validation.inspect_clip(
-                                path, scene, directory, config.app, params.mixed_vision_model, source_start=previous)
-                        except visual_validation.VisualValidationError as exc:
-                            raise MixedError(str(exc), key="mixed.vision_failed") from exc
-                        logger.info("Visual validation: scene={}, candidate={}, accepted={}", scene["id"], examined, accepted)
-                        if not accepted:
-                            continue
-                    used[digest] = used[identity] = previous + needed
-                    return path, {**material._material_source_record(item, path), "provider": provider,
-                                  "visual_validation": verdict, "source_digest": digest, "source_identity": identity,
-                                  "source_start": previous, "source_end": previous + needed}
+            used[digest] = used[identity] = previous + needed
+            return path, {**material._material_source_record(item, path), "provider": provider,
+                          "visual_validation": verdict, "source_digest": digest, "source_identity": identity,
+                          "source_start": previous, "source_end": previous + needed}
     return None, None
 
 
@@ -370,6 +415,9 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 remember(scene["provenance"])
                 stock_turn += int(scene["provenance"]["provider"] in {"pexels", "pixabay", "coverr"})
                 continue
+            if scene.get("image_refused") and not scene.get("image_file"):
+                _context_card(scene, params, scene_dir)
+                _save(manifest_file, manifest)
             source, provenance = None, None
             if scene["source"] == "stock" and not scene.get("image_file"):
                 history = records or params.mixed_previous_sources
@@ -403,11 +451,18 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                               + "Depict the central subject and action literally, including human context when narrated. "
                               "No unrelated animals or symbolic substitutes for human conditions. "
                               "No captions, logos or text. This is an illustration, not archival evidence.")
-                    items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
-                                                            video_aspect=params.video_aspect, save_dir=str(scene_dir))
-                    if not items:
-                        raise MixedError("Image generation did not yield a usable result; no further images were ordered")
-                    image = Path(items[0].url)
+                    try:
+                        items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
+                            video_aspect=params.video_aspect, save_dir=str(scene_dir), raise_on_refusal=True)
+                    except material.OpenAIImageRefusalError:
+                        scene["image_refused"] = True
+                        _save(manifest_file, manifest)
+                        image = _context_card(scene, params, scene_dir)
+                        logger.warning("Scene {}: image refused; using a labeled editorial card, no retry", scene["id"])
+                    else:
+                        if not items:
+                            raise MixedError("Image generation did not yield a usable result; no further images were ordered")
+                        image = Path(items[0].url)
                     scene["image_file"] = image.name
                     scene["image_sha256"] = _hash(image)
                     _save(manifest_file, manifest)
@@ -416,10 +471,10 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     raise MixedError("Generated image duplicates an earlier image; retained for review, no automatic reorder")
                 used[digest] = 1
                 duration = (scene["end_frame"] - scene["start_frame"]) / FPS
-                source = material._render_openai_image_video(str(image), duration, image_motion=params.image_motion)
+                source = str(image) if scene.get("image_refused") else material._render_openai_image_video(str(image), duration, image_motion=params.image_motion)
                 if not source:
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
-                provenance = {"provider": "openai_image", "illustration": True, "local_file": output.name,
+                provenance = {"provider": "editorial_card" if scene.get("image_refused") else "openai_image", "illustration": True, "local_file": output.name,
                               "source_digest": digest, "source_identity": digest, "source_end": 1}
             render(source, output, scene["end_frame"] - scene["start_frame"], params,
                    start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,
@@ -432,6 +487,9 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             records.append(scene["provenance"])
         counts = {provider: sum(record["provider"] == provider for record in records)
                   for provider in ("pexels", "pixabay", "coverr", "openai_image")}
+        cards = sum(record["provider"] == "editorial_card" for record in records)
+        if cards:
+            counts["editorial_card"] = cards
         logger.info("Mixed sources used: Pexels={}, Pixabay={}, Coverr={}, AI={}",
                     counts["pexels"], counts["pixabay"], counts["coverr"], counts["openai_image"])
         sm.state.update_task(task_id, mixed_source_counts=counts)

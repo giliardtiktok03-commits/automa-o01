@@ -595,6 +595,7 @@
     "Production Add": "Adicionar próximo vídeo à fila",
     "Production Help": "Prepare o próximo tema, roteiro e áudio e clique em Adicionar próximo vídeo à fila. Cada item guarda as configurações do momento do envio. Um vídeo por vez; os próximos começam automaticamente, mesmo se um falhar. Mantenha o MPT e o computador ligados, sem suspensão. A fila em memória não é retomada após fechar ou reiniciar o MPT.",
     "Production Waiting": "Aguardando · posição {position}",
-    "Production View": "Ver tarefa"
+    "Production View": "Ver tarefa",
+    "Mixed Editorial Cards": "{count} cena(s) usam cards informativos identificados porque o provedor recusou a geração de imagem. Confira esses trechos no vídeo final."
   }
 }

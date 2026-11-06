@@ -850,6 +850,7 @@
     "Production Add": "Add next video to queue",
     "Production Help": "Prepare the next topic, script and audio, then add it to the queue. Settings are captured per submission. One video at a time; the next starts automatically even after a failure. Keep MPT and the computer running, without sleep. In-memory queued jobs do not survive closing/restarting MPT.",
     "Production Waiting": "Waiting · position {position}",
-    "Production View": "View task"
+    "Production View": "View task",
+    "Mixed Editorial Cards": "{count} scene(s) use labeled editorial cards because the image provider refused generation. Review these passages in the final video."
   }
 }

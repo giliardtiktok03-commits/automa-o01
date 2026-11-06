@@ -484,3 +484,60 @@ def test_stock_reuse_only_after_sixty_percent_and_from_unused_segment(setup, pos
     assert bool(path) is allowed
     if allowed:
         assert again["source_start"] == 3 and again["source_end"] == 6
+
+
+def test_refused_image_becomes_editorial_card_and_is_not_requested_again(setup):
+    folder, subtitles, params, _, _, images, _ = setup
+    images.side_effect = mixed.material.OpenAIImageRefusalError("content policy refusal")
+    result = mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    manifest = json.loads((folder / "mixed-scenes.json").read_text())
+    assert len(result) == 3
+    assert manifest["image_requests"] == 1
+    assert manifest["scenes"][1]["image_refused"] is True
+    assert manifest["scenes"][1]["provenance"]["provider"] == "editorial_card"
+    assert (folder / "mixed" / manifest["scenes"][1]["image_file"]).is_file()
+    assert mixed.sm.state.get_task("job")["mixed_source_counts"]["editorial_card"] == 1
+    assert mixed.prepare("job", params, SCRIPT, 30, str(subtitles)) == result
+    assert images.call_count == 1
+
+
+def test_technical_image_failure_does_not_silently_become_editorial_card(setup):
+    folder, subtitles, params, _, _, images, _ = setup
+    images.return_value = []
+    images.side_effect = None
+    with pytest.raises(mixed.MixedError, match="usable result"):
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert not list((folder / "mixed").glob("card-*.png"))
+
+
+def test_three_candidates_are_distributed_across_three_configured_banks(setup, monkeypatch):
+    folder, _, params, model, search, _, _ = setup
+    params.mixed_visual_validation = True
+    monkeypatch.setitem(mixed.config.app, "coverr_api_keys", ["test-coverr"])
+    inspect = Mock(side_effect=[(False, {}), (False, {}), (True, {})])
+    monkeypatch.setattr(mixed.visual_validation, "inspect_clip", inspect)
+    search.side_effect = lambda provider, *args: [
+        MaterialInfo(provider=provider, url=f"https://stock.example.test/{provider}-{i}.mp4", duration=60)
+        for i in range(5)]
+    scene = {**json.loads(model.return_value)[0], "text": "Coffee", "start_frame": 0, "end_frame": 90}
+    path, provenance = mixed._stock(scene, params, folder, ["pexels", "pixabay", "coverr"], {})
+    assert path and provenance["provider"] == "coverr"
+    assert [c.args[0] for c in search.call_args_list] == ["pexels", "pixabay", "coverr"]
+    assert inspect.call_count == 3
+
+
+def test_local_editorial_card_renders_without_image_api(tmp_path, monkeypatch):
+    from moviepy import VideoFileClip
+    if not shutil.which("ffmpeg"):
+        pytest.skip("FFmpeg required")
+    monkeypatch.setattr(VideoAspect, "to_resolution", lambda self: (640, 360))
+    params = VideoParams(video_subject="Context", video_language="en", n_threads=1)
+    scene = {"id": 2, "period": "2018", "location": "The Hague", "text": "Electronic equipment was found in a rental car."}
+    image = mixed._context_card(scene, params, tmp_path)
+    target = tmp_path / "card.mp4"
+    mixed.render(image, target, 30, params)
+    with VideoFileClip(str(target)) as clip:
+        assert abs(clip.duration - 1) < 0.05
+        frame = clip.get_frame(0.5)
+        assert frame.max() > 200
+        assert frame.mean() > 20

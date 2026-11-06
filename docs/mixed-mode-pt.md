@@ -177,3 +177,21 @@ interface e orçamento compartilhado entre capítulos. Um teste integrado usa
 clipes e áudio reais gerados por FFmpeg e verifica cor, ordem e duração do vídeo
 final. Chamadas aos modelos e bancos são simuladas; o teste com suas contas e
 seu roteiro no Windows continua necessário.
+
+## Recusa da API de imagens
+
+As primeiras avaliações de candidatos são alternadas entre os bancos configurados:
+primeiro candidato de Pexels, primeiro de Pixabay, primeiro de Coverr, antes de
+voltar ao segundo candidato de um banco. O limite total por cena continua valendo.
+
+Uma recusa explícita por política de conteúdo não é repetida nem reformulada.
+O modo misto salva a recusa e gera localmente um card de texto, identificado como
+card editorial sem imagem de arquivo, com o contexto e o trecho da narração.
+O vídeo continua, e um aviso na interface informa quantos cards foram usados.
+O card fica registrado na proveniência da cena. A solicitação recusada continua
+contando no limite de imagens iniciadas; o card não faz nova chamada de geração.
+
+Falhas técnicas, resultado desconhecido de pedido pago ou erro de autenticação
+não são transformados em cards. Uma recusa salva não é reenviada ao retomar o
+mesmo checkpoint. Uma nova tarefa é uma nova execução e pode repetir etapas.
+Essa mudança não adiciona curadoria histórica nem downloads de novos acervos.

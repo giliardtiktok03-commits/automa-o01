@@ -1,3 +1,4 @@
+import re
 import base64
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
@@ -61,6 +62,10 @@ def _get_material_concurrency() -> int:
 
 class _OpenAIImageDecodeError(ValueError):
     """表示兼容接口返回的字节无法解码为图片，不包含本地文件写入故障。"""
+
+
+class OpenAIImageRefusalError(RuntimeError):
+    """Explicit content-policy refusal; do not retry the image request."""
 
 
 class OpenAIImagePaidResultError(RuntimeError):
@@ -1803,6 +1808,8 @@ def generate_images_openai(
     minimum_duration: int,
     video_aspect: VideoAspect = VideoAspect.portrait,
     save_dir: str = "",
+    *,
+    raise_on_refusal: bool = False,
 ) -> List[MaterialInfo]:
     """
     用 OpenAI 兼容文生图接口为一个脚本关键词生成一张图片并保存到本地。
@@ -1833,6 +1840,11 @@ def generate_images_openai(
             f"openai image generation failed: term={search_term!r}, "
             f"detail={failure_detail}"
         )
+        if raise_on_refusal and re.search(
+            r"safety system|safety_violations|content_policy_violation|moderation_blocked|safety rejection",
+            failure_detail, re.I,
+        ):
+            raise OpenAIImageRefusalError("Image provider refused this request under its content policy")
         return []
 
     try:

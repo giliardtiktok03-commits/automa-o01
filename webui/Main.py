@@ -2129,6 +2129,8 @@ def _render_generation_task_snapshot(task_id, task):
         ))
         if task.get("mixed_timing") == "estimated":
             st.caption(tr("Mixed Estimated Timing"))
+    if (task.get("mixed_source_counts") or {}).get("editorial_card"):
+        st.warning(tr("Mixed Editorial Cards").format(count=task["mixed_source_counts"]["editorial_card"]))
     if isinstance(task.get("mixed_source_counts"), Mapping):
         counts = task["mixed_source_counts"]
         st.caption(tr("Mixed Source Counts").format(**{
