@@ -64,6 +64,10 @@ class _OpenAIImageDecodeError(ValueError):
     """表示兼容接口返回的字节无法解码为图片，不包含本地文件写入故障。"""
 
 
+class OpenAIImageTechnicalError(RuntimeError):
+    """An explicit technical/configuration failure; do not switch providers."""
+
+
 class OpenAIImageRefusalError(RuntimeError):
     """Explicit content-policy refusal; do not retry the image request."""
 
@@ -1810,6 +1814,7 @@ def generate_images_openai(
     save_dir: str = "",
     *,
     raise_on_refusal: bool = False,
+    raise_on_technical: bool = False,
 ) -> List[MaterialInfo]:
     """
     用 OpenAI 兼容文生图接口为一个脚本关键词生成一张图片并保存到本地。
@@ -1845,6 +1850,8 @@ def generate_images_openai(
             failure_detail, re.I,
         ):
             raise OpenAIImageRefusalError("Image provider refused this request under its content policy")
+        if raise_on_technical:
+            raise OpenAIImageTechnicalError("Image API failed; check credentials/model/service. No provider fallback.")
         return []
 
     try:

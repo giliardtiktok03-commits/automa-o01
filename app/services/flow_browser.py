@@ -1,13 +1,11 @@
-"""Local, user-assisted Flow browser profile. Never stores Google passwords."""
+"""Local Flow browser profile and automatic generation handoff. No Google passwords."""
 import argparse
-import html
 import importlib.util
 import json
 from pathlib import Path
 import re
 import subprocess
 import sys
-import time
 from urllib.parse import urlparse
 import uuid
 
@@ -57,12 +55,12 @@ def connect(profile, project):
     return request.with_suffix(".result.json")
 
 
-def generate(prompt, directory, profile, project, timeout=900):
+def generate(prompt, directory, profile, project, timeout=900, require_zero=True):
     validate(profile, project)
     folder = Path(directory)
     request = folder / ("flow-" + uuid.uuid4().hex + ".json")
     task_artifacts._write_json_atomic(request, {"profile": profile, "project": project, "action": "generate",
-                                              "prompt": prompt, "timeout": timeout})
+                                              "prompt": prompt, "timeout": timeout, "require_zero": require_zero})
     result_file = request.with_suffix(".result.json")
     process = _launch(request)
     try:
@@ -75,7 +73,7 @@ def generate(prompt, directory, profile, project, timeout=900):
         raise FlowError("Flow browser closed without a result; review the project before retrying")
     result = json.loads(result_file.read_text(encoding="utf-8"))
     if result.get("status") == "refused":
-        raise FlowRefusal("User reported an explicit Flow refusal; no resubmission")
+        raise FlowRefusal("Flow returned an explicit refusal; no resubmission")
     if result.get("status") != "ready":
         raise FlowError(result.get("error", "Flow did not provide an image"))
     image = request.with_suffix(".png")
@@ -120,47 +118,18 @@ def _browser(request_file):
                         page.wait_for_timeout(500)
                     task_artifacts._write_json_atomic(result_file, {"status": "closed"})
                     return
-                outcome = {}
-                target = request_file.with_suffix('.png')
-                def receive(download):
-                    if urlparse(download.page.url).hostname != "flow.google.com":
-                        return
-                    try:
-                        _save_image(download, target)
-                        outcome["status"] = "ready"
-                    except Exception:
-                        outcome.update(status="failed", error="Download is not a usable image")
-                page.on("download", receive)
-                control = context.new_page()
-                control.set_content('<meta charset="utf-8"><h2>MPT — Google Flow</h2>'
-                    '<p>Copie o prompt abaixo. No Flow, selecione Imagem, confira proporção, modelo e créditos. '
-                    'Escolha quantidade x1. Gere uma imagem e clique em Download no próprio Flow. O MPT recebe o arquivo e continua.</p>'
-                    '<p>Não baixe outra imagem durante este pedido. Não há garantia de gratuidade. '
-                    'Se aparecer CAPTCHA ou limite, cancele e resolva diretamente no serviço.</p>'
-                    '<textarea style="width:95%;height:240px">' + html.escape(data['prompt']) + '</textarea>'
-                    '<p><button onclick="document.title=\'MPT_REFUSED\'">Flow recusou por segurança</button> '
-                    '<button onclick="document.title=\'MPT_CANCEL\'">Cancelar / limite / CAPTCHA</button></p>')
+                from app.services import flow_automation
                 page.goto(data["project"], wait_until="domcontentloaded", timeout=60000)
-                # Best-effort prefill only. The user confirms generation/model/
-                # credits and download; never invokes undocumented Google APIs.
-                editors = page.locator('textarea, [contenteditable="true"][role="textbox"]')
-                if editors.count() == 1 and editors.first.is_visible():
-                    try:
-                        editors.first.fill(data["prompt"], timeout=2000)
-                    except Exception:
-                        pass
-                control.bring_to_front()
-                deadline = time.monotonic() + data.get("timeout", 900)
-                while not outcome and time.monotonic() < deadline:
-                    title = control.title()
-                    if title == 'MPT_REFUSED':
-                        outcome['status'] = 'refused'
-                    elif title == 'MPT_CANCEL':
-                        outcome.update(status='cancelled', error='Flow cancelled by user; no automatic retry')
-                    page.wait_for_timeout(250)
-                if not outcome:
-                    outcome.update(status='timeout', error='Flow timed out; review the project before retrying')
-                task_artifacts._write_json_atomic(result_file, outcome)
+                target = request_file.with_suffix('.png')
+                try:
+                    flow_automation.generate(page, data['prompt'], target, timeout=data.get('timeout',900),
+                                             require_zero=data.get('require_zero',True))
+                    result = {"status": "ready"}
+                except FlowRefusal:
+                    result = {"status": "refused"}
+                except FlowError as exc:
+                    result = {"status": "failed", "error": str(exc)}
+                task_artifacts._write_json_atomic(result_file, result)
             finally:
                 context.close()
     except Timeout:

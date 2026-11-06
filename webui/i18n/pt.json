@@ -598,15 +598,17 @@
     "Production View": "Ver tarefa",
     "Mixed Editorial Cards": "{count} cena(s) usam cards informativos identificados porque o provedor recusou a geração de imagem. Confira esses trechos no vídeo final.",
     "Mixed Image Provider": "Gerador de imagens do modo misto",
-    "Flow Browser": "Google Flow — navegador assistido",
+    "Flow Browser": "Google Flow — navegador automático",
     "Flow OpenAI API": "API compatível com OpenAI (atual)",
     "Flow Profile": "Nome do perfil local da conta",
     "Flow Project": "Link do projeto Google Flow",
     "Flow Connect": "Cadastrar / conectar conta no Google Flow",
     "Flow Connect Started": "Janela solicitada. Faça login diretamente no Google e confira a conta. Feche TODAS as janelas desse perfil antes de gerar no MPT. O MPT não verifica automaticamente seu login.",
     "Flow Used": "Imagens recebidas do Flow: {count}",
-    "Flow Browser Help": "Requer Google Chrome instalado e PREPARAR_FLOW_WINDOWS.bat executado uma vez. Cadastre um nome (letras, números, _ ou -) e o link do projeto. O login é feito no Google; a sessão fica neste computador. Durante a geração, confirme modelo, proporção e créditos no Flow e baixe a imagem da cena na janela aberta. O MPT recebe esse download. NÃO é uma fila sem supervisão: cada imagem exige sua participação. Não há rotação de contas nem garantia de gratuidade. Em limite/CAPTCHA, cancele; em recusa de segurança, marque a recusa na aba de controle para usar o card. A validação visual dos bancos ainda usa a API configurada.",
+    "Flow Browser Help": "Login manual uma vez pelo botão abaixo, depois feche a janela. A automação tenta configurar Imagem, 16:9, x1 e Nano Banana 2.1, enviar uma vez e baixar a nova imagem. Se um controle, resultado ou custo não puder ser confirmado, para sem repetir. CAPTCHA, limite e login exigem intervenção. No modo Bancos → ChatGPT → Flow, o Flow só entra após rejeição visual/resultado inutilizável do ChatGPT. Recusas de segurança usam card, sem troca de provedor. Requer Chrome e PREPARAR_FLOW_WINDOWS.bat; seletores ainda precisam de validação na sua conta real.",
     "mixed.flow_failed": "O Flow não concluiu a entrega da imagem. Confira a janela, o login, os limites e o perfil. Não houve repetição automática. Feche a janela de conexão antes de gerar. Após cancelamento ou timeout, revise o projeto antes de iniciar outra tarefa.",
-    "mixed.flow_config": "Confira o perfil e link do projeto Flow e execute PREPARAR_FLOW_WINDOWS.bat antes de gerar. Detalhe: {detail}"
+    "mixed.flow_config": "Confira o perfil e link do projeto Flow e execute PREPARAR_FLOW_WINDOWS.bat antes de gerar. Detalhe: {detail}",
+    "Flow Last Resort": "Bancos → ChatGPT → Flow automático (último recurso)",
+    "Flow Require Zero": "Só enviar se o Flow mostrar custo de 0 créditos"
   }
 }

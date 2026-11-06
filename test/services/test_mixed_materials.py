@@ -582,3 +582,44 @@ def test_missing_flow_setup_stops_in_preflight_before_narration_or_requests(setu
     assert result['error_key'] == 'mixed.flow_config'
     model.assert_not_called()
     images.assert_not_called()
+
+
+def test_last_resort_uses_flow_after_banks_and_rejected_openai_image(setup, monkeypatch):
+    folder, subtitles, params, _, search, images, _ = setup
+    params.mixed_image_provider = 'openai_flow'
+    params.mixed_visual_validation = True
+    monkeypatch.setitem(mixed.config.app,'openai_api_key','test')
+    monkeypatch.setattr(mixed.flow_browser,'validate',lambda *_:None)
+    inspect = Mock(return_value=(False, {'relevant':False,'confidence':0.99,'reason':'Not a match'}))
+    monkeypatch.setattr(mixed.visual_validation,'inspect_clip',inspect)
+    def create(*args, **kwargs):
+        file=folder/f'flow-{fallback.call_count}.png'
+        file.write_bytes(f'flow-{fallback.call_count}'.encode())
+        return file
+    fallback=Mock(side_effect=create)
+    monkeypatch.setattr(mixed.flow_browser,'generate',fallback)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert search.call_count >= 3
+    assert images.call_count == 3 and fallback.call_count == 3
+    assert json.loads((folder/'mixed-scenes.json').read_text())['image_requests'] == 6
+
+
+@pytest.mark.parametrize('failure', [mixed.material.OpenAIImageRefusalError('refused'), mixed.material.OpenAIImageTechnicalError('technical')])
+def test_last_resort_never_switches_provider_on_refusal_or_technical_failure(setup, monkeypatch, failure):
+    _, subtitles, params, _, search, images, _ = setup
+    params.mixed_image_provider='openai_flow'
+    params.mixed_visual_validation=True
+    monkeypatch.setitem(mixed.config.app,'openai_api_key','test')
+    monkeypatch.setattr(mixed.flow_browser,'validate',lambda *_:None)
+    search.side_effect=None
+    search.return_value=[]
+    images.side_effect=failure
+    fallback=Mock()
+    monkeypatch.setattr(mixed.flow_browser,'generate',fallback)
+    if isinstance(failure,mixed.material.OpenAIImageRefusalError):
+        mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+        assert mixed.sm.state.get_task('job')['mixed_source_counts']['editorial_card']==3
+    else:
+        with pytest.raises(mixed.MixedError,match='technical'):
+            mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    fallback.assert_not_called()

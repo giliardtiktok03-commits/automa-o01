@@ -853,15 +853,17 @@
     "Production View": "View task",
     "Mixed Editorial Cards": "{count} scene(s) use labeled editorial cards because the image provider refused generation. Review these passages in the final video.",
     "Mixed Image Provider": "Mixed-mode image generator",
-    "Flow Browser": "Google Flow — assisted browser",
+    "Flow Browser": "Google Flow — automatic browser",
     "Flow OpenAI API": "OpenAI-compatible API (current)",
     "Flow Profile": "Local account profile name",
     "Flow Project": "Google Flow project URL",
     "Flow Connect": "Register / connect Google Flow account",
     "Flow Connect Started": "Browser launch requested. Sign in directly with Google and check the account. Close ALL windows of that profile before generation. MPT does not automatically verify login.",
     "Flow Used": "Images received from Flow: {count}",
-    "Flow Browser Help": "Requires installed Google Chrome and PREPARAR_FLOW_WINDOWS.bat. Choose a local profile name and project URL; sign in at Google. Each image requires you to check model, aspect and credits, generate and download in the opened Flow tab. MPT receives the download. Not unattended automation. No account rotation or free-generation guarantee. Cancel on quota/CAPTCHA; explicitly report a safety refusal in the control tab to use a card. Stock vision checks still use the configured API.",
+    "Flow Browser Help": "Sign in manually once, then close the connection window. Automation attempts Image, 16:9, x1 and Nano Banana 2.1, submits once and downloads the new result. Missing/ambiguous controls, quota, CAPTCHA or login stop without retry. Last-resort mode uses Flow only after an unusable/visually rejected ChatGPT result; safety refusals use cards, never provider switching. Requires Chrome and PREPARAR_FLOW_WINDOWS.bat. Live account selectors still need verification.",
     "mixed.flow_failed": "Flow did not complete the image handoff. Check the browser, login, limits and profile. No automatic retry. Close the connection window before generation. Review the project after cancellation or timeout before a new task.",
-    "mixed.flow_config": "Check the Flow profile/project URL and run PREPARAR_FLOW_WINDOWS.bat before generating. Detail: {detail}"
+    "mixed.flow_config": "Check the Flow profile/project URL and run PREPARAR_FLOW_WINDOWS.bat before generating. Detail: {detail}",
+    "Flow Last Resort": "Stock → ChatGPT → automatic Flow (last resort)",
+    "Flow Require Zero": "Only submit if Flow shows zero-credit cost"
   }
 }

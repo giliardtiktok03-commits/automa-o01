@@ -78,18 +78,20 @@ def validate(params, settings=None, *, external_audio=False):
             and settings.get("subtitle_provider", "edge") != "whisper"):
         raise MixedError("Uploaded narration with subtitles requires Whisper; select Whisper or disable subtitles for estimated timing",
                          key="mixed.external_subtitles")
+    if params.mixed_image_provider == "openai_flow" and not params.mixed_visual_validation:
+        raise MixedError("Automatic OpenAI-to-Flow fallback requires visual validation enabled")
     if params.mixed_visual_validation and not str(settings.get("openai_api_key") or "").strip():
         raise MixedError("Visual validation requires an OpenAI-compatible API key", key="mixed.vision_config")
     if params.video_count != 1:
         raise MixedError("Mixed mode requires one output video")
     if not providers(settings):
         raise MixedError("Configure at least one stock API: Pexels, Pixabay or Coverr")
-    if params.mixed_max_images and params.mixed_image_provider == "flow_browser":
+    if params.mixed_max_images and params.mixed_image_provider in {"flow_browser", "openai_flow"}:
         try:
             flow_browser.validate(params.flow_profile, params.flow_project_url)
         except flow_browser.FlowError as exc:
             raise MixedError(str(exc), key="mixed.flow_config", params={"detail": str(exc)}) from exc
-    if params.mixed_max_images and params.mixed_image_provider == "openai" and not material.is_openai_image_enabled(settings):
+    if params.mixed_max_images and params.mixed_image_provider in {"openai", "openai_flow"} and not material.is_openai_image_enabled(settings):
         raise MixedError("Configure the OpenAI-compatible image URL and model, or set the mixed image limit to zero")
 
 
@@ -376,7 +378,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if not params.mixed_is_chapter and not params.mixed_timeline_offset and not params.mixed_total_duration:
             params = params.model_copy(update={"mixed_total_duration": float(audio_duration)})
         signature = {"source_policy": "distinct-shots-v5", "image_provider": params.mixed_image_provider,
-                     "flow_profile": params.flow_profile, "flow_project_url": params.flow_project_url, "total_duration": params.mixed_total_duration,
+                     "flow_profile": params.flow_profile, "flow_require_zero": params.flow_require_zero, "flow_project_url": params.flow_project_url, "total_duration": params.mixed_total_duration,
                      "previous_sources": params.mixed_previous_sources, "variable_pacing": params.mixed_variable_pacing,
                      "timeline_offset": params.mixed_timeline_offset, "visual_validation": params.mixed_visual_validation,
                      "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
@@ -394,7 +396,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             manifest = {"version": 1, "fingerprint": fingerprint, "timing": timing,
                         "image_requests": 0, "scenes": _plan(units, script)}
             _save(manifest_file, manifest)
-        pending_images = sum(s["source"] == "image" and not s.get("image_file")
+        pending_images = 0 if params.mixed_image_provider == "openai_flow" else sum(s["source"] == "image" and not s.get("image_file")
                              and not s.get("image_request_started")
                              for s in manifest["scenes"])
         if manifest["image_requests"] + pending_images > params.mixed_max_images:
@@ -425,7 +427,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 _context_card(scene, params, scene_dir)
                 _save(manifest_file, manifest)
             source, provenance = None, None
-            if scene["source"] == "stock" and not scene.get("image_file"):
+            if (scene["source"] == "stock" or params.mixed_image_provider == "openai_flow") and not scene.get("image_file"):
                 history = records or params.mixed_previous_sources
                 scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
@@ -442,7 +444,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         raise MixedError("A previous image request has an unknown result; review it before ordering again")
                     if manifest["image_requests"] >= params.mixed_max_images:
                         raise MixedError("AI image limit reached; no matching stock material was available for this scene")
-                    reserved = sum(other["source"] == "image" and other["id"] != scene["id"]
+                    reserved = 0 if params.mixed_image_provider == "openai_flow" else sum(other["source"] == "image" and other["id"] != scene["id"]
                                    and not other.get("image_file") and not other.get("image_request_started")
                                    for other in manifest["scenes"])
                     if manifest["image_requests"] + 1 + reserved > params.mixed_max_images:
@@ -460,16 +462,47 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     try:
                         if params.mixed_image_provider == "flow_browser":
                             generation_progress.stage("flow_browser")
-                            image = flow_browser.generate(prompt, scene_dir, params.flow_profile, params.flow_project_url)
+                            image = flow_browser.generate(prompt, scene_dir, params.flow_profile, params.flow_project_url, require_zero=params.flow_require_zero)
                             items = [MaterialInfo(provider="flow_browser", url=str(image), duration=1)]
                         else:
                             items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
-                                video_aspect=params.video_aspect, save_dir=str(scene_dir), raise_on_refusal=True)
+                                video_aspect=params.video_aspect, save_dir=str(scene_dir), raise_on_refusal=True, raise_on_technical=True)
+                        if params.mixed_image_provider == "openai_flow":
+                            suitable = bool(items)
+                            if items:
+                                candidate = Path(items[0].url)
+                                scene["openai_candidate_file"] = candidate.name
+                                scene["openai_candidate_sha256"] = _hash(candidate)
+                                _save(manifest_file, manifest)
+                                candidate_video = material._render_openai_image_video(str(candidate),
+                                    (scene["end_frame"]-scene["start_frame"])/FPS, image_motion=params.image_motion)
+                                if not candidate_video:
+                                    raise material.OpenAIImagePaidResultError("Image render failed; retained candidate, no Flow request")
+                                try:
+                                    suitable, verdict = visual_validation.inspect_clip(candidate_video, scene, scene_dir,
+                                        config.app, params.mixed_vision_model)
+                                except visual_validation.VisualValidationError as exc:
+                                    raise MixedError(str(exc), key="mixed.vision_failed") from exc
+                                scene["openai_candidate_verdict"] = verdict
+                                _save(manifest_file, manifest)
+                            if not suitable:
+                                if manifest["image_requests"] >= params.mixed_max_images:
+                                    raise MixedError("Image request limit prevents Flow fallback; no Flow request submitted")
+                                manifest["image_requests"] += 1
+                                scene["flow_request_started"] = True
+                                _save(manifest_file, manifest)
+                                generation_progress.stage("flow_browser")
+                                image = flow_browser.generate(prompt, scene_dir, params.flow_profile, params.flow_project_url,
+                                                              require_zero=params.flow_require_zero)
+                                scene["flow_image_received"] = True
+                                items = [MaterialInfo(provider="flow_browser", url=str(image), duration=1)]
                     except (material.OpenAIImageRefusalError, flow_browser.FlowRefusal):
                         scene["image_refused"] = True
                         _save(manifest_file, manifest)
                         image = _context_card(scene, params, scene_dir)
                         logger.warning("Scene {}: image refused; using a labeled editorial card, no retry", scene["id"])
+                    except material.OpenAIImageTechnicalError as exc:
+                        raise MixedError(str(exc)) from exc
                     except flow_browser.FlowError as exc:
                         raise MixedError(str(exc), key="mixed.flow_failed") from exc
                     else:
@@ -487,7 +520,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 source = str(image) if scene.get("image_refused") else material._render_openai_image_video(str(image), duration, image_motion=params.image_motion)
                 if not source:
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
-                provenance = {"provider": "editorial_card" if scene.get("image_refused") else ("flow_browser" if params.mixed_image_provider == "flow_browser" else "openai_image"), "illustration": True, "local_file": output.name,
+                provenance = {"provider": "editorial_card" if scene.get("image_refused") else ("flow_browser" if params.mixed_image_provider == "flow_browser" or scene.get("flow_image_received") else "openai_image"), "illustration": True, "local_file": output.name,
                               "source_digest": digest, "source_identity": digest, "source_end": 1}
             render(source, output, scene["end_frame"] - scene["start_frame"], params,
                    start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,

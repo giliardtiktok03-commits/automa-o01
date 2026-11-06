@@ -1,64 +1,58 @@
-# Google Flow pelo navegador — perfil local assistido
+# Google Flow automático como último recurso
 
-A integração atual preserva o gerador pela API e adiciona uma opção assistida no
-modo misto. Não é integração oficial Google nem promessa de geração gratuita.
-Não é automação sem supervisão: você confirma a geração e baixa cada imagem.
+Esta versão substitui o modo assistido. Só o login inicial exige intervenção.
+A execução por navegador é uma integração não oficial por controles visíveis.
+Seletores ainda precisam ser verificados na sessão real do usuário: testes
+simulados não comprovam compatibilidade com o Flow atual. Mudanças no site podem
+interromper o processo. Não há chamada a endpoints internos nem bypass de
+CAPTCHA, login, segurança ou cotas.
 
-## Instalação e cadastro
+## Instalar e conectar
 
-1. Com o MPT fechado, aplique os arquivos da atualização sobre a instalação
-   modificada existente, após backup.
-2. Tenha Google Chrome instalado. Execute `PREPARAR_FLOW_WINDOWS.bat` uma vez.
-   Ele instala a dependência opcional Playwright no Python do projeto. Não baixa
-   um novo navegador nem altera as dependências básicas do MPT.
-3. Abra `webui.bat`. Em Configurações do Vídeo, escolha o modo Misto.
-4. Em Gerador de imagens do modo misto, escolha Google Flow — navegador assistido.
-5. Nome do perfil: `principal`. Link do projeto: cole o seu endereço HTTPS
-   `https://flow.google.com/project/<UUID>`.
-6. Clique em Cadastrar / conectar conta no Google Flow. Faça login DIRETAMENTE
-   no Google e confira o avatar/conta no Flow. Não informe senha no MPT ou chat.
-7. Feche TODAS as janelas desse perfil antes de iniciar a geração no MPT.
+Aplique o ZIP na instalação modificada, após fechar o MPT e fazer backup.
+Tenha Chrome instalado e execute PREPARAR_FLOW_WINDOWS.bat uma vez. Reabra
+webui.bat, selecione Misto e escolha **Bancos → ChatGPT → Flow automático**.
+Informe nome do perfil e URL do projeto; use Cadastrar / conectar conta para
+fazer login diretamente no Google e confira o avatar. Feche as janelas desse
+perfil antes de gerar. Sessão local em storage/flow_browser/profiles; não
+compartilhe a pasta nem informe sua senha no MPT. Não há rotação de contas.
+Google pode impedir login num navegador controlado; a integração não contorna isso.
 
-O nome/link ficam nas preferências da interface. A sessão do Chrome fica apenas
-em `storage/flow_browser/profiles/<nome>`. Essa pasta contém dados sensíveis de
-sessão: não compartilhe nem inclua em atualizações. O MPT não importa cookies do
-seu navegador habitual e não verifica automaticamente qual conta fez login.
-Outro nome cria outro perfil manual; não existe rotação automática de contas.
-Google pode impedir o login em navegadores controlados. Nesse caso, pare: não há
-contorno de CAPTCHA, bloqueio, login ou cota nesta integração.
+## Ordem de seleção
 
-## Durante a produção
+1. Tenta materiais dos bancos disponíveis, distribuindo os candidatos.
+2. Sem clipe aprovado, solicita uma imagem à API do ChatGPT/OpenAI configurada.
+3. A imagem recebida é guardada e comparada visualmente com a passagem.
+4. Se o resultado for inutilizável ou rejeitado por falta de correspondência,
+   tenta o Flow. Não muda de provedor em recusa de segurança ou erro técnico.
 
-Quando uma cena precisar de imagem, o MPT abrirá o perfil e uma aba de controle
-com o prompt. O preenchimento no editor é uma tentativa simples; se não aparecer,
-copie o prompt da aba de controle. Não há cliques automáticos de geração.
-No Flow, selecione IMAGEM, a proporção do vídeo, seu modelo e quantidade x1.
-Confira os créditos/custos e as condições do serviço, gere a imagem e clique em
-Download na mesma aba do projeto. Não baixe imagem antiga/outra durante a espera.
-O MPT recebe o arquivo, valida o formato, salva e continua montando a cena.
-Se o serviço abrir o download em outra aba em vez da aba do projeto, este
-primeiro adaptador pode não recebê-lo: o comportamento real precisa de teste.
+Esse encadeamento requer validação visual ativada e API de geração configurada.
+A opção Flow direto continua separada e não passa pela geração OpenAI.
 
-A janela de controle tem dois botões distintos:
-- Flow recusou por segurança: você confirma uma recusa explícita do serviço;
-  entra o mesmo card editorial identificado, sem reformular ou reenviar o pedido.
-- Cancelar / limite / CAPTCHA: a tarefa para sem nova tentativa automática.
+## Ações no navegador
 
-Há até 15 minutos de espera por imagem; timeout ou fechamento não provoca
-reenvio. Revise o projeto antes de iniciar outra tarefa. O limite de imagens
-continua contando pedidos preparados, inclusive cancelados; não mede cliques ou
-créditos dentro do Flow. Escolher x2/x4 manualmente pode gerar mais imagens que
-essa contagem — use x1. Downloads aprovados ficam no checkpoint da cena.
+O conector tenta confirmar Imagem, 16:9, x1 e Nano Banana 2.1, preencher o prompt,
+enviar UMA vez, esperar uma imagem nova e baixar pelo botão do próprio resultado.
+A imagem é validada e inserida na cena. Não baixa um arquivo antigo só porque
+há um botão Download na página. Resultado múltiplo/ambíguo interrompe a execução.
 
-## O que continua igual
+A opção **Só enviar se mostrar custo de 0 créditos** vem ativada. Se esse custo
+não estiver visível, o sistema para antes de enviar. Desativá-la permite usar
+os créditos da conta. Não há garantia de gratuidade ou disponibilidade do modelo.
+Controles sem seleção verificável também impedem o envio. CAPTCHA, limite,
+logout, falha ou timeout interrompem sem repetir automaticamente.
 
-Pexels/Pixabay/Coverr alternam os candidatos, a validação visual dos bancos ainda
-usa a API configurada e a geração pela API mantém seu tratamento de recusas com
-cards. Selecionar Flow NÃO redireciona automaticamente pedidos recusados da API
-para o Google. Falhas técnicas continuam parando a tarefa. A fila do MPT permanece
-sequencial, mas este modo exige sua presença; para produção sem supervisão,
-selecione o gerador por API.
+## Preservação das correções anteriores
 
-Testes locais usam o navegador/Google simulados. Login, limites, disponibilidade
-do modelo e download na conta real precisam ser confirmados no Windows. Este
-ambiente não teve acesso à sessão do projeto do usuário.
+- Recusa explícita da API ou do Flow resulta no card editorial identificado.
+- Uma recusa NÃO é reenviada a outro provedor nem reformulada.
+- Erro de chave/modelo/serviço não provoca troca automática de provedor.
+- Cada pedido preparado conta no limite: OpenAI e Flow podem consumir DUAS
+  unidades para uma cena. Se não houver orçamento, o Flow não é aberto.
+- Resultados OpenAI rejeitados ficam salvos para revisão, sem nova cobrança
+  automática para refazê-los. Downloads Flow concluídos entram no checkpoint.
+- Resultado desconhecido não é reenviado ao retomar.
+- A fila continua sequencial; não repete clipes indevidamente.
+
+Recomenda-se uma nova tarefa curta para o primeiro teste do DOM na conta real.
+Não foi possível acessar ou validar o projeto privado do usuário neste ambiente.

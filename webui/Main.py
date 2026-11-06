@@ -1568,6 +1568,7 @@ def _apply_restored_params(params):
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
     _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "openai"))
+    st.session_state["flow_require_zero"] = params.get("flow_require_zero", True)
     st.session_state["flow_profile"] = params.get("flow_profile", "principal")
     st.session_state["flow_project_url"] = params.get("flow_project_url", "")
     for key, default in (("mixed_visual_validation", True), ("mixed_vision_model", "gpt-4.1-mini"), ("mixed_max_candidates", 3)):
@@ -6210,14 +6211,15 @@ def _render_video_settings(panel, params):
             _set_runtime_config("app", "video_source", params.video_source)
             if params.video_source == "mixed":
                 st.info(tr("Mixed Materials Help"))
-                image_provider_labels = {"openai": tr("Flow OpenAI API"), "flow_browser": tr("Flow Browser")}
+                image_provider_labels = {"openai": tr("Flow OpenAI API"), "flow_browser": tr("Flow Browser"), "openai_flow": tr("Flow Last Resort")}
                 params.mixed_image_provider = stable_selectbox(
-                    tr("Mixed Image Provider"), options=["openai", "flow_browser"],
+                    tr("Mixed Image Provider"), options=["openai", "openai_flow", "flow_browser"],
                     default_value=config.ui.get("mixed_image_provider", "openai"),
                     key="mixed_image_provider", format_func=image_provider_labels.get)
                 _set_runtime_config("ui", "mixed_image_provider", params.mixed_image_provider)
-                if params.mixed_image_provider == "flow_browser":
+                if params.mixed_image_provider in {"flow_browser", "openai_flow"}:
                     st.info(tr("Flow Browser Help"))
+                    params.flow_require_zero = st.checkbox(tr("Flow Require Zero"), value=True, key="flow_require_zero")
                     params.flow_profile = st.text_input(tr("Flow Profile"), value=config.ui.get("flow_profile", "principal"), key="flow_profile")
                     params.flow_project_url = st.text_input(tr("Flow Project"), value=config.ui.get("flow_project_url", ""), key="flow_project_url")
                     _set_runtime_config("ui", "flow_profile", params.flow_profile)
