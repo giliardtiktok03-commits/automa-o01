@@ -962,10 +962,6 @@ def _remove_active_generation_task(task_id):
 def _prepare_generation_task():
     # st.button 的 on_click 会在页面脚本重新执行前触发。这里提前生成任务 ID，
     # 顶部任务管理入口就能在同一次 rerun 中显示“生成中”数量。
-    current_id = _current_generation_task_id()
-    if current_id and webui_task.is_generation_active(current_id):
-        st.session_state["pending_generation_task_id"] = current_id
-        return
     task_id = str(uuid4())
     st.session_state["pending_generation_task_id"] = task_id
     subject = st.session_state.get("video_subject") or st.session_state.get(
@@ -5964,8 +5960,8 @@ def _render_reference_research():
 def _render_script_settings(panel, params):
     """渲染文案设置并更新生成参数。"""
     with panel:
-        with st.container(border=True):
-            st.write(tr("Video Script Settings"))
+        with st.container(border=True, key="stage_script"):
+            _stage_heading(1, tr("Video Script Settings"), "#6d28d9")
             _render_reference_research()
             # 标签行需要容纳“配置大模型”入口，因此无法继续使用 text_area
             # 内置标签。把标签和输入框收进同一个字段容器后，可覆盖内部间距，
@@ -6161,8 +6157,8 @@ def _render_video_settings(panel, params):
     """渲染视频设置并返回本次选择的本地素材。"""
     uploaded_files = []
     with panel:
-        with st.container(border=True):
-            st.write(tr("Video Settings"))
+        with st.container(border=True, key="stage_video"):
+            _stage_heading(2, tr("Video Settings"), "#0369a1")
             video_concat_modes = [
                 (tr("Sequential"), "sequential"),
                 (tr("Random"), "random"),
@@ -8098,8 +8094,8 @@ def _voice_rate_not_supported_help(tts_server, voice_name):
 def _render_audio_settings(panel, params):
     """渲染音频设置并返回上传音频与当前配音模式。"""
     with panel:
-        with st.container(border=True):
-            st.write(tr("Audio Settings"))
+        with st.container(border=True, key="stage_audio"):
+            _stage_heading(3, tr("Audio Settings"), "#b45309")
 
             # 配音方式是音频设置的一级状态，负责明确区分自动配音、用户上传和无配音。
             # 旧配置没有 voice_mode 时，根据原 tts_server 的无配音哨兵保持兼容。
@@ -8803,8 +8799,8 @@ def _render_audio_settings(panel, params):
 def _render_subtitle_settings(panel, params):
     """渲染字幕设置并更新生成参数。"""
     with panel:
-        with st.container(border=True):
-            st.write(tr("Subtitle Settings"))
+        with st.container(border=True, key="stage_subtitles"):
+            _stage_heading(4, tr("Subtitle Settings"), "#047857")
             st.session_state.setdefault(
                 "subtitle_enabled_checkbox",
                 _saved_ui_bool(
@@ -9159,6 +9155,41 @@ def _stage_task_audio(audio_path, audio_bytes):
                 logger.warning(f"failed to remove staged task audio: {exc}")
 
 
+
+def _stage_heading(number, label, color):
+    st.markdown(f'<div style="border-left:6px solid {color};padding:10px 12px;'
+                f'background:{color}18;border-radius:6px;font-weight:700">'
+                f'<span style="color:{color}">{number:02d}</span> · {html.escape(label)}</div>',
+                unsafe_allow_html=True)
+
+
+@st.fragment(run_every=2)
+def _render_production_queue():
+    ids = list(dict.fromkeys([*st.session_state.get("production_task_ids", []),
+                             *(task_id for task_id, _ in webui_task.queue_snapshot())]))
+    if not ids:
+        return
+    with st.container(border=True, key="production_queue"):
+        _stage_heading(5, tr("Production Queue"), "#0f766e")
+        st.caption(tr("Production Help"))
+        waiting = 0
+        for task_id in ids[-100:]:
+            task = sm.state.get_task(task_id) or {}
+            state = _normalize_task_state(task.get("state"))
+            phase = (task.get("generation_activity") or {}).get("phase")
+            if state == const.TASK_STATE_PROCESSING and phase == "queued":
+                waiting += 1
+                status = tr("Production Waiting").format(position=waiting)
+            else:
+                status = _task_state_label(state, bool(task.get("videos")))
+            subject = str(task.get("video_subject") or task_id)
+            col, action = st.columns([5, 1])
+            col.write(f"{status} · {subject} · {task.get('progress', 0)}%")
+            if action.button(tr("Production View"), key="production_view_" + task_id):
+                st.session_state["current_generation_task_id"] = task_id
+                st.query_params["generation_task"] = task_id
+                st.rerun(scope="app")
+
 def _render_generation_controls(
     params, uploaded_files, uploaded_audio_file, uploaded_bgm_file, voice_mode
 ):
@@ -9207,14 +9238,14 @@ def _render_generation_controls(
 
     _render_settings_transfer(params)
 
-    generation_busy = _generation_is_busy(_current_generation_task_id())
+    generation_busy = bool(webui_task.queue_snapshot()) or _generation_is_busy(_current_generation_task_id())
     start_button = st.button(
-        tr("Generating Video") if generation_busy else tr("Generate Video"),
+        tr("Production Add") if generation_busy else tr("Generate Video"),
         use_container_width=True,
         type="primary",
         key="generate_video_button",
         on_click=_prepare_generation_task,
-        disabled=generation_busy,
+        disabled=False,
     )
     render_onboarding_tour()
     if start_button:
@@ -9668,10 +9699,14 @@ def _render_generation_controls(
             _add_active_generation_task(task_id, subject=params.video_subject)
         st.session_state["current_generation_task_id"] = task_id
         st.query_params["generation_task"] = task_id
+        history = st.session_state.setdefault("production_task_ids", [])
+        if task_id not in history:
+            history.append(task_id)
         logger.info(f"WebUI generation task submitted: task_id={task_id}")
         if webui_task.is_generation_active(task_id):
             st.rerun()
 
+    _render_production_queue()
     _render_current_generation_task()
     return start_button
 

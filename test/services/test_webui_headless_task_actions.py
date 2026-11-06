@@ -131,3 +131,11 @@ def test_subtitle_settings_offer_whisper_and_a_small_model(headless_task_app, mo
     assert not app.exception
     assert config.app["subtitle_provider"] == "whisper"
     assert config.whisper["model_size"] == "small"
+
+
+def test_stages_have_distinct_numbered_colors(headless_task_app):
+    app, _ = headless_task_app
+    headings = " ".join(item.value for item in app.markdown)
+    for number, color in [("01", "#6d28d9"), ("02", "#0369a1"), ("03", "#b45309"), ("04", "#047857")]:
+        assert number in headings and color in headings
+    assert not app.button(key="generate_video_button").disabled

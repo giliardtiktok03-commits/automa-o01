@@ -590,6 +590,11 @@
     "mixed.vision_config": "Para validar os clipes, configure a chave e URL do OpenAI em Configurar modelo de IA e escolha um modelo que aceite imagens. A chave de geração de imagens é uma configuração separada.",
     "mixed.vision_failed": "A análise visual falhou ou não retornou uma avaliação válida. A tarefa parou sem aprovar o clipe nem encomendar uma imagem para substituir essa falha. Confira o acesso ao modelo visual, a configuração da API e os logs.",
     "Mixed Variable Pacing": "Ritmo variável na abertura",
-    "Mixed Pacing Help": "Troca real de material: 3s nos primeiros 30s, 5s até 3min, depois na duração configurada. Mesmo arquivo/ID bloqueado antes de 60%. Depois, só outro trecho ainda não usado, nunca consecutivo. Mais materiais podem aumentar custo e tempo; o limite de imagens continua valendo."
+    "Mixed Pacing Help": "Troca real de material: 3s nos primeiros 30s, 5s até 3min, depois na duração configurada. Mesmo arquivo/ID bloqueado antes de 60%. Depois, só outro trecho ainda não usado, nunca consecutivo. Mais materiais podem aumentar custo e tempo; o limite de imagens continua valendo.",
+    "Production Queue": "Fila de produção",
+    "Production Add": "Adicionar próximo vídeo à fila",
+    "Production Help": "Prepare o próximo tema, roteiro e áudio e clique em Adicionar próximo vídeo à fila. Cada item guarda as configurações do momento do envio. Um vídeo por vez; os próximos começam automaticamente, mesmo se um falhar. Mantenha o MPT e o computador ligados, sem suspensão. A fila em memória não é retomada após fechar ou reiniciar o MPT.",
+    "Production Waiting": "Aguardando · posição {position}",
+    "Production View": "Ver tarefa"
   }
 }

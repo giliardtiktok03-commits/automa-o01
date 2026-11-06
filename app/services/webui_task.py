@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import asdict
 
 from loguru import logger
@@ -39,6 +40,43 @@ _active_submissions: dict[str, str] = {}
 # Streamlit 无法由后台线程直接推送组件更新，只能通过 Fragment 轮询。0.5 秒
 # 足以让 WebUI 日志接近终端实时输出，又不会像高频刷新那样持续占用浏览器资源。
 TASK_LOG_REFRESH_INTERVAL_SECONDS = 0.5
+
+
+_CONFIG_SECTIONS = ("app", "whisper", "azure", "chatterbox", "kokoro", "elevenlabs",
+                    "minimax_tts", "siliconflow", "fish_audio", "voxcpm", "ui", "proxy")
+
+
+def capture_settings():
+    return {name: copy.deepcopy(config.snapshot_config_with_pending(getattr(config, name)))
+            for name in _CONFIG_SECTIONS if hasattr(config, name)}
+
+
+@contextmanager
+def _queued_settings(snapshot):
+    # Hold the existing runtime lock; restore the live UI settings before its
+    # pending edits are flushed. Credentials stay in memory, never in job state.
+    with config.runtime_config_lock():
+        if snapshot is None:
+            yield
+            return
+        originals = {name: dict(getattr(config, name)) for name in snapshot}
+        try:
+            for name, values in snapshot.items():
+                section = getattr(config, name)
+                section.clear()
+                section.update(copy.deepcopy(values))
+            yield
+        finally:
+            for name, values in originals.items():
+                section = getattr(config, name)
+                section.clear()
+                section.update(values)
+
+
+def queue_snapshot():
+    with _submission_lock:
+        ids = list(_active_submissions.values())
+    return [(task_id, sm.state.get_task(task_id) or {}) for task_id in ids]
 
 
 def is_generation_active(task_id: str) -> bool:
@@ -116,6 +154,7 @@ def _run_generation(
     voxcpm_prompt_text: str = "",
     jalapeno_video_endpoint: volcengine_seedance.SeedanceEndpoint | None = None,
     codex_image_context: codex_image.CodexImageContext | None = None,
+    settings_snapshot: dict | None = None,
 ) -> dict:
     """
     在后台线程中执行现有视频流水线。
@@ -143,7 +182,7 @@ def _run_generation(
 
         # 完整任务仍使用原来的配置锁，防止另一个 WebUI 会话在生成中途修改
         # Provider、密钥等进程级配置，造成同一条视频前后使用不同设置。
-        with config.runtime_config_lock():
+        with _queued_settings(settings_snapshot):
             return tm.start(
                 task_id=task_id,
                 params=params,
@@ -242,6 +281,7 @@ def submit_generation(
         if task_params.video_source == "codex_image"
         else None
     )
+    settings_snapshot = capture_settings()
     signature = _submission_signature(
         task_params,
         (
@@ -254,6 +294,7 @@ def submit_generation(
         voice_preview_snapshot,
         codex_image_context,
     )
+    signature = hashlib.sha256((signature + json.dumps(settings_snapshot, sort_keys=True, default=str)).encode()).hexdigest()
     # 同一锁内查重并预占，两个标签页同时点击也只会真正入队一次。
     with _submission_lock:
         existing = _active_submissions.get(signature)
@@ -274,6 +315,7 @@ def submit_generation(
             voxcpm_prompt_text_snapshot,
             jalapeno_video_endpoint,
             codex_image_context,
+            settings_snapshot,
         )
     except Exception:
         with _submission_lock:
@@ -294,6 +336,7 @@ def _enqueue_generation(
     voxcpm_prompt_text_snapshot,
     jalapeno_video_endpoint,
     codex_image_context=None,
+    settings_snapshot=None,
 ):
     submitted_at = time.time()
     sm.state.update_task(
@@ -311,6 +354,7 @@ def _enqueue_generation(
             task_id=task_id,
             params=task_params,
             capture_logs=capture_logs,
+            settings_snapshot=settings_snapshot,
             voice_preview=voice_preview_snapshot,
             loomloom_video_request=loomloom_request_snapshot,
             voxcpm_reference_audio=voxcpm_reference_audio_snapshot,

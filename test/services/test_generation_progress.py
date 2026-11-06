@@ -381,7 +381,7 @@ def test_browser_refresh_recovers_busy_job_and_displays_current_phase(isolated_j
             app.run()
             assert not app.exception
             assert app.session_state["current_generation_task_id"] == job
-            assert app.button(key="generate_video_button").disabled
+            assert not app.button(key="generate_video_button").disabled
             assert any("06:" in c.value for c in app.caption)
             assert any("paid-123" in c.value for c in app.caption)
         isolated_jobs.patch_task(job, generation_activity={"phase":"downloading", "downloaded_bytes":1048576})
@@ -409,7 +409,7 @@ def test_persisted_processing_job_can_be_untracked_after_service_restart(isolate
         app.query_params["generation_task"] = job
         app.run()
         assert not app.exception
-        assert app.button(key="generate_video_button").disabled
+        assert not app.button(key="generate_video_button").disabled
         app.button(key=f"stop_tracking_generation_{job}").click().run()
         assert not app.exception
         assert not app.button(key="generate_video_button").disabled
