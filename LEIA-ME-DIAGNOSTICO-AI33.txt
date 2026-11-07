@@ -1,0 +1,34 @@
+DIAGNOSTICO AI33 — somente consulta, sem novas geracoes
+
+1. Extraia o ZIP na pasta do MPT onde ficam webui.bat, config.toml e .venv.
+2. Execute DIAGNOSTICAR_AI33.bat. Ele usa a chave ja salva no MPT.
+3. Aguarde as consultas e envie o arquivo JSON indicado no final.
+
+Por padrao seleciona o projeto com registro AI33 mais recente.
+Para indicar o projeto manualmente, use no PowerShell:
+  .\DIAGNOSTICAR_AI33.bat 5ea95e86-2852-4ecc-9fde-5beabd62fcdd
+
+O relatorio fica em storage\diagnostics\ai33-DATA-HORA.json.
+Nao inclui chave, roteiro, prompts nem URLs das imagens.
+Nao altera configuracoes, checkpoints, limites ou o fluxo do MPT.
+Nao reenvia geracoes, nao apaga tarefas e nao baixa imagens.
+
+Consulta o catalogo, uma pagina de historico (ate 20 IDs/estados, sem conteudo)
+e ate tres tarefas existentes, com duas amostras de estado
+por tarefa e intervalo de quatro segundos. A segunda pede revalidacao de cache.
+Datas e estimativas sao registradas apenas quando realmente retornadas pela API.
+
+Podemos comparar:
+- demora da consulta HTTP versus estado de processamento;
+- datas de criacao/atualizacao/termino quando disponibilizadas;
+- diferenca entre estado salvo no MPT e estado atual da API;
+- sinais de cache, como Age, X-Cache e CF-Cache-Status;
+- disponibilidade do modelo no catalogo atual.
+- outras tarefas ainda pendentes na amostra da mesma conta.
+
+Uma mudanca de doing para done entre consultas nao prova cache: a tarefa pode
+ter terminado nesse intervalo. Doing sozinho nao distingue fila de processamento.
+Sem dados de fila/inicio/termino, sera necessario confirmar a causa com o provedor.
+O historico da conta nao mede a fila global da AI33.
+
+Este pacote e independente: nao e uma atualizacao do gerador de videos.
