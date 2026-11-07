@@ -86,7 +86,7 @@ def configure_sources(params, settings):
 def validate(params, settings=None, *, external_audio=False):
     settings = config.app if settings is None else settings
     configure_sources(params, settings)
-    if ((external_audio or params.custom_audio_file) and params.subtitle_enabled
+    if (not params.mixed_resume and (external_audio or params.custom_audio_file) and params.subtitle_enabled
             and settings.get("subtitle_provider", "edge") != "whisper"):
         raise MixedError("Uploaded narration with subtitles requires Whisper; select Whisper or disable subtitles for estimated timing",
                          key="mixed.external_subtitles")
@@ -377,6 +377,36 @@ def _stock(scene, params, directory, provider_order, used):
     return None, None
 
 
+
+def checkpoint_matches(signature, fingerprint):
+    """Known formats; tolerate Pydantic's 0 -> 0.0 numeric round trip."""
+    def digest(value):
+        return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+    def variants(value):
+        number = float(value)
+        return [value, number, int(number)] if number.is_integer() else [value]
+    for offset in variants(signature["timeline_offset"]):
+        for total in variants(signature["total_duration"]):
+            current = dict(signature, timeline_offset=offset, total_duration=total)
+            if digest(current) == fingerprint:
+                return True
+            if not all(signature["selected_sources"].values()):
+                continue
+            older = dict(current)
+            older.pop("selected_sources", None)
+            if digest(older) == fingerprint:
+                return True
+            older.pop("flow_require_zero", None)
+            if signature["flow_require_zero"] and digest(older) == fingerprint:
+                return True
+            for key in ("image_provider", "flow_profile", "flow_project_url"):
+                older.pop(key, None)
+            if (signature["image_provider"] == "openai" and signature["flow_require_zero"]
+                    and digest(older) == fingerprint):
+                return True
+    return False
+
+
 def prepare(task_id, params, script, audio_duration, subtitle_file=""):
     validate(params)
     directory = Path(utils.task_dir(task_id))
@@ -405,9 +435,16 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if manifest_file.exists():
             manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
             if manifest["fingerprint"] != fingerprint:
-                raise MixedError("Scene checkpoint inputs changed; use a new task ID")
+                if not params.mixed_resume or not checkpoint_matches(signature, manifest["fingerprint"]):
+                    if manifest.get("signature"):
+                        logger.warning("Checkpoint differs in fields: {}", [key for key in signature if signature[key] != manifest["signature"].get(key)])
+                    raise MixedError("Scene checkpoint inputs changed; restore the original settings before resuming")
+                manifest["previous_fingerprint"] = manifest["fingerprint"]
+                manifest["fingerprint"] = fingerprint
+                manifest["signature"] = signature
+                _save(manifest_file, manifest)
         else:
-            manifest = {"version": 1, "fingerprint": fingerprint, "timing": timing,
+            manifest = {"version": 1, "fingerprint": fingerprint, "signature": signature, "timing": timing,
                         "image_requests": 0, "scenes": _plan(units, script)}
             _save(manifest_file, manifest)
         pending_images = 0 if params.mixed_select_sources or params.mixed_image_provider == "openai_flow" else sum(s["source"] == "image" and not s.get("image_file")

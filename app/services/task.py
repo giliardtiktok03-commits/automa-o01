@@ -2041,6 +2041,9 @@ def start(
     """
     with generation_progress.task_scope(task_id):
         try:
+            if getattr(params, "mixed_resume", False):
+                from app.services import mixed_resume
+                return mixed_resume.run(task_id, params.mixed_max_images)
             if getattr(params, "long_form", False):
                 from app.services import long_form
 

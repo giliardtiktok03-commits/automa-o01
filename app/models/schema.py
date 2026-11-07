@@ -131,6 +131,7 @@ class VideoParams(BaseModel):
     mixed_previous_sources: list[dict[str, Any]] = Field(default_factory=list)
     mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
     mixed_image_provider: Literal["openai", "flow_browser", "openai_flow", "none"] = "openai"
+    mixed_resume: bool = False
     mixed_select_sources: bool = False
     mixed_use_pexels: bool = True
     mixed_use_pixabay: bool = True

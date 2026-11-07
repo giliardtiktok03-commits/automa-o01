@@ -214,3 +214,36 @@ A API pode ativar essa seleção com `mixed_select_sources: true` e campos boole
 `mixed_use_pexels`, `mixed_use_pixabay`, `mixed_use_coverr`, `mixed_use_openai` e
 `mixed_use_flow`. Quando `mixed_select_sources` é falso, a preferência explícita
 `mixed_image_provider` continua disponível por compatibilidade.
+
+## Retomar projeto após limite de imagens
+
+Na interface, abra **Retomar projeto salvo — modo misto**, informe o ID da tarefa
+e o novo limite TOTAL, depois clique em **Verificar projeto salvo**. A conferência
+mostra cenas prontas e solicitações já iniciadas. **Retomar projeto salvo** entra
+na mesma fila, usando o mesmo ID/pasta. Não precisa reenviar áudio/roteiro.
+O formulário normal não substitui as configurações originais nesse processo.
+
+Para a tarefa `5c8b2e2a-3360-449a-a84d-297f6ab90bcf`, um limite de 24 inclui as 12
+solicitações já iniciadas: restam no máximo 12. Isso não garante que seja
+suficiente para todas as cenas restantes. Não há aumento automático de custo.
+
+Preserve integralmente storage/tasks/<ID>, inclusive script.json,
+mixed-scenes.json, áudio, legendas se ativadas e a pasta mixed. A retomada não
+chama geração de roteiro, TTS nem Whisper: usa os arquivos originais, confere
+hashes das cenas concluídas e das imagens e prepara só o que falta. Resultados
+pagos desconhecidos impedem o processo antes de novas solicitações. Não remove
+nem recria a pasta; guarda cópias dos manifestos em resume-backups antes de editar.
+
+Checkpoints conhecidos das versões anteriores podem ser migrados se seus hashes
+forem reproduzidos com as mesmas entradas. Mudanças de modelo de imagem, tamanho,
+API visual, roteiro, tempos ou configuração visual impedem a retomada: restaure
+os valores originais. Credenciais podem ser atualizadas; modelo/endpoint visuais
+continuam sujeitos à conferência. Não há garantia de validar o histórico de
+arquivos alterados antes do primeiro checkpoint de mídia nas versões antigas;
+preserve o áudio original. Após a primeira retomada, hashes de áudio/SRT também
+são guardados em resume-media.json. Não publica automaticamente em redes sociais.
+
+Esta ação vale para um vídeo misto único; projetos por capítulos usam a retomada
+já existente do modo longo. O vídeo final só é montado depois que todas as cenas
+ficarem prontas. Uma renderização final interrompida pode precisar ser refeita,
+mesmo com os materiais reaproveitados. Projetos já finalizados não são reenviados.

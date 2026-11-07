@@ -176,3 +176,21 @@ def test_mixed_sources_all_start_checked(headless_task_app, monkeypatch):
     assert not app.exception
     assert not app.checkbox(key='mixed_use_flow').value
     assert all(item.key!='flow_connect' for item in app.button)
+
+
+def test_saved_project_check_uses_original_id_and_total_budget(headless_task_app, monkeypatch):
+    from unittest.mock import Mock
+    from app.models.schema import VideoParams
+    from app.services import mixed_resume
+    app, _ = headless_task_app
+    task_id='5c8b2e2a-3360-449a-a84d-297f6ab90bcf'
+    project={'task_id':task_id,'params':VideoParams(video_subject='Saved project', mixed_resume=True),
+             'ready':21,'total':60,'started':12}
+    load=Mock(return_value=project)
+    monkeypatch.setattr(mixed_resume,'load',load)
+    app.text_input(key='mixed_resume_id').set_value(task_id)
+    app.number_input(key='mixed_resume_limit').set_value(24)
+    app.button(key='mixed_resume_check').click().run()
+    assert not app.exception
+    load.assert_called_once_with(task_id,24)
+    assert any('21/60' in item.value and '12' in item.value and '24' in item.value for item in app.info)

@@ -9267,6 +9267,36 @@ def _render_production_queue():
                 st.query_params["generation_task"] = task_id
                 st.rerun(scope="app")
 
+
+def _render_mixed_resume():
+    from app.services import mixed_resume
+    with st.expander(tr("Mixed Resume Project")):
+        st.caption(tr("Mixed Resume Help"))
+        resume_id = st.text_input(tr("Mixed Resume ID"), key="mixed_resume_id").strip()
+        limit = st.number_input(tr("Mixed Resume Limit"), min_value=0, max_value=120, value=24,
+                                step=1, key="mixed_resume_limit")
+        check = st.button(tr("Mixed Resume Check"), key="mixed_resume_check")
+        resume = st.button(tr("Mixed Resume Start"), key="mixed_resume_start", disabled=_flow_test_running())
+        if check or resume:
+            try:
+                if webui_task.is_generation_active(resume_id):
+                    raise ValueError(tr("Generating Video"))
+                project = mixed_resume.load(resume_id, limit)
+                st.info(tr("Mixed Resume Summary").format(ready=project['ready'], total=project['total'],
+                                                         started=project['started'], limit=limit))
+                if resume:
+                    task_id = webui_task.submit_generation(project['task_id'], project['params'],
+                                                           capture_logs=not config.ui.get('hide_log',False))
+                    _add_active_generation_task(task_id, subject=project['params'].video_subject)
+                    history = st.session_state.setdefault('production_task_ids', [])
+                    if task_id not in history:
+                        history.append(task_id)
+                    st.session_state['current_generation_task_id'] = task_id
+                    st.query_params['generation_task'] = task_id
+                    st.rerun()
+            except (ValueError, OSError, KeyError) as exc:
+                st.error(str(exc))
+
 def _render_generation_controls(
     params, uploaded_files, uploaded_audio_file, uploaded_bgm_file, voice_mode
 ):
@@ -9314,6 +9344,7 @@ def _render_generation_controls(
             st.text_input(tr("Resume Chapter Task ID"), key="long_form_resume_task_id")
 
     _render_settings_transfer(params)
+    _render_mixed_resume()
 
     generation_busy = bool(webui_task.queue_snapshot()) or _generation_is_busy(_current_generation_task_id())
     start_button = st.button(

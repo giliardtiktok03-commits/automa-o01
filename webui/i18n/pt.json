@@ -622,6 +622,13 @@
     "Mixed ChatGPT Images": "ChatGPT — geração de imagens",
     "Mixed Sources Help": "Todas vêm marcadas inicialmente. Apenas fontes marcadas e configuradas são usadas. Ordem: bancos → ChatGPT → Flow. Para testar só Flow, use o botão abaixo; para produzir só com ele, desmarque as outras quatro fontes. ChatGPT aqui controla apenas imagens; roteiro e análise visual têm configurações separadas.",
     "mixed.no_sources": "Marque e configure pelo menos uma fonte de material.",
-    "mixed.no_images": "Nenhum clipe adequado foi encontrado nas fontes ativas. Os geradores de imagem estão desligados ou sem configuração; nenhuma imagem foi encomendada."
+    "mixed.no_images": "Nenhum clipe adequado foi encontrado nas fontes ativas. Os geradores de imagem estão desligados ou sem configuração; nenhuma imagem foi encomendada.",
+    "Mixed Resume Project": "Retomar projeto salvo — modo misto",
+    "Mixed Resume Help": "Usa a mesma pasta e as configurações salvas, sem gerar roteiro, áudio ou legendas novamente. Só o limite total de imagens muda. Preserve os arquivos originais e a configuração das APIs. Faça backup antes de retomar. Pedidos com resultado desconhecido não são repetidos. Para vídeos por capítulos, use a retomada do modo longo.",
+    "Mixed Resume ID": "ID da tarefa que parou",
+    "Mixed Resume Limit": "Novo limite TOTAL de solicitações de imagens",
+    "Mixed Resume Check": "Verificar projeto salvo",
+    "Mixed Resume Start": "Retomar projeto salvo",
+    "Mixed Resume Summary": "Cenas prontas: {ready}/{total}. Solicitações já iniciadas: {started}. Limite total: {limit}. As solicitações anteriores contam nesse limite."
   }
 }

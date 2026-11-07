@@ -877,6 +877,13 @@
     "Mixed ChatGPT Images": "ChatGPT — image generation",
     "Mixed Sources Help": "All start checked. Only enabled and configured sources are used: stock → ChatGPT → Flow. Use the test button for Flow only, or uncheck the other four sources for Flow-only production. ChatGPT here controls image generation only; script and visual inspection settings are separate.",
     "mixed.no_sources": "Enable and configure at least one material source.",
-    "mixed.no_images": "No approved clip from enabled sources; image generators are disabled or unconfigured. No image was ordered."
+    "mixed.no_images": "No approved clip from enabled sources; image generators are disabled or unconfigured. No image was ordered.",
+    "Mixed Resume Project": "Resume saved mixed-mode project",
+    "Mixed Resume Help": "Uses the same folder and saved settings, without regenerating script, audio or subtitles. Only the total image-request budget changes. Preserve original files and API settings; back up first. Unknown paid requests are not repeated. Use long-form resume for chapter projects.",
+    "Mixed Resume ID": "Interrupted task ID",
+    "Mixed Resume Limit": "New TOTAL image request limit",
+    "Mixed Resume Check": "Check saved project",
+    "Mixed Resume Start": "Resume saved project",
+    "Mixed Resume Summary": "Completed scenes: {ready}/{total}. Requests already started: {started}. Total limit: {limit}. Earlier requests count toward this limit."
   }
 }

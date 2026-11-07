@@ -661,3 +661,67 @@ def test_disabled_image_generators_are_not_called(setup, monkeypatch):
     assert params.mixed_image_provider=='none'
     images.assert_not_called()
     generate.assert_not_called()
+
+
+def test_saved_project_resumes_after_limit_without_script_audio_or_paid_repetition(setup,monkeypatch):
+    from app.services import mixed_resume, task
+    import hashlib
+    folder, _, params, model, search, images, rendering = setup
+    task_id='5c8b2e2a-3360-449a-a84d-297f6ab90bcf'
+    directory=Path(mixed.utils.task_dir(task_id))
+    content=b'original external narration'
+    audio=directory/f'custom-audio-{hashlib.sha256(content).hexdigest()}.mp3'
+    audio.write_bytes(content)
+    params.custom_audio_file=str(audio)
+    params.subtitle_enabled=False
+    params.mixed_max_images=1
+    original_search=search.side_effect
+    search.side_effect=lambda provider,method,query,*args: [] if query.endswith('3') else original_search(provider,method,query,*args)
+    task.save_script_data(task_id,SCRIPT,[],params)
+    with pytest.raises(mixed.MixedError,match='limit reached'):
+        mixed.prepare(task_id,params,SCRIPT,30)
+    assert images.call_count==1
+    monkeypatch.setattr(mixed_resume.voice,'get_audio_duration',lambda *_:30)
+    saved=mixed_resume.load(task_id,24)
+    assert saved['ready']==2 and saved['started']==1
+    model.reset_mock()
+    rendering.reset_mock()
+    def render_final(*args,**kwargs):
+        target=directory/'final-1.mp4'
+        target.write_bytes(b'final video')
+        return [str(target)],[],[]
+    monkeypatch.setattr(task,'generate_final_videos',render_final)
+    spies=[Mock() for _ in range(3)]
+    for name,spy in zip(('generate_script','generate_audio','generate_subtitle'),spies):
+        monkeypatch.setattr(task,name,spy)
+    result=task.start(task_id,saved['params'])
+    assert result['videos'] and result['mixed_image_requests']==2
+    assert images.call_count==2 and rendering.call_count==1
+    model.assert_not_called()
+    for spy in spies:
+        spy.assert_not_called()
+    assert list((directory/'resume-backups').glob('*/mixed-scenes.json'))
+    assert json.loads((directory/'script.json').read_text())['params']['mixed_max_images']==24
+
+
+def test_legacy_checkpoint_migrates_only_when_original_inputs_match(setup):
+    import hashlib
+    folder,subtitles,params,model,_,images,_=setup
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    file=folder/'mixed-scenes.json'
+    saved=json.loads(file.read_text())
+    signature=saved.pop('signature')
+    for key in ('selected_sources','flow_require_zero','image_provider','flow_profile','flow_project_url'):
+        signature.pop(key,None)
+    saved['fingerprint']=hashlib.sha256(json.dumps(signature,sort_keys=True).encode()).hexdigest()
+    file.write_text(json.dumps(saved))
+    params.mixed_resume=True
+    params.mixed_max_images=24
+    model.reset_mock()
+    images.reset_mock()
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    model.assert_not_called()
+    images.assert_not_called()
+    params.video_aspect='1:1'
+    with pytest.raises(mixed.MixedError,match='restore the original settings'):
+        mixed.prepare('job',params,SCRIPT,30,str(subtitles))
