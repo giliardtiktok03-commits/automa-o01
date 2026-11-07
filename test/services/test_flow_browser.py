@@ -75,3 +75,33 @@ def test_standalone_test_launches_one_image_without_video_pipeline(tmp_path, mon
     assert body['timeout']==180 and body['require_zero'] is True
     assert 'prompt' in body
     assert launcher.call_count==1
+
+
+def test_browser_keeps_chrome_sandbox_and_reuses_initial_tab(tmp_path, monkeypatch):
+    import sys
+    import types
+    from unittest.mock import MagicMock
+    monkeypatch.setattr(flow, 'validate', lambda *_: None)
+    monkeypatch.setattr(flow, '_root', lambda: tmp_path)
+    page = MagicMock()
+    context = MagicMock()
+    context.pages = [page]
+    page.goto.side_effect = lambda *_a, **_k: setattr(context, 'pages', [])
+    playwright = MagicMock()
+    playwright.chromium.launch_persistent_context.return_value = context
+    manager = MagicMock()
+    manager.__enter__.return_value = playwright
+    api = types.ModuleType('playwright.sync_api')
+    api.sync_playwright = lambda: manager
+    monkeypatch.setitem(sys.modules, 'playwright', types.ModuleType('playwright'))
+    monkeypatch.setitem(sys.modules, 'playwright.sync_api', api)
+    request = tmp_path/'connect.json'
+    request.write_text(json.dumps({'profile':'giliard', 'project':URL, 'action':'connect'}))
+    flow._browser(request)
+    kwargs = playwright.chromium.launch_persistent_context.call_args.kwargs
+    assert kwargs['chromium_sandbox'] is True
+    assert kwargs['headless'] is False
+    assert 'ignore_default_args' not in kwargs
+    context.new_page.assert_not_called()
+    assert json.loads(request.with_suffix('.result.json').read_text())['status']=='closed'
+    context.close.assert_called_once()

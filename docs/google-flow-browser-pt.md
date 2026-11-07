@@ -71,3 +71,11 @@ o mesmo conector automático e a opção de zero créditos, sem consultar bancos
 ou OpenAI. O painel acompanha o resultado e mostra a imagem recebida. Timeout,
 CAPTCHA, erro ou recusa não provocam novas tentativas. Revise o projeto antes de
 clicar novamente. O teste real ainda depende dos seletores da sua página.
+
+## Inicialização do Chrome
+
+O Chrome é iniciado com a sandbox ativa, sem a opção `--no-sandbox`, e reutiliza
+a aba inicial em vez de deixar uma aba about:blank extra. Isso corrige a
+configuração de lançamento; não garante aceitação do login Google. Se a mensagem
+"navegador ou app pode não ser seguro" continuar, pare e registre o resultado.
+Não há remoção de indicadores de automação nem contorno dessa decisão do serviço.

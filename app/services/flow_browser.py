@@ -135,13 +135,18 @@ def _browser(request_file):
             # Visible installed Chrome; no stealth flags, password collection or
             # CAPTCHA/quota bypass. Google may disallow login in automation.
             context = p.chromium.launch_persistent_context(str(profile_root / data["profile"]),
-                        channel="chrome", headless=False, accept_downloads=True)
+                        channel="chrome", headless=False, accept_downloads=True, chromium_sandbox=True)
             try:
-                page = context.new_page()
+                page = context.pages[0] if context.pages else context.new_page()
                 if data["action"] == "connect":
                     page.goto(data["project"], wait_until="domcontentloaded", timeout=60000)
                     while context.pages:
-                        page.wait_for_timeout(500)
+                        try:
+                            page.wait_for_timeout(500)
+                        except Exception:
+                            if not context.pages:
+                                break
+                            raise
                     task_artifacts._write_json_atomic(result_file, {"status": "closed"})
                     return
                 from app.services import flow_automation
