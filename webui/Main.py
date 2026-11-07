@@ -445,6 +445,8 @@ def _run_llm_read_operation(operation_name, operation):
         # 配置层在复制全局值和叠加待更新值期间持有队列锁，因此快照只能看到
         # 更新前或更新后的完整状态，不会混用两组 Provider 参数。
         app_config_snapshot = config.snapshot_config_with_pending(config.app)
+        if "active_channel_skill_snapshot" in st.session_state:
+            app_config_snapshot["_channel_skill_snapshot"] = list(st.session_state["active_channel_skill_snapshot"])
         if lock_acquired:
             return operation(app_config_snapshot)
 
@@ -1567,6 +1569,8 @@ def _apply_restored_params(params):
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
+    st.session_state["channel_skills_enabled"] = params.get("skills_enabled", False)
+    st.session_state["channel_skill_ids"] = list(params.get("skill_ids", []))
     for source in ("pexels", "pixabay", "coverr", "ai33"):
         key = "mixed_use_" + source
         st.session_state[key] = params.get(key, True)
@@ -6025,14 +6029,15 @@ def _render_script_settings(panel, params):
                         icon=":material/preview:",
                         use_container_width=True,
                     ):
+                        from app.services import channel_skill_runtime
                         render_script_prompt_preview(
-                            llm.build_script_prompt(
+                            channel_skill_runtime.decorate(llm.build_script_prompt(
                                 video_subject=params.video_subject,
                                 language=params.video_language,
                                 paragraph_number=params.paragraph_number,
                                 video_script_prompt=params.video_script_prompt,
                                 custom_system_prompt=params.custom_system_prompt,
-                            )
+                            ), params.skill_snapshot)
                         )
 
             # 模型发现只增强视频素材，不改变用户明确选择的文案 Provider。
@@ -9736,6 +9741,8 @@ def _render_application():
     params.match_materials_to_script = bool(
         st.session_state.get("match_materials_to_script", False)
     )
+    from webui.channel_skills import render as render_channel_skills
+    render_channel_skills(left_panel, params, _set_runtime_config, _stage_heading)
     _render_script_settings(left_panel, params)
 
     uploaded_files = _render_video_settings(middle_panel, params)

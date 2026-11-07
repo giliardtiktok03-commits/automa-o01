@@ -325,6 +325,9 @@ def _generate_response(
         # 的配置快照，确保模型请求重试期间不会因为后台任务结束并应用新配置，
         # 而切换到另一个 Provider、Base URL 或模型。
         runtime_app_config = app_config if app_config is not None else config.app
+        from app.services import channel_skill_runtime
+        prompt = channel_skill_runtime.decorate(
+            prompt, runtime_app_config.get("_channel_skill_snapshot") if app_config is not None else None)
         llm_provider = str(
             runtime_app_config.get("llm_provider", DEFAULT_LLM_PROVIDER_ID)
         ).lower()

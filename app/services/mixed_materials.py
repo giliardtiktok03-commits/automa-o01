@@ -420,6 +420,13 @@ def legacy_continuation(signature, manifest):
 
 
 def prepare(task_id, params, script, audio_duration, subtitle_file=""):
+    from app.services import channel_skill_runtime
+    channel_skill_runtime.freeze(params)
+    with channel_skill_runtime.scope(params.skill_snapshot):
+        return _prepare(task_id, params, script, audio_duration, subtitle_file)
+
+
+def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
     validate(params)
     directory = Path(utils.task_dir(task_id))
     scene_dir = directory / "mixed"
@@ -444,6 +451,8 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                      "image_size": params.ai33_resolution,
                      "image_quality": params.ai33_quality,
                      "image_credit_cap": params.ai33_max_credits}
+        if params.skills_enabled and params.skill_snapshot:
+            signature["channel_skills"] = [{"id": item.skill_id, "sha256": item.sha256} for item in params.skill_snapshot]
         fingerprint = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
         if manifest_file.exists():
             manifest = json.loads(manifest_file.read_text(encoding="utf-8"))

@@ -117,6 +117,9 @@ def _get_video_music_prompt(params: VideoParams) -> str:
     prompt = str(params.video_music_prompt or "").strip()
     if params.bgm_type == "sonilo" and not prompt:
         prompt = str(params.sonilo_bgm_prompt or "").strip()
+    if not prompt:
+        from app.services import channel_skill_runtime
+        prompt = channel_skill_runtime.metadata_value(params, "music_prompt", 1200)
     return prompt
 
 
@@ -2046,7 +2049,13 @@ def start(
     ``allow_server_file_input`` 只供本机 CLI 使用。HTTP API 和 WebUI 必须保持
     默认值，让自定义音频始终受当前任务目录约束。
     """
-    with generation_progress.task_scope(task_id):
+    from app.services import channel_skill_runtime
+    # Resume will load its own saved context; active queued jobs use their snapshot.
+    try:
+        channel_skill_runtime.freeze(params)
+    except ValueError as exc:
+        return _mark_task_failed(task_id, "skills", str(exc))
+    with generation_progress.task_scope(task_id), channel_skill_runtime.scope(params.skill_snapshot):
         try:
             if getattr(params, "mixed_resume", False):
                 from app.services import mixed_resume

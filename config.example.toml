@@ -805,6 +805,9 @@ voice_id = "default"
 # =============================================================================
 
 [ui]
+# Channel skills are optional. Installed SKILL.md files stay in storage/channel-skills.
+skills_enabled = false
+skill_ids = []
 # Hide generation logs in the WebUI.
 hide_log = false
 

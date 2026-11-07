@@ -252,6 +252,8 @@ def submit_generation(
     浏览器刷新或 WebSocket 重连也不依赖旧页面内存中的占位符。
     """
     task_params = params.model_copy(deep=True)
+    from app.services import channel_skill_runtime
+    channel_skill_runtime.freeze(task_params)
     # The subtitle timeline and nested preview parameters remain mutable in
     # Streamlit session state. Snapshot them before this job enters the queue.
     voice_preview_snapshot = copy.deepcopy(voice_preview) if voice_preview else None

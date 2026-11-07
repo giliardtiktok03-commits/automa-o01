@@ -1,0 +1,21 @@
+MPT — 00 · Configurações de Skills
+
+Feche o MPT, faça backup e extraia este ZIP na raiz do programa.
+Preserve config.toml, storage e .venv. Reabra webui.bat.
+
+O bloco 00 aparece na primeira coluna, acima das configurações do roteiro.
+Ele permite instalar SKILL.md, ativar múltiplas skills, editar, exportar e
+arquivar arquivos. A primeira skill selecionada tem prioridade editorial.
+
+NENHUMA SKILL DE CANAL É INSTALADA OU ATIVADA AUTOMATICAMENTE.
+O perfil de história militar/espionagem ainda precisa de decisões editoriais.
+O modelo disponível para download na interface é vazio e precisa ser preenchido.
+
+As instruções são copiadas para cada projeto ao enviar para a fila. Edições
+posteriores na biblioteca não alteram os vídeos já enviados. Sem skills ativas,
+o MPT mantém o modo padrão. A voz aprovada não é trocada automaticamente.
+
+A geração de imagens continua exclusivamente na AI33.Pro. Esta atualização
+inclui os arquivos da integração AI33 anterior e não adiciona endpoints de áudio.
+
+Mais detalhes: docs/channel-skills-pt.md

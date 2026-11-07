@@ -73,6 +73,9 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     payload["params"].pop("mixed_resume", None)
+    if not params.skills_enabled or not params.skill_snapshot:
+        for key in ("skills_enabled", "skill_ids", "skill_snapshot"):
+            payload["params"].pop(key, None)
     if params.video_source not in {"mixed", "ai33_image"}:
         for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates", "mixed_variable_pacing", "mixed_timeline_offset", "mixed_total_duration", "mixed_previous_sources", "mixed_is_chapter", "mixed_image_provider", "flow_profile", "flow_project_url", "flow_require_zero", "mixed_select_sources", "mixed_use_pexels", "mixed_use_pixabay", "mixed_use_coverr", "mixed_use_openai", "mixed_use_flow", "mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
             payload["params"].pop(key, None)

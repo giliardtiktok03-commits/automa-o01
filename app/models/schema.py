@@ -6,6 +6,7 @@ import pydantic
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import config
+from app.models.channel_skill import ChannelSkillSnapshot
 
 # 忽略 Pydantic 的特定警告
 warnings.filterwarnings(
@@ -109,6 +110,9 @@ class VideoParams(BaseModel):
     """
 
     video_subject: str
+    skills_enabled: bool = False
+    skill_ids: list[str] = Field(default_factory=list, max_length=8)
+    skill_snapshot: list[ChannelSkillSnapshot] = Field(default_factory=list, max_length=8)
     video_script: str = ""  # Script used to generate the video
     video_terms: Optional[str | List[str]] = None  # Keywords used to generate the video
     video_aspect: Optional[VideoAspect] = VideoAspect.portrait
