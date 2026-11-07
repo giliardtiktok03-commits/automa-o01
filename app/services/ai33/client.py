@@ -1,17 +1,43 @@
 """Contract from the user-supplied AI33 image API documentation, 2026-11-07.
 
-No implicit retries, redirects, webhooks, or undocumented audio endpoints.
+Only task GETs have bounded transient retries. Never retry a paid POST.
 """
 
 import json
+import logging
 import math
 import re
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import requests
 
 
 class AI33Error(RuntimeError):
     """Safe diagnostic: never includes upstream bodies, prompts, URLs or keys."""
+
+
+class _TransientError(AI33Error):
+    def __init__(self, message, retry_after=0):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _retry_after(value):
+    if not isinstance(value, str):
+        return 0
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            date = parsedate_to_datetime(value)
+            if date.tzinfo is None:
+                return 0
+            seconds = (date - datetime.now(timezone.utc)).total_seconds()
+        except (ValueError, TypeError, OverflowError):
+            return 0
+    return max(0, seconds) if math.isfinite(seconds) else 0
 
 
 def credits(value):
@@ -39,8 +65,17 @@ class AI33Client:
                 allow_redirects=False, **kwargs,
             ) as response:
                 if not 200 <= response.status_code < 300:
+                    if method == "GET" and response.status_code in (429, 502, 503, 504):
+                        raise _TransientError(
+                            f"AI33 HTTP {response.status_code}",
+                            _retry_after(response.headers.get("Retry-After")),
+                        )
                     raise AI33Error(f"AI33 HTTP {response.status_code}; no automatic retry")
                 payload = response.json()
+        except (requests.Timeout, requests.ConnectionError):
+            if method == "GET":
+                raise _TransientError("AI33 consulta sem resposta") from None
+            raise AI33Error("AI33 transport failure; paid submission not retried") from None
         except (requests.RequestException, ValueError):
             raise AI33Error("AI33 transport or JSON failure; no automatic retry") from None
         if not isinstance(payload, dict) or payload.get("success") is False:
@@ -102,7 +137,23 @@ class AI33Client:
     def task(self, task_id):
         if not self.valid_task_id(task_id):
             raise AI33Error("Invalid AI33 task ID")
-        payload = self._request("GET", f"/v1/task/{task_id}")
+        for attempt in range(4):
+            try:
+                payload = self._request("GET", f"/v1/task/{task_id}")
+                break
+            except _TransientError as exc:
+                delay = max(4 * 2 ** attempt, exc.retry_after)
+                if attempt == 3 or delay > 60:
+                    raise AI33Error(
+                        f"{exc}. Consulta temporariamente indisponível; tarefa preservada. "
+                        "Retome mais tarde no mesmo diretório ou confira a tarefa no painel AI33. "
+                        "A repetição da consulta não reenvia a geração."
+                    ) from None
+                logging.getLogger(__name__).warning(
+                    "%s. Nova consulta em %.0fs (tentativa %s/4); sem reenviar geração.",
+                    exc, delay, attempt + 2,
+                )
+                time.sleep(delay)
         if payload.get("id") != task_id or payload.get("type") != "imagen2":
             raise AI33Error("AI33 task identity does not match")
         if payload.get("status") not in {"doing", "done", "error"}:

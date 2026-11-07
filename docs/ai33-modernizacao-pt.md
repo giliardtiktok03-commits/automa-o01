@@ -101,8 +101,13 @@ permitem retomar a mesma tarefa. Arquivo íntegro é reutilizado sem rede;
 arquivo ausente ou alterado é baixado novamente. Um prompt diferente é
 recusado no mesmo checkpoint. Cada novo envio exige outro diretório deliberado.
 
-Erros HTTP, inclusive 429, param sem repetição automática; é possível retomar
-a consulta depois. Falha remota genérica não é classificada como recusa de
+Consultas GET de tarefa repetem falhas temporárias 429/502/503/504 ou falhas
+de conexão/timeout até quatro tentativas, com intervalos de 4, 8 e 16 segundos.
+`Retry-After` em segundos ou data é respeitado; espera superior a 60 segundos
+interrompe a execução para retomada posterior. POST de geração nunca é repetido
+automaticamente. Erros de autenticação, JSON e identidade não são repetidos.
+Se a consulta continuar indisponível, o checkpoint permanece intacto.
+Falha remota genérica não é classificada como recusa de
 segurança. Reembolso descrito pelo provedor não é presumido como confirmado.
 
 Downloads não recebem a chave AI33; exigem HTTPS público, verificam cada

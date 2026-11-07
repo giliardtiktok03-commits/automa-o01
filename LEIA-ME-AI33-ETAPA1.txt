@@ -29,3 +29,10 @@ Não apague resultados já gerados nem checkpoints ao reverter o código.
 Validação: 158 testes de contrato/regressão passaram, mais uma execução
 complementar de 21 testes (com sobreposição). Sem chamadas pagas à AI33.
 Acesso real à API e custos por conta/modelo ainda precisam de teste local.
+
+Correção de consultas 503:
+O conector agora repete somente consultas de estado com falhas temporárias,
+até quatro tentativas, preservando o ID já salvo. Não repete o POST pago.
+Se continuar indisponível, consulte a tarefa no painel AI33 e retome depois.
+Para atualizar, feche o comando anterior e extraia os arquivos deste ZIP na
+mesma instalação. Preserve storage/ai33-test/imagem-01 e prompt-ai33.txt.

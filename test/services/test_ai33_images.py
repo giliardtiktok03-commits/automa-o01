@@ -87,6 +87,69 @@ class AI33ContractTests(unittest.TestCase):
             self.client.task("../danger")
         request.assert_not_called()
 
+    @patch("app.services.ai33.client.time.sleep")
+    @patch("app.services.ai33.client.requests.request")
+    def test_task_503_retries_same_get_then_recovers(self, request, sleep):
+        busy = response(status=503)
+        busy.headers = {"Retry-After": "6"}
+        done = {"id": "abc", "type": "imagen2", "status": "done"}
+        request.side_effect = [busy, response(done)]
+        self.assertEqual(self.client.task("abc"), done)
+        sleep.assert_called_once_with(6)
+        self.assertEqual(request.call_count, 2)
+        self.assertTrue(all(c.args == ("GET", "https://api.ai33.pro/v1/task/abc")
+                            for c in request.call_args_list))
+
+    @patch("app.services.ai33.client.time.sleep")
+    @patch("app.services.ai33.client.requests.request")
+    def test_task_retry_bound_and_long_retry_after(self, request, sleep):
+        busy = response(status=503)
+        busy.headers = {}
+        request.return_value = busy
+        with self.assertRaisesRegex(AI33Error, "tarefa preservada"):
+            self.client.task("abc")
+        self.assertEqual(request.call_count, 4)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [4, 8, 16])
+        request.reset_mock()
+        sleep.reset_mock()
+        busy.headers = {"Retry-After": "120"}
+        with self.assertRaises(AI33Error):
+            self.client.task("abc")
+        self.assertEqual(request.call_count, 1)
+        sleep.assert_not_called()
+
+    @patch("app.services.ai33.client.time.sleep")
+    @patch("app.services.ai33.client.requests.request")
+    def test_task_transport_retry_but_paid_503_is_never_retried(self, request, sleep):
+        request.side_effect = [requests.Timeout("private-test-key"),
+                               response({"id": "abc", "type": "imagen2", "status": "doing"})]
+        self.client.task("abc")
+        self.assertEqual(request.call_count, 2)
+        request.reset_mock()
+        sleep.reset_mock()
+        request.side_effect = None
+        request.return_value = response(status=503)
+        with self.assertRaises(AI33Error):
+            self.client.submit("model", PARAMS, "test")
+        self.assertEqual(request.call_count, 1)
+        sleep.assert_not_called()
+
+    @patch("app.services.ai33.client.time.sleep")
+    @patch("app.services.ai33.client.requests.request")
+    def test_permanent_auth_error_and_invalid_json_are_not_retried(self, request, sleep):
+        request.return_value = response(status=401)
+        with self.assertRaises(AI33Error):
+            self.client.task("abc")
+        self.assertEqual(request.call_count, 1)
+        request.reset_mock()
+        invalid = response()
+        invalid.json.side_effect = ValueError("private-test-key")
+        request.return_value = invalid
+        with self.assertRaises(AI33Error):
+            self.client.task("abc")
+        self.assertEqual(request.call_count, 1)
+        sleep.assert_not_called()
+
 
 class AI33ResumeTests(unittest.TestCase):
     def setUp(self):
@@ -170,6 +233,24 @@ class AI33ResumeTests(unittest.TestCase):
             with self.assertRaises(Timeout):
                 job.run(**self.kwargs)
         self.client.submit.assert_not_called()
+
+    @patch("app.services.ai33.client.time.sleep")
+    @patch("app.services.ai33.client.requests.request")
+    def test_persisted_task_503_resume_only_queries_and_keeps_checkpoint(self, request, sleep):
+        self.client.task.side_effect = AI33Error("first query unavailable")
+        with self.assertRaises(AI33Error):
+            self.job().run(**self.kwargs)
+        before = self.job().checkpoint.read_bytes()
+        busy = response(status=503)
+        busy.headers = {}
+        request.return_value = busy
+        real_job = ImageJob(AI33Client("private-test-key"), self.temp.name)
+        with self.assertRaisesRegex(AI33Error, "tarefa preservada"):
+            real_job.run(**self.kwargs)
+        self.assertEqual(real_job.checkpoint.read_bytes(), before)
+        self.assertEqual(request.call_count, 4)
+        self.assertTrue(all(c.args[0] == "GET" for c in request.call_args_list))
+        self.assertEqual(self.client.submit.call_count, 1)
 
 
 class AI33DownloadTests(unittest.TestCase):
