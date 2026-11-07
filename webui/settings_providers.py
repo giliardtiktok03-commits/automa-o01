@@ -93,6 +93,8 @@ def configured_material_providers(settings, groups, codex_connected=False):
         provider: _has_keys(settings.get(f"{provider}_api_keys"))
         for provider in ("pexels", "pixabay", "coverr", "wavespeed")
     }
+    from app.services.ai33 import provider as ai33_provider
+    enabled["ai33_image"] = ai33_provider.is_enabled(settings)
     enabled.update(
         {
             "metaso_minimax": metaso_minimax.is_enabled(settings),
@@ -102,9 +104,7 @@ def configured_material_providers(settings, groups, codex_connected=False):
             "jalapeno": jalapeno_video.is_enabled(settings),
             "muapi": muapi.is_enabled(settings),
             "openai_image": material.is_openai_image_enabled(settings),
-            "codex_image": bool(
-                codex_connected and _text(settings.get("codex_image_model_name"))
-            ),
+            "codex_image": False,
         }
     )
     try:

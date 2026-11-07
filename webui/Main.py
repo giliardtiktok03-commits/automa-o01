@@ -145,7 +145,7 @@ VIDEO_SOURCE_GROUPS = {
         "wavespeed",
         "muapi",
     ),
-    "ai_image": ("openai_image", "codex_image"),
+    "ai_image": ("ai33_image",),
     "local": ("local",),
 }
 # Upload-Post 的 API Key 与发布用户分别在两个页面管理，并且发布用户名称
@@ -1567,10 +1567,10 @@ def _apply_restored_params(params):
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
-    for source in ("pexels", "pixabay", "coverr", "openai", "flow"):
+    for source in ("pexels", "pixabay", "coverr", "ai33"):
         key = "mixed_use_" + source
         st.session_state[key] = params.get(key, True)
-    _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "openai"))
+    _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "ai33"))
     st.session_state["flow_require_zero"] = params.get("flow_require_zero", True)
     st.session_state["flow_profile"] = params.get("flow_profile", "principal")
     st.session_state["flow_project_url"] = params.get("flow_project_url", "")
@@ -2143,9 +2143,11 @@ def _render_generation_task_snapshot(task_id, task):
         st.warning(tr("Mixed Editorial Cards").format(count=task["mixed_source_counts"]["editorial_card"]))
     if isinstance(task.get("mixed_source_counts"), Mapping):
         counts = task["mixed_source_counts"]
-        st.caption(tr("Mixed Source Counts").format(**{
-            name: counts.get(name, 0) for name in ("pexels", "pixabay", "coverr", "openai_image")
-        }))
+        display_counts = {name: counts.get(name, 0) for name in ("pexels", "pixabay", "coverr", "openai_image")}
+        display_counts["openai_image"] += counts.get("ai33_image", 0)
+        st.caption(tr("Mixed Source Counts").format(**display_counts))
+        if counts.get("ai33_image"):
+            st.caption(f"Imagens AI33.Pro utilizadas: {counts['ai33_image']}")
     if task.get("chapter_count"):
         st.caption(tr("Chapter Progress").format(
             current=task.get("current_chapter", 0), total=task["chapter_count"],
@@ -3451,7 +3453,7 @@ def _material_provider_labels():
         "jalapeno": tr("Jalapeno Cloud AI Video"),
         "wavespeed": tr("WaveSpeed AI Video"),
         "muapi": tr("MuAPI AI Video"),
-        "openai_image": tr("OpenAI Compatible Text-to-Image"),
+        "ai33_image": "AI33.Pro · Imagens IA",
         "codex_image": tr("codex.image.label"),
         "local": tr("Local file"),
     }
@@ -4145,93 +4147,9 @@ def _render_material_provider_settings(provider):
 
         with st.container():
             render_codex_login(tr)
-    elif provider == "openai_image":
-        st.markdown(f"**{tr('OpenAI Compatible Text-to-Image')}**")
-
-        openai_image_base_url = st.text_input(
-            tr("OpenAI Image Base URL"),
-            value=str(app_settings.get("openai_image_base_url", "") or ""),
-            placeholder="https://api.openai.com/v1",
-            key="openai_image_base_url_input",
-            on_change=_save_settings_change,
-            args=(
-                "app",
-                "openai_image_base_url",
-                "openai_image_base_url_input",
-                lambda value: value.strip(),
-            ),
-        )
-        _set_runtime_config(
-            "app", "openai_image_base_url", openai_image_base_url.strip()
-        )
-
-        openai_image_api_key = _get_material_api_keys("openai_image_api_keys")
-        openai_image_api_key = st.text_input(
-            tr("OpenAI Image API Key"),
-            value=openai_image_api_key,
-            type="password",
-            help=tr("OpenAI Image API Key Help"),
-            key="openai_image_api_keys_input",
-            on_change=_save_settings_api_keys,
-            args=("openai_image_api_keys", "openai_image_api_keys_input"),
-        )
-        _save_material_api_keys("openai_image_api_keys", openai_image_api_key)
-
-        openai_image_model = st.text_input(
-            tr("OpenAI Image Model"),
-            value=str(app_settings.get("openai_image_model", "") or ""),
-            placeholder="gpt-image-2",
-            key="openai_image_model_input",
-            on_change=_save_settings_change,
-            args=(
-                "app",
-                "openai_image_model",
-                "openai_image_model_input",
-                lambda value: value.strip(),
-            ),
-        )
-        _set_runtime_config("app", "openai_image_model", openai_image_model.strip())
-        # 只展示参考值，不将 OpenAI 官方端点写成默认配置。
-        # 兼容服务的 Base URL 和模型 ID 没有统一值；留空不会让
-        # 用户在未知情时误连官方付费接口，也不会覆盖旧配置。
-        st.caption(tr("OpenAI Image Configuration Example"))
-
-        with st.expander(tr("OpenAI Image Advanced Settings"), expanded=False):
-            openai_image_size = st.text_input(
-                tr("OpenAI Image Size"),
-                value=str(app_settings.get("openai_image_size", "") or ""),
-                placeholder="1024x1536",
-                help=tr("OpenAI Image Size Help"),
-                key="openai_image_size_input",
-                on_change=_save_settings_change,
-                args=(
-                    "app",
-                    "openai_image_size",
-                    "openai_image_size_input",
-                    lambda value: value.strip(),
-                ),
-            )
-            _set_runtime_config("app", "openai_image_size", openai_image_size.strip())
-
-            openai_image_prompt_template = st.text_input(
-                tr("OpenAI Image Prompt Template"),
-                value=str(app_settings.get("openai_image_prompt_template", "") or ""),
-                placeholder="cinematic photo of {term}, photorealistic",
-                help=tr("OpenAI Image Prompt Template Help"),
-                key="openai_image_prompt_template_input",
-                on_change=_save_settings_change,
-                args=(
-                    "app",
-                    "openai_image_prompt_template",
-                    "openai_image_prompt_template_input",
-                    lambda value: value.strip(),
-                ),
-            )
-            _set_runtime_config(
-                "app",
-                "openai_image_prompt_template",
-                openai_image_prompt_template.strip(),
-            )
+    elif provider == "ai33_image":
+        from webui.ai33_settings import render
+        render(app_settings, _set_runtime_config)
 
 
 @st.dialog(
@@ -6217,7 +6135,7 @@ def _render_video_settings(panel, params):
                 "metaso_minimax": tr("Metaso MiniMax H3"),
                 "muapi": tr("MuAPI AI Video"),
                 "loomloom": tr("Shengsuan Cloud AI Video"),
-                "openai_image": tr("OpenAI Compatible Text-to-Image"),
+                "ai33_image": "AI33.Pro · Imagens IA",
                 "codex_image": tr("codex.image.label"),
                 "local": tr("Local file"),
             }
@@ -6245,38 +6163,13 @@ def _render_video_settings(panel, params):
                 st.info(tr("Mixed Materials Help"))
                 params.mixed_select_sources = True
                 st.write(tr("Mixed Sources"))
-                for source in ("pexels", "pixabay", "coverr", "openai", "flow"):
+                for source in ("pexels", "pixabay", "coverr", "ai33"):
                     key = "mixed_use_" + source
-                    labels = {"pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr",
-                              "openai": tr("Mixed ChatGPT Images"), "flow": "Google Flow"}
+                    labels = {"pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "ai33": "AI33.Pro · Imagens IA"}
                     value = st.checkbox(labels[source], value=config.ui.get(key, True), key=key)
                     setattr(params, key, value)
                     _set_runtime_config("ui", key, value)
                 st.caption(tr("Mixed Sources Help"))
-                if params.mixed_use_flow:
-                    st.info(tr("Flow Browser Help"))
-                    params.flow_require_zero = st.checkbox(tr("Flow Require Zero"), value=True, key="flow_require_zero")
-                    params.flow_profile = st.text_input(tr("Flow Profile"), value=config.ui.get("flow_profile", "principal"), key="flow_profile")
-                    params.flow_project_url = st.text_input(tr("Flow Project"), value=config.ui.get("flow_project_url", ""), key="flow_project_url")
-                    from app.services import flow_browser
-                    params.flow_profile, params.flow_project_url = flow_browser.normalized(params.flow_profile, params.flow_project_url)
-                    _set_runtime_config("ui", "flow_profile", params.flow_profile)
-                    _set_runtime_config("ui", "flow_project_url", params.flow_project_url)
-                    if st.button(tr("Flow Connect"), key="flow_connect", disabled=bool(webui_task.queue_snapshot()) or _flow_test_running()):
-                        from app.services import flow_browser
-                        try:
-                            flow_browser.connect(params.flow_profile, params.flow_project_url)
-                            st.success(tr("Flow Connect Started"))
-                        except (ValueError, OSError) as exc:
-                            st.error(tr(exc.key) if getattr(exc, "key", None) else str(exc))
-                    if st.button(tr("Flow Test"), key="flow_test", disabled=bool(webui_task.queue_snapshot()) or _flow_test_running()):
-                        try:
-                            request = flow_browser.start_test(params.flow_profile, params.flow_project_url, params.flow_require_zero)
-                            st.session_state["flow_test_request"] = str(request)
-                            st.session_state["flow_test_started"] = time.time()
-                        except (ValueError, OSError) as exc:
-                            st.error(tr(exc.key) if getattr(exc, "key", None) else str(exc))
-                    _render_flow_test()
                 params.mixed_variable_pacing = st.checkbox(
                     tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
                 st.caption(tr("Mixed Pacing Help"))
@@ -6299,6 +6192,12 @@ def _render_video_settings(panel, params):
                 )
                 from app.services import mixed_materials
                 mixed_materials.configure_sources(params, config.snapshot_config_with_pending(config.app))
+
+            if params.video_source == "ai33_image":
+                st.info("Todas as cenas usarão imagens AI33.Pro. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
+                params.mixed_max_images = st.number_input("Máximo de imagens AI33 neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit")
+                params.mixed_variable_pacing = st.checkbox(tr("Mixed Variable Pacing"), value=True, key="ai33_only_pacing")
+                params.mixed_scene_duration = st.slider(tr("Mixed Scene Duration"), min_value=5, max_value=30, value=10, key="ai33_only_duration")
 
             loomloom_video_capability = None
             if params.video_source == "loomloom":
@@ -6345,7 +6244,7 @@ def _render_video_settings(panel, params):
             # 文案顺序匹配会从关键词生成到最终合成全程保持叙事顺序，因此开启时
             # 顺序拼接是唯一符合实际执行逻辑的选项。同步控件值可避免界面仍显示
             # “随机拼接”，同时保留用户原选择，关闭后自动恢复。
-            if params.video_source == "mixed":
+            if params.video_source in {"mixed", "ai33_image"}:
                 st.session_state.setdefault("mixed_previous_match", st.session_state.get("match_materials_to_script", False))
                 st.session_state["match_materials_to_script"] = True
             elif "mixed_previous_match" in st.session_state:
@@ -6371,7 +6270,7 @@ def _render_video_settings(panel, params):
                 tr("Match Materials to Script Order"),
                 help=tr("Match Materials to Script Order Help"),
                 key="match_materials_to_script",
-                disabled=params.video_source == "mixed",
+                disabled=params.video_source in {"mixed", "ai33_image"},
                 on_change=sync_script_order_concat_mode,
             )
             _set_runtime_config(
@@ -6406,7 +6305,7 @@ def _render_video_settings(panel, params):
                     VideoTransitionMode.none.value,
                 ),
                 key="video_transition_mode_select",
-                disabled=params.video_source == "mixed",
+                disabled=params.video_source in {"mixed", "ai33_image"},
                 format_func=lambda value: dict(
                     (v, label) for label, v in video_transition_modes
                 )[value],
@@ -6478,7 +6377,7 @@ def _render_video_settings(panel, params):
                 "ui", "video_fit_mode", params.video_fit_mode.value
             )
 
-            if params.video_source in {"local", "openai_image", "codex_image", "mixed"}:
+            if params.video_source in {"local", "ai33_image", "mixed"}:
                 image_motion_labels = {
                     ImageMotion.static.value: tr("Static Image"),
                     ImageMotion.zoom.value: tr("Slow Zoom"),
@@ -6532,7 +6431,7 @@ def _render_video_settings(panel, params):
                     else 3,
                 ),
                 key="video_clip_duration_select",
-                disabled=params.video_source == "mixed",
+                disabled=params.video_source in {"mixed", "ai33_image"},
                 help=tr("Clip Duration Help"),
             )
             _set_runtime_config(
@@ -6555,7 +6454,7 @@ def _render_video_settings(panel, params):
                 step=0.05,
                 format="%.2fx",
                 key=clip_speed_key,
-                disabled=params.video_source == "mixed",
+                disabled=params.video_source in {"mixed", "ai33_image"},
                 help=tr("Clip Speed Help"),
             )
             _set_runtime_config("ui", "video_clip_speed", params.video_clip_speed)
@@ -9426,15 +9325,14 @@ def _render_generation_controls(
             "metaso_minimax",
             "muapi",
             "loomloom",
-            "openai_image",
-            "codex_image",
+            "ai33_image",
             "local",
         ]:
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
             st.stop()
 
-        if params.video_source == "mixed":
+        if params.video_source in {"mixed", "ai33_image"}:
             from app.services import mixed_materials
 
             try:
@@ -9566,24 +9464,14 @@ def _render_generation_controls(
             st.error(tr("Confirm MuAPI Charge Required"))
             st.stop()
 
-        if params.video_source == "codex_image":
-            from app.services import codex_image, codex_oauth
-
+        if params.video_source == "ai33_image":
+            from app.services.ai33 import provider as ai33_provider, AI33Error
             try:
-                codex_image.capture_context(
-                    config.snapshot_config_with_pending(config.app)
-                )
-            except codex_oauth.CodexError as error:
+                ai33_provider.freeze(params, config.snapshot_config_with_pending(config.app))
+            except AI33Error as exc:
                 _remove_active_generation_task(task_id)
-                st.error(tr(error.key).format(**error.params))
+                st.error(str(exc))
                 st.stop()
-
-        if params.video_source == "openai_image" and not material.is_openai_image_enabled(
-            config.snapshot_config_with_pending(config.app)
-        ):
-            _remove_active_generation_task(task_id)
-            st.error(tr("Please Configure the OpenAI Image Source"))
-            st.stop()
 
         loomloom_video_request = None
         if params.video_source == "loomloom":

@@ -1,4 +1,4 @@
-"""Isolated AI33 image connector; production routing is not changed here."""
+"""AI33 image connector shared by the MPT pipeline and standalone local tests."""
 
 from .client import AI33Client, AI33Error
 from .images import ImageJob

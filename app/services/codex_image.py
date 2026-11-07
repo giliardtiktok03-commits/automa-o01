@@ -221,32 +221,5 @@ def _read_stream(response, deadline):
 
 
 def generate_image(prompt, context):
-    assert_current(context)
-    payload = {
-        "model": context.model,
-        "store": False,
-        "stream": True,
-        "instructions": "Generate exactly one image for the user's prompt using the image generation tool.",
-        "input": [
-            {"role": "user", "content": [{"type": "input_text", "text": prompt}]}
-        ],
-        "tools": [
-            {"type": "image_generation", "action": "generate", "output_format": "png"}
-        ],
-        "tool_choice": {"type": "image_generation"},
-        "parallel_tool_calls": False,
-    }
-    try:
-        result = codex_oauth.request_image(
-            payload,
-            generation=context.generation,
-            session=context.session,
-            timeout=context.timeout,
-            read_result=_read_stream,
-        )
-    except codex_oauth.CodexError as error:
-        if error.key in ("codex.oauth.network_error", "codex.oauth.timeout"):
-            raise CodexImageError("codex.image.uncertain") from None
-        raise CodexImageError(error.key, **error.params) from None
-    assert_current(context)
-    return result
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()

@@ -49,8 +49,7 @@ _CLI_VIDEO_SOURCES = (
     "jalapeno",
     "metaso_minimax",
     "muapi",
-    "openai_image",
-    "codex_image",
+    "ai33_image",
     "local",
 )
 

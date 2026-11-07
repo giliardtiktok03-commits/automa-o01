@@ -1,5 +1,8 @@
 # Modernização AI33.Pro — entrega 1: núcleo isolado
 
+> Registro da primeira entrega. Para a versão integrada à interface e ao modo
+> misto, consulte [AI33 no MPT](ai33-mpt-pt.md).
+
 ## Escopo desta entrega
 
 Base de rollback: `a73a901127df853fd6d316a8e63764192e23ddb4`.

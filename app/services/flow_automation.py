@@ -58,53 +58,5 @@ def _images(page):
 
 
 def generate(page, prompt, target, timeout=900, require_zero=True):
-    """One submit, only after all settings are verified; exact new result download."""
-    page.wait_for_load_state('domcontentloaded', timeout=60000)
-    _blocked(page)
-    _button(page, r'^(Imagem|Image)$', 'image mode').click(timeout=5000)
-    settings = _button(page, r'Nano Banana|Imagen', 'image settings')
-    settings.click(timeout=5000)
-    _choose(page, '16:9')
-    _choose(page, 'x1')
-    model = _one_visible(page.get_by_role('button', name=re.compile(r'^(Nano Banana [0-9.]+|Imagen [0-9.]+)$', re.I)), 'model selector')
-    if model.inner_text().strip() != MODEL:
-        model.click(timeout=5000)
-        _one_visible(page.get_by_role('option', name=MODEL, exact=True), MODEL).click(timeout=5000)
-    if MODEL not in model.inner_text():
-        raise FlowError('Flow model could not be confirmed; no generation submitted')
-    if require_zero:
-        text = page.locator('body').inner_text()
-        if not re.search(r'(vai usar|will use|costs?)\s*0\s*(créditos|credits)', text, re.I):
-            raise FlowError('Flow did not confirm zero credits. No generation submitted.')
-    # Close settings via its own trigger; no keyboard shortcuts that might submit.
-    settings.click(timeout=5000)
-    editor = _one_visible(page.locator('textarea, [contenteditable="true"]'), 'prompt editor')
-    editor.fill(prompt, timeout=5000)
-    before = set(_images(page))
-    previous_alerts = set(page.locator('[role="alert"]').all_inner_texts())
-    submit = _one_visible(page.locator('button[aria-label="Send prompt"], button[aria-label="Generate"], '
-                         'button[aria-label="Gerar"], button[aria-label="Enviar"], button:has-text("arrow_forward")'), 'submit')
-    submit.click(timeout=5000)  # Never retried, even if result becomes unknown.
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        _blocked(page, previous_alerts)
-        new = {src: node for src, node in _images(page).items() if src not in before}
-        if len(new) > 1:
-            raise FlowError('Multiple new Flow images; cannot correlate result safely. Review project, no retry.')
-        if new:
-            image = next(iter(new.values()))
-            image.hover(timeout=5000)
-            # Limit download lookup to the nearest result container, never a
-            # page-wide button that could download old material.
-            card = image.locator('xpath=ancestor::*[.//button[contains(@aria-label,"Download") or contains(@aria-label,"Baixar") or .//*[text()="download"]]][1]')
-            if not card.count():
-                page.wait_for_timeout(500)
-                continue
-            card = _one_visible(card, 'new image result card')
-            download = _one_visible(card.locator('button[aria-label*="Download"], button[aria-label*="Baixar"], button:has-text("download")'), 'result download')
-            with page.expect_download(timeout=60000) as event:
-                download.click(timeout=5000)
-            _save_image(event.value, target)
-            return
-        page.wait_for_timeout(500)
-    raise FlowError('Flow generation result timed out. Review project before another request.')
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()

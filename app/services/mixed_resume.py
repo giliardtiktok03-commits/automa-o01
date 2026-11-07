@@ -46,7 +46,7 @@ def load(task_id, limit):
     ):
         raise ValueError("Invalid scene checkpoint")
     params = VideoParams.model_validate(saved["params"])
-    if params.video_source != "mixed" or params.long_form or params.mixed_is_chapter:
+    if params.video_source not in {"mixed", "ai33_image"} or params.long_form or params.mixed_is_chapter:
         raise ValueError(
             "This resume action requires a single-video mixed project; use chapter resume for long-form projects"
         )
@@ -93,9 +93,13 @@ def load(task_id, limit):
                     "A previously generated image changed; review project before resuming"
                 )
         elif scene.get("image_request_started") and not scene.get("image_refused"):
-            raise ValueError(
-                "A previous image request has an unknown result; review it before resuming, no automatic resubmission"
-            )
+            ledger = directory / "mixed" / f"ai33-{scene['id']:03d}" / "ai33-image.json"
+            if not scene.get("ai33_job") or not ledger.is_file():
+                raise ValueError("A previous image request has an unknown result; review it before resuming, no automatic resubmission")
+            from app.services.ai33 import AI33Client
+            attempt = json.loads(ledger.read_text(encoding="utf-8"))
+            if not AI33Client.valid_task_id(attempt.get("task_id")):
+                raise ValueError("AI33 submission is unconfirmed; reconcile before resuming")
     duration = voice.get_audio_duration(str(audio))
     if not params.custom_audio_file:
         duration = math.ceil(duration)

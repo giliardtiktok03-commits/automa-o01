@@ -18,6 +18,8 @@ from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoFitMode
 from app.services import generation_progress, llm, material, task_artifacts, visual_validation, flow_browser
 from app.services import state as sm
+from app.services.ai33 import provider as ai33_provider
+from app.services.ai33 import AI33Error, AI33Client
 from app.utils import utils
 from app.utils.subtitle_reader import moviepy_subtitles
 
@@ -76,12 +78,10 @@ def providers(settings=None, params=None):
 
 
 def configure_sources(params, settings):
-    if not params.mixed_select_sources:
-        return
-    openai = params.mixed_use_openai and material.is_openai_image_enabled(settings)
-    flow = params.mixed_use_flow and bool(params.flow_project_url.strip())
-    params.mixed_image_provider = ("openai_flow" if openai and flow else
-                                   "openai" if openai else "flow_browser" if flow else "none")
+    # Legacy names remain readable, but no new generation can use those providers.
+    enabled = params.mixed_use_ai33 and (params.mixed_select_sources or params.mixed_image_provider != "none")
+    params.mixed_image_provider = "ai33" if enabled else "none"
+
 
 def validate(params, settings=None, *, external_audio=False):
     settings = config.app if settings is None else settings
@@ -90,22 +90,17 @@ def validate(params, settings=None, *, external_audio=False):
             and settings.get("subtitle_provider", "edge") != "whisper"):
         raise MixedError("Uploaded narration with subtitles requires Whisper; select Whisper or disable subtitles for estimated timing",
                          key="mixed.external_subtitles")
-    if params.mixed_image_provider == "openai_flow" and not params.mixed_visual_validation:
-        raise MixedError("Automatic OpenAI-to-Flow fallback requires visual validation enabled")
     if params.mixed_visual_validation and not str(settings.get("openai_api_key") or "").strip():
         raise MixedError("Visual validation requires an OpenAI-compatible API key", key="mixed.vision_config")
     if params.video_count != 1:
         raise MixedError("Mixed mode requires one output video")
-    if not providers(settings, params) and (not params.mixed_select_sources or
-                                          params.mixed_image_provider == "none" or not params.mixed_max_images):
+    if not providers(settings, params) and (params.mixed_image_provider == "none" or not params.mixed_max_images):
         raise MixedError("Select and configure at least one material source", key="mixed.no_sources")
-    if params.mixed_max_images and params.mixed_image_provider in {"flow_browser", "openai_flow"}:
+    if params.mixed_max_images and params.mixed_image_provider == "ai33":
         try:
-            flow_browser.validate(params.flow_profile, params.flow_project_url)
-        except flow_browser.FlowError as exc:
-            raise MixedError(str(exc), key="mixed.flow_config", params={"detail": str(exc)}) from exc
-    if params.mixed_max_images and params.mixed_image_provider in {"openai", "openai_flow"} and not material.is_openai_image_enabled(settings):
-        raise MixedError("Configure the OpenAI-compatible image URL and model, or set the mixed image limit to zero")
+            ai33_provider.freeze(params, settings)
+        except AI33Error as exc:
+            raise MixedError(str(exc)) from exc
 
 
 def _save(file, payload):
@@ -407,6 +402,23 @@ def checkpoint_matches(signature, fingerprint):
     return False
 
 
+def legacy_continuation(signature, manifest):
+    """Only image-provider fields may migrate; narration/editing must still match."""
+    previous = manifest.get("signature")
+    if not isinstance(previous, dict) or previous.get("image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none"}:
+        return False
+    original_hash = hashlib.sha256(json.dumps(previous, sort_keys=True).encode()).hexdigest()
+    if original_hash != manifest.get("fingerprint"):
+        return False
+    image_fields = {"image_provider", "image_model", "image_size", "image_template", "image_quality", "image_credit_cap", "selected_sources"}
+    before = {k: v for k, v in previous.items() if k not in image_fields}
+    after = {k: v for k, v in signature.items() if k not in image_fields}
+    old_sources = previous.get("selected_sources", {})
+    if any(old_sources.get(name, True) != signature["selected_sources"][name] for name in ("pexels", "pixabay", "coverr")):
+        return False
+    return before == after
+
+
 def prepare(task_id, params, script, audio_duration, subtitle_file=""):
     validate(params)
     directory = Path(utils.task_dir(task_id))
@@ -422,23 +434,33 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             params = params.model_copy(update={"mixed_total_duration": float(audio_duration)})
         signature = {"source_policy": "distinct-shots-v5", "image_provider": params.mixed_image_provider,
                      "flow_profile": params.flow_profile, "flow_require_zero": params.flow_require_zero, "flow_project_url": params.flow_project_url, "total_duration": params.mixed_total_duration,
-                     "selected_sources": {name: getattr(params, "mixed_use_" + name) for name in ("pexels", "pixabay", "coverr", "openai", "flow")},
+                     "selected_sources": {name: getattr(params, "mixed_use_" + name) for name in ("pexels", "pixabay", "coverr", "ai33")},
                      "previous_sources": params.mixed_previous_sources, "variable_pacing": params.mixed_variable_pacing,
                      "timeline_offset": params.mixed_timeline_offset, "visual_validation": params.mixed_visual_validation,
                      "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
                      "vision_endpoint": config.app.get("openai_base_url", ""), "script": script, "units": units, "aspect": params.video_aspect,
                      "fit": params.video_fit_mode, "motion": params.image_motion,
-                     "image_model": config.app.get("openai_image_model", ""),
-                     "image_size": config.app.get("openai_image_size", ""),
-                     "image_template": config.app.get("openai_image_prompt_template", "")}
+                     "image_model": params.ai33_model,
+                     "image_size": params.ai33_resolution,
+                     "image_quality": params.ai33_quality,
+                     "image_credit_cap": params.ai33_max_credits}
         fingerprint = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
         if manifest_file.exists():
             manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
             if manifest["fingerprint"] != fingerprint:
-                if not params.mixed_resume or not checkpoint_matches(signature, manifest["fingerprint"]):
+                migration = params.mixed_resume and legacy_continuation(signature, manifest)
+                if not params.mixed_resume or not (migration or checkpoint_matches(signature, manifest["fingerprint"])):
                     if manifest.get("signature"):
                         logger.warning("Checkpoint differs in fields: {}", [key for key in signature if signature[key] != manifest["signature"].get(key)])
                     raise MixedError("Scene checkpoint inputs changed; restore the original settings before resuming")
+                if migration:
+                    manifest.setdefault("original_signature", manifest["signature"])
+                    manifest.setdefault("original_fingerprint", manifest["fingerprint"])
+                    manifest["continuation_image_provider"] = "ai33_image"
+                    for saved_scene in manifest["scenes"]:
+                        if saved_scene.get("image_file"):
+                            original_provider = manifest["signature"].get("image_provider", "openai")
+                            saved_scene.setdefault("image_provider", "flow_browser" if original_provider == "flow_browser" or saved_scene.get("flow_image_received") else "openai_image")
                 manifest["previous_fingerprint"] = manifest["fingerprint"]
                 manifest["fingerprint"] = fingerprint
                 manifest["signature"] = signature
@@ -447,7 +469,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             manifest = {"version": 1, "fingerprint": fingerprint, "signature": signature, "timing": timing,
                         "image_requests": 0, "scenes": _plan(units, script)}
             _save(manifest_file, manifest)
-        pending_images = 0 if params.mixed_select_sources or params.mixed_image_provider == "openai_flow" else sum(s["source"] == "image" and not s.get("image_file")
+        pending_images = 0 if params.mixed_select_sources else sum(s["source"] == "image" and not s.get("image_file")
                              and not s.get("image_request_started")
                              for s in manifest["scenes"])
         if manifest["image_requests"] + pending_images > params.mixed_max_images:
@@ -478,13 +500,13 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 _context_card(scene, params, scene_dir)
                 _save(manifest_file, manifest)
             source, provenance = None, None
-            if available and (scene["source"] == "stock" or params.mixed_select_sources or params.mixed_image_provider == "openai_flow") and not scene.get("image_file"):
+            if available and (scene["source"] == "stock" or params.mixed_select_sources) and not scene.get("image_file") and not scene.get("image_request_started"):
                 history = records or params.mixed_previous_sources
                 scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
-            if source is None and params.mixed_image_provider == "none":
+            if source is None and params.mixed_image_provider == "none" and not scene.get("image_file"):
                 raise MixedError("No approved stock material and image generators are disabled or unconfigured",
                                  key="mixed.no_images")
             if source is None:
@@ -494,18 +516,22 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     if not image.is_file() or _hash(image) != scene.get("image_sha256"):
                         raise MixedError("A paid image is missing or changed; review the task before ordering another")
                 else:
-                    if scene.get("image_request_started"):
+                    resuming_ai33 = bool(scene.get("ai33_job"))
+                    if scene.get("image_request_started") and not resuming_ai33:
                         raise MixedError("A previous image request has an unknown result; review it before ordering again")
-                    if manifest["image_requests"] >= params.mixed_max_images:
-                        raise MixedError("AI image limit reached; no matching stock material was available for this scene")
-                    reserved = 0 if params.mixed_select_sources or params.mixed_image_provider == "openai_flow" else sum(other["source"] == "image" and other["id"] != scene["id"]
-                                   and not other.get("image_file") and not other.get("image_request_started")
-                                   for other in manifest["scenes"])
-                    if manifest["image_requests"] + 1 + reserved > params.mixed_max_images:
-                        raise MixedError("The remaining AI budget is reserved for planned historical/illustrative scenes")
-                    manifest["image_requests"] += 1
-                    scene["image_request_started"] = True
-                    _save(manifest_file, manifest)
+                    if not scene.get("image_request_started"):
+                        if manifest["image_requests"] >= params.mixed_max_images:
+                            raise MixedError("AI image limit reached; no matching stock material was available for this scene")
+                        reserved = 0 if params.mixed_select_sources else sum(
+                            other["source"] == "image" and other["id"] != scene["id"]
+                            and not other.get("image_file") and not other.get("image_request_started")
+                            for other in manifest["scenes"])
+                        if manifest["image_requests"] + 1 + reserved > params.mixed_max_images:
+                            raise MixedError("The remaining AI budget is reserved for planned historical/illustrative scenes")
+                    job_dir = scene_dir / f"ai33-{scene['id']:03d}"
+                    # An interrupted attempt without a ledger is ambiguous; never repost.
+                    if resuming_ai33 and not (job_dir / "ai33-image.json").is_file():
+                        raise MixedError("AI33 attempt has no checkpoint; reconcile before another paid request")
                     prompt = (f"Illustrate this narration: {scene['text']}\n{scene['image_prompt']}\n"
                               f"Period: {scene['period']}. Location: {scene['location']}. "
                               + ("Historical reconstruction, no contemporary buildings, clothing, vehicles or machinery. "
@@ -514,55 +540,22 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                               "No unrelated animals or symbolic substitutes for human conditions. "
                               "No captions, logos or text. This is an illustration, not archival evidence.")
                     try:
-                        if params.mixed_image_provider == "flow_browser":
-                            generation_progress.stage("flow_browser")
-                            image = flow_browser.generate(prompt, scene_dir, params.flow_profile, params.flow_project_url, require_zero=params.flow_require_zero)
-                            items = [MaterialInfo(provider="flow_browser", url=str(image), duration=1)]
-                        else:
-                            items = material.generate_images_openai(search_term=prompt, minimum_duration=1,
-                                video_aspect=params.video_aspect, save_dir=str(scene_dir), raise_on_refusal=True, raise_on_technical=True)
-                        if params.mixed_image_provider == "openai_flow":
-                            suitable = bool(items)
-                            if items:
-                                candidate = Path(items[0].url)
-                                scene["openai_candidate_file"] = candidate.name
-                                scene["openai_candidate_sha256"] = _hash(candidate)
-                                _save(manifest_file, manifest)
-                                candidate_video = material._render_openai_image_video(str(candidate),
-                                    (scene["end_frame"]-scene["start_frame"])/FPS, image_motion=params.image_motion)
-                                if not candidate_video:
-                                    raise material.OpenAIImagePaidResultError("Image render failed; retained candidate, no Flow request")
-                                try:
-                                    suitable, verdict = visual_validation.inspect_clip(candidate_video, scene, scene_dir,
-                                        config.app, params.mixed_vision_model)
-                                except visual_validation.VisualValidationError as exc:
-                                    raise MixedError(str(exc), key="mixed.vision_failed") from exc
-                                scene["openai_candidate_verdict"] = verdict
-                                _save(manifest_file, manifest)
-                            if not suitable:
-                                if manifest["image_requests"] >= params.mixed_max_images:
-                                    raise MixedError("Image request limit prevents Flow fallback; no Flow request submitted")
-                                manifest["image_requests"] += 1
-                                scene["flow_request_started"] = True
-                                _save(manifest_file, manifest)
-                                generation_progress.stage("flow_browser")
-                                image = flow_browser.generate(prompt, scene_dir, params.flow_profile, params.flow_project_url,
-                                                              require_zero=params.flow_require_zero)
-                                scene["flow_image_received"] = True
-                                items = [MaterialInfo(provider="flow_browser", url=str(image), duration=1)]
-                    except (material.OpenAIImageRefusalError, flow_browser.FlowRefusal):
-                        scene["image_refused"] = True
-                        _save(manifest_file, manifest)
-                        image = _context_card(scene, params, scene_dir)
-                        logger.warning("Scene {}: image refused; using a labeled editorial card, no retry", scene["id"])
-                    except material.OpenAIImageTechnicalError as exc:
+                        def mark_submitted():
+                            manifest["image_requests"] += 1
+                            scene["image_request_started"] = True
+                            scene["ai33_job"] = f"ai33-{scene['id']:03d}"
+                            _save(manifest_file, manifest)
+                        generated, details = ai33_provider.generate(params, prompt, job_dir, before_submit=mark_submitted)
+                        # Keep legacy image_file as a basename, while the AI33 ledger
+                        # and original downloaded image remain in their own directory.
+                        from app.services.ai33.images import _atomic
+                        _atomic(image, generated.read_bytes())
+                        scene["image_provider"] = "ai33_image"
+                        scene["ai33"] = details
+                    except AI33Error as exc:
+                        # Generic AI33 errors have no documented moderation code.
+                        # Retain the attempt and stop; never invent a refusal/fallback.
                         raise MixedError(str(exc)) from exc
-                    except flow_browser.FlowError as exc:
-                        raise MixedError(str(exc), key="mixed.flow_failed") from exc
-                    else:
-                        if not items:
-                            raise MixedError("Image generation did not yield a usable result; no further images were ordered")
-                        image = Path(items[0].url)
                     scene["image_file"] = image.name
                     scene["image_sha256"] = _hash(image)
                     _save(manifest_file, manifest)
@@ -574,7 +567,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 source = str(image) if scene.get("image_refused") else material._render_openai_image_video(str(image), duration, image_motion=params.image_motion)
                 if not source:
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
-                provenance = {"provider": "editorial_card" if scene.get("image_refused") else ("flow_browser" if params.mixed_image_provider == "flow_browser" or scene.get("flow_image_received") else "openai_image"), "illustration": True, "local_file": output.name,
+                provenance = {"provider": "editorial_card" if scene.get("image_refused") else scene.get("image_provider", "flow_browser" if scene.get("flow_image_received") else "openai_image"), "illustration": True, "local_file": output.name,
                               "source_digest": digest, "source_identity": digest, "source_end": 1}
             render(source, output, scene["end_frame"] - scene["start_frame"], params,
                    start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,
@@ -586,7 +579,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             output_paths.append(str(output))
             records.append(scene["provenance"])
         counts = {provider: sum(record["provider"] == provider for record in records)
-                  for provider in ("pexels", "pixabay", "coverr", "openai_image")}
+                  for provider in ("pexels", "pixabay", "coverr", "ai33_image", "openai_image")}
         cards = sum(record["provider"] == "editorial_card" for record in records)
         if cards:
             counts["editorial_card"] = cards
@@ -594,7 +587,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if flow_count:
             counts["flow_browser"] = flow_count
         logger.info("Mixed sources used: Pexels={}, Pixabay={}, Coverr={}, AI={}",
-                    counts["pexels"], counts["pixabay"], counts["coverr"], counts["openai_image"])
+                    counts["pexels"], counts["pixabay"], counts["coverr"], counts["ai33_image"] + counts["openai_image"])
         sm.state.update_task(task_id, mixed_source_counts=counts)
         material._persist_material_sources(task_id, records)
         task_artifacts.patch_script_data(task_id, mixed_scene_plan=manifest, mixed_timing=timing)

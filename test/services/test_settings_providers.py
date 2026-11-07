@@ -16,7 +16,7 @@ GROUPS = {
         "wavespeed",
         "muapi",
     ),
-    "ai_image": ("openai_image", "codex_image"),
+    "ai_image": ("ai33_image",),
     "stock_video": ("pexels", "pixabay", "coverr"),
 }
 OAUTH = {"openai_codex": False, "openai_chatgpt": False, "kimi_code": False}
@@ -139,12 +139,7 @@ MATERIAL_VALUES = {
     "jalapeno": {"jalapeno_video_api_key": "synthetic-key"},
     "wavespeed": {"wavespeed_api_keys": ["synthetic-key"]},
     "muapi": {"muapi_api_key": "synthetic-key"},
-    "openai_image": {
-        "openai_image_api_keys": ["synthetic-key"],
-        "openai_image_base_url": "https://images.example/v1",
-        "openai_image_model": "chosen-image-model",
-    },
-    "codex_image": {"codex_image_model_name": "image-model"},
+    "ai33_image": {"ai33_api_key": "synthetic-key", "ai33_image_model": "chosen-model"},
 }
 
 
@@ -226,44 +221,18 @@ def test_configured_provider_lists_keep_registry_and_group_order(monkeypatch):
     ) == tuple(provider.provider_id for provider in LLM_PROVIDER_REGISTRY)
 
 
-@pytest.mark.parametrize("missing", ["openai_image_base_url", "openai_image_model"])
-def test_keyless_image_gateway_needs_explicit_endpoint_and_model(missing):
-    values = {
-        "openai_image_base_url": "http://localhost:8188/v1",
-        "openai_image_model": "local-image",
-    }
-    assert (
-        "openai_image"
-        in settings_providers.configured_material_providers(values, GROUPS)["ai_image"]
-    )
+@pytest.mark.parametrize("missing", ["ai33_api_key", "ai33_image_model"])
+def test_ai33_requires_its_own_key_and_model(missing):
+    values = {"ai33_api_key": "test-key", "ai33_image_model": "model"}
+    assert "ai33_image" in settings_providers.configured_material_providers(values, GROUPS)["ai_image"]
     del values[missing]
-    assert (
-        "openai_image"
-        not in settings_providers.configured_material_providers(values, GROUPS)[
-            "ai_image"
-        ]
-    )
+    assert "ai33_image" not in settings_providers.configured_material_providers(values, GROUPS)["ai_image"]
 
 
-def test_codex_image_needs_saved_model_and_same_local_llm_session():
-    assert (
-        "codex_image"
-        not in settings_providers.configured_material_providers(
-            {}, GROUPS, codex_connected=True
-        )["ai_image"]
-    )
-    assert (
-        "codex_image"
-        not in settings_providers.configured_material_providers(
-            {"codex_image_model_name": "image-model"}, GROUPS
-        )["ai_image"]
-    )
-    assert (
-        "codex_image"
-        in settings_providers.configured_material_providers(
-            {"codex_image_model_name": "image-model"}, GROUPS, codex_connected=True
-        )["ai_image"]
-    )
+def test_old_image_credentials_do_not_enable_generation():
+    groups = {"ai_image": ("openai_image", "codex_image", "ai33_image")}
+    values = {"openai_image_base_url": "https://example.test", "openai_image_model": "old-model", "codex_image_model_name": "old-model"}
+    assert settings_providers.configured_material_providers(values, groups, codex_connected=True)["ai_image"] == ()
 
 
 def test_infistar_video_does_not_accept_separate_llm_key():

@@ -100,7 +100,7 @@ class ImageJob:
     def _save(self, state):
         _atomic(self.checkpoint, json.dumps(state, ensure_ascii=False, indent=2).encode("utf-8"))
 
-    def run(self, *, model_id, parameters, prompt, max_credits, max_polls=150):
+    def run(self, *, model_id, parameters, prompt, max_credits, max_polls=150, before_submit=None):
         credits(max_credits)
         if isinstance(max_polls, bool) or not isinstance(max_polls, int) or max_polls < 1:
             raise AI33Error("max_polls must be a positive integer")
@@ -129,6 +129,8 @@ class ImageJob:
                          "status": "submission_unconfirmed"}
                 # A crash or timeout after this write must never trigger another POST.
                 self._save(state)
+                if before_submit is not None:
+                    before_submit()
                 state["task_id"] = self.client.submit(model_id, parameters, prompt)
                 state["status"] = "submitted"
                 self._save(state)

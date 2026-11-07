@@ -24,12 +24,21 @@ listen_port = 8080
 log_requests = false
 
 [app]
+# Synthetic images: AI33.Pro only. Configure these in Material Sources > AI Image.
+# Do not commit config.toml or copy its credentials into projects.
+ai33_api_key = ""
+ai33_image_model = "bytedance-seedream-4.5"
+ai33_image_resolution = "2K"
+ai33_image_quality = ""
+# Gates the quote for each image; this is not a provider-side price lock.
+ai33_image_max_credits = 1000
+
 # OpenAI - Codex: existing device-code provider; upgrades preserve this connection.
 # Uses ChatGPT subscription limits; no API key. Credentials live in storage/auth.
 openai_codex_model_name = ""
 openai_codex_timeout = ""
-# Codex image source: reuses the same ChatGPT login, with an independent Responses
-# model selection. Catalog candidates do not guarantee image-tool access.
+# Legacy image settings are retained for compatibility; new image generation
+# through Codex/OpenAI Image/Flow is disabled. Codex text use remains available.
 codex_image_model_name = ""
 codex_image_timeout = 300
 

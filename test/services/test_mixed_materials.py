@@ -23,7 +23,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(mixed.utils, "task_dir", task_dir)
     monkeypatch.setattr(mixed.sm, "state", MemoryState())
     monkeypatch.setattr(mixed.config, "app", {"pexels_api_keys": ["test-pexels"], "pixabay_api_keys": ["test-pixabay"],
-                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test-model"})
+                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test-model", "ai33_api_key": "test-ai33", "ai33_image_model": "test-model"})
     folder = Path(task_dir("job"))
     subtitles = folder / "subtitle.srt"
     subtitles.write_text(
@@ -50,7 +50,15 @@ def setup(tmp_path, monkeypatch):
         path.write_bytes(str(images.call_count).encode())
         return [MaterialInfo(provider="openai_image", url=str(path), duration=1)]
     images = Mock(side_effect=image)
-    monkeypatch.setattr(mixed.material, "generate_images_openai", images)
+    def ai33_generate(params, prompt, directory, *, before_submit=None):
+        if before_submit:
+            before_submit()
+        Path(directory).mkdir(parents=True, exist_ok=True)
+        items = images(search_term=prompt, minimum_duration=1, save_dir=str(directory))
+        if not items:
+            raise mixed.AI33Error("Image generation did not yield a usable result")
+        return Path(items[0].url), {"task_id": "ai33-test-id", "model_id": "test-model"}
+    monkeypatch.setattr(mixed.ai33_provider, "generate", ai33_generate)
     monkeypatch.setattr(mixed.material, "_render_openai_image_video", lambda *args, **kwargs: "image-clip.mp4")
 
     def render(source, output, frames, params, **kwargs):
@@ -74,7 +82,7 @@ def test_mixed_uses_pexels_historical_illustration_and_pixabay_in_order(setup):
     manifest = json.loads((folder / "mixed-scenes.json").read_text())
     assert manifest["timing"] == "subtitles"
     assert manifest["image_requests"] == 1
-    assert [scene["provenance"]["provider"] for scene in manifest["scenes"]] == ["pexels", "openai_image", "pixabay"]
+    assert [scene["provenance"]["provider"] for scene in manifest["scenes"]] == ["pexels", "ai33_image", "pixabay"]
     assert [call.args[2] for call in rendering.call_args_list] == [300, 300, 300]
     assert model.call_count == 1
 
@@ -103,7 +111,7 @@ def test_unknown_paid_result_cannot_be_automatically_ordered_again(setup):
     images.side_effect = mixed.material.OpenAIImagePaidResultError("unknown response")
     with pytest.raises(mixed.material.OpenAIImagePaidResultError):
         mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
-    with pytest.raises(mixed.MixedError, match="unknown result"):
+    with pytest.raises(mixed.MixedError, match="no checkpoint"):
         mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
     assert images.call_count == 1
     assert mixed.image_requests("job") == 1
@@ -191,7 +199,8 @@ def test_real_render_and_concat_preserve_scene_order_and_duration(tmp_path, monk
         assert clip.get_frame(2.0)[0, 0, 2] > 200
 
 
-def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch):
+@pytest.mark.parametrize("source", ["mixed", "ai33_image"])
+def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch, source):
     from moviepy import VideoFileClip
     from app.services import task as tm
 
@@ -205,7 +214,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
     monkeypatch.setattr(mixed.sm, "state", MemoryState())
     monkeypatch.setattr(VideoAspect, "to_resolution", lambda self: (160, 90))
     monkeypatch.setattr(mixed.config, "app", {"pexels_api_keys": ["test"], "pixabay_api_keys": ["test"],
-                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test"})
+                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test", "ai33_api_key": "test-ai33", "ai33_image_model": "test"})
     clips = {}
     for provider, color in (("pexels", "red"), ("openai_image", "blue"), ("pixabay", "green")):
         target = tmp_path / (provider + ".mp4")
@@ -228,21 +237,30 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
     monkeypatch.setattr(mixed.llm, "_generate_response", lambda **kwargs: json.dumps(choices))
     monkeypatch.setattr(mixed.material, "_search_videos_with_cache", lambda provider, *args: [MaterialInfo(provider=provider, url=provider, duration=3)])
     monkeypatch.setattr(mixed.material, "save_video", lambda url, directory: clips[url])
-    image = tmp_path / "generated.png"
-    image.write_bytes(b"simulated downloaded image")
-    generate = Mock(return_value=[MaterialInfo(provider="openai_image", url=str(image), duration=1)])
-    monkeypatch.setattr(mixed.material, "generate_images_openai", generate)
-    monkeypatch.setattr(mixed.material, "_render_openai_image_video", lambda *args, **kwargs: clips["openai_image"])
+    def create_image():
+        image = tmp_path / f"generated-{generate.call_count}.png"
+        image.write_text(str(generate.call_count))
+        return [MaterialInfo(provider="ai33_image", url=str(image), duration=1)]
+    generate = Mock(side_effect=create_image)
+    def generate_ai33(params, prompt, directory, *, before_submit=None):
+        if before_submit:
+            before_submit()
+        return Path(generate()[0].url), {"task_id": "test-id"}
+    monkeypatch.setattr(mixed.ai33_provider, "generate", generate_ai33)
+    def render_image(image, *args, **kwargs):
+        index = int(Path(image).read_text()) - 1
+        return clips[("pexels", "openai_image", "pixabay")[index]] if source == "ai33_image" else clips["openai_image"]
+    monkeypatch.setattr(mixed.material, "_render_openai_image_video", render_image)
     monkeypatch.setattr(tm, "generate_audio", lambda *args, **kwargs: (str(audio), 6, None))
     monkeypatch.setattr(tm, "generate_subtitle", lambda *args, **kwargs: str(subtitles))
     terms = Mock(side_effect=AssertionError("Mixed mode must plan from narration, not global search terms"))
     monkeypatch.setattr(tm, "generate_terms", terms)
     monkeypatch.setattr(tm.upload_post.upload_post_service, "is_configured", lambda: False)
-    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
+    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source=source, mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
                          bgm_type="", n_threads=1, video_clip_speed=2.0)
     result = tm.start("integration", params)
     assert result.get("videos"), result
-    assert result["mixed_image_requests"] == 1
+    assert result["mixed_image_requests"] == (1 if source == "mixed" else 3)
     with VideoFileClip(result["videos"][0]) as clip:
         assert abs(clip.duration - 6) < 0.1
         assert clip.audio is not None
@@ -250,7 +268,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch)
         assert clip.get_frame(2.5)[0, 0, 2] > 200
         assert clip.get_frame(4.5)[0, 0, 1] > 90
     terms.assert_not_called()
-    assert generate.call_count == 1
+    assert generate.call_count == (1 if source == "mixed" else 3)
 
 
 def test_historical_context_changes_can_split_scenes_before_target_duration(tmp_path):
@@ -368,7 +386,7 @@ def test_coverr_is_rotated_alongside_pexels_and_pixabay(setup, monkeypatch):
     assert [s["provenance"]["provider"] for s in scenes] == ["pexels", "pixabay", "coverr"]
     images.assert_not_called()
     assert mixed.sm.state.get_task("job")["mixed_source_counts"] == {
-        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0}
+        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0}
 
 
 def test_coverr_can_be_the_only_configured_bank(setup, monkeypatch):
@@ -486,18 +504,14 @@ def test_stock_reuse_only_after_sixty_percent_and_from_unused_segment(setup, pos
         assert again["source_start"] == 3 and again["source_end"] == 6
 
 
-def test_refused_image_becomes_editorial_card_and_is_not_requested_again(setup):
+def test_unclassified_ai33_error_stops_without_editorial_card_or_paid_retry(setup):
     folder, subtitles, params, _, _, images, _ = setup
-    images.side_effect = mixed.material.OpenAIImageRefusalError("content policy refusal")
-    result = mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
-    manifest = json.loads((folder / "mixed-scenes.json").read_text())
-    assert len(result) == 3
-    assert manifest["image_requests"] == 1
-    assert manifest["scenes"][1]["image_refused"] is True
-    assert manifest["scenes"][1]["provenance"]["provider"] == "editorial_card"
-    assert (folder / "mixed" / manifest["scenes"][1]["image_file"]).is_file()
-    assert mixed.sm.state.get_task("job")["mixed_source_counts"]["editorial_card"] == 1
-    assert mixed.prepare("job", params, SCRIPT, 30, str(subtitles)) == result
+    images.side_effect = mixed.AI33Error("unclassified remote failure")
+    with pytest.raises(mixed.MixedError, match="unclassified"):
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert not list((folder / "mixed").glob("card-*.png"))
+    with pytest.raises(mixed.MixedError, match="no checkpoint"):
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
     assert images.call_count == 1
 
 
@@ -543,118 +557,43 @@ def test_local_editorial_card_renders_without_image_api(tmp_path, monkeypatch):
         assert frame.mean() > 20
 
 
-def test_flow_is_explicit_provider_and_keeps_existing_api_unused(setup, monkeypatch):
+@pytest.mark.parametrize("legacy_provider", ["flow_browser", "openai", "openai_flow"])
+def test_legacy_provider_selection_routes_new_images_only_to_ai33(setup, monkeypatch, legacy_provider):
     folder, subtitles, params, _, _, images, _ = setup
-    params.mixed_image_provider = 'flow_browser'
-    params.flow_project_url = 'https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
-    monkeypatch.setattr(mixed.flow_browser, 'validate', lambda *_: None)
-    picture = folder/'flow.png'
-    picture.write_bytes(b'flow image')
-    generate = Mock(return_value=picture)
-    monkeypatch.setattr(mixed.flow_browser, 'generate', generate)
-    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
-    assert generate.call_count == 1
-    images.assert_not_called()
-    assert mixed.sm.state.get_task('job')['mixed_source_counts']['flow_browser'] == 1
-
-
-def test_explicit_flow_refusal_keeps_editorial_card_behavior(setup, monkeypatch):
-    folder, subtitles, params, _, _, images, _ = setup
-    params.mixed_image_provider = 'flow_browser'
-    monkeypatch.setattr(mixed.flow_browser, 'validate', lambda *_: None)
-    generate = Mock(side_effect=mixed.flow_browser.FlowRefusal('refused'))
-    monkeypatch.setattr(mixed.flow_browser, 'generate', generate)
-    result = mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
-    assert len(result) == 3
-    assert mixed.sm.state.get_task('job')['mixed_source_counts']['editorial_card'] == 1
-    assert mixed.prepare('job', params, SCRIPT, 30, str(subtitles)) == result
-    assert generate.call_count == 1
-    images.assert_not_called()
-
-
-def test_missing_flow_setup_stops_in_preflight_before_narration_or_requests(setup, monkeypatch):
-    from app.services import task as tm
-    _, _, params, model, _, images, _ = setup
-    params.mixed_image_provider = 'flow_browser'
-    monkeypatch.setattr(mixed.flow_browser, 'validate', Mock(side_effect=mixed.flow_browser.FlowError('Missing optional dependency')))
-    result = tm.start('missing-flow-setup', params)
-    assert result['failed_stage'] == 'preflight'
-    assert result['error_key'] == 'mixed.flow_config'
-    model.assert_not_called()
-    images.assert_not_called()
-
-
-def test_last_resort_uses_flow_after_banks_and_rejected_openai_image(setup, monkeypatch):
-    folder, subtitles, params, _, search, images, _ = setup
-    params.mixed_image_provider = 'openai_flow'
-    params.mixed_visual_validation = True
-    monkeypatch.setitem(mixed.config.app,'openai_api_key','test')
-    monkeypatch.setattr(mixed.flow_browser,'validate',lambda *_:None)
-    inspect = Mock(return_value=(False, {'relevant':False,'confidence':0.99,'reason':'Not a match'}))
-    monkeypatch.setattr(mixed.visual_validation,'inspect_clip',inspect)
-    def create(*args, **kwargs):
-        file=folder/f'flow-{fallback.call_count}.png'
-        file.write_bytes(f'flow-{fallback.call_count}'.encode())
-        return file
-    fallback=Mock(side_effect=create)
-    monkeypatch.setattr(mixed.flow_browser,'generate',fallback)
-    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
-    assert search.call_count >= 3
-    assert images.call_count == 3 and fallback.call_count == 3
-    assert json.loads((folder/'mixed-scenes.json').read_text())['image_requests'] == 6
-
-
-@pytest.mark.parametrize('failure', [mixed.material.OpenAIImageRefusalError('refused'), mixed.material.OpenAIImageTechnicalError('technical')])
-def test_last_resort_never_switches_provider_on_refusal_or_technical_failure(setup, monkeypatch, failure):
-    _, subtitles, params, _, search, images, _ = setup
-    params.mixed_image_provider='openai_flow'
-    params.mixed_visual_validation=True
-    monkeypatch.setitem(mixed.config.app,'openai_api_key','test')
-    monkeypatch.setattr(mixed.flow_browser,'validate',lambda *_:None)
-    search.side_effect=None
-    search.return_value=[]
-    images.side_effect=failure
-    fallback=Mock()
-    monkeypatch.setattr(mixed.flow_browser,'generate',fallback)
-    if isinstance(failure,mixed.material.OpenAIImageRefusalError):
-        mixed.prepare('job',params,SCRIPT,30,str(subtitles))
-        assert mixed.sm.state.get_task('job')['mixed_source_counts']['editorial_card']==3
-    else:
-        with pytest.raises(mixed.MixedError,match='technical'):
-            mixed.prepare('job',params,SCRIPT,30,str(subtitles))
-    fallback.assert_not_called()
+    params.mixed_image_provider = legacy_provider
+    flow = Mock(side_effect=AssertionError("Flow must never generate"))
+    openai = Mock(side_effect=AssertionError("OpenAI Image must never generate"))
+    monkeypatch.setattr(mixed.flow_browser, "generate", flow)
+    monkeypatch.setattr(mixed.material, "generate_images_openai", openai)
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert params.mixed_image_provider == "ai33"
+    assert images.call_count == 1
+    flow.assert_not_called()
+    openai.assert_not_called()
+    assert mixed.sm.state.get_task("job")["mixed_source_counts"]["ai33_image"] == 1
 
 
 def test_sources_start_enabled_and_disabled_bank_is_never_searched(setup):
     _, subtitles, params, _, search, _, _ = setup
-    assert all(getattr(params, 'mixed_use_'+name) for name in ('pexels','pixabay','coverr','openai','flow'))
+    assert all(getattr(params, 'mixed_use_'+name) for name in ('pexels','pixabay','coverr','ai33'))
     params.mixed_use_pexels=False
     mixed.prepare('job',params,SCRIPT,30,str(subtitles))
     assert all(call.args[0]=='pixabay' for call in search.call_args_list)
 
 
-def test_selecting_flow_only_skips_all_banks_and_openai(setup, monkeypatch):
-    folder, subtitles, params, _, search, images, _ = setup
-    params.mixed_select_sources=True
-    params.mixed_use_pexels=params.mixed_use_pixabay=params.mixed_use_coverr=params.mixed_use_openai=False
-    params.flow_project_url='https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
-    monkeypatch.setattr(mixed.flow_browser,'validate',lambda *_:None)
-    def make(*args,**kwargs):
-        file=folder/f'flow-{generate.call_count}.png'
-        file.write_bytes(str(generate.call_count).encode())
-        return file
-    generate=Mock(side_effect=make)
-    monkeypatch.setattr(mixed.flow_browser,'generate',generate)
-    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
-    assert generate.call_count==3 and params.mixed_image_provider=='flow_browser'
+def test_selecting_ai33_only_skips_all_banks(setup):
+    _, subtitles, params, _, search, images, _ = setup
+    params.mixed_select_sources = True
+    params.mixed_use_pexels = params.mixed_use_pixabay = params.mixed_use_coverr = False
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    assert images.call_count == 3 and params.mixed_image_provider == "ai33"
     search.assert_not_called()
-    images.assert_not_called()
 
 
 def test_disabled_image_generators_are_not_called(setup, monkeypatch):
     _, subtitles, params, _, _, images, _ = setup
     params.mixed_select_sources=True
-    params.mixed_use_openai=params.mixed_use_flow=False
+    params.mixed_use_ai33=False
     generate=Mock()
     monkeypatch.setattr(mixed.flow_browser,'generate',generate)
     mixed.prepare('job',params,SCRIPT,30,str(subtitles))
@@ -711,7 +650,7 @@ def test_legacy_checkpoint_migrates_only_when_original_inputs_match(setup):
     file=folder/'mixed-scenes.json'
     saved=json.loads(file.read_text())
     signature=saved.pop('signature')
-    for key in ('selected_sources','flow_require_zero','image_provider','flow_profile','flow_project_url'):
+    for key in ('selected_sources',):
         signature.pop(key,None)
     saved['fingerprint']=hashlib.sha256(json.dumps(signature,sort_keys=True).encode()).hexdigest()
     file.write_text(json.dumps(saved))
@@ -725,3 +664,46 @@ def test_legacy_checkpoint_migrates_only_when_original_inputs_match(setup):
     params.video_aspect='1:1'
     with pytest.raises(mixed.MixedError,match='restore the original settings'):
         mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+
+
+def test_legacy_provider_migration_reuses_paid_file_and_records_original_signature(setup):
+    import hashlib
+    folder, subtitles, params, model, _, images, _ = setup
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    path = folder / "mixed-scenes.json"
+    manifest = json.loads(path.read_text())
+    original = dict(manifest["signature"])
+    original.update(image_provider="flow_browser", image_model="legacy-model", image_size="legacy-size", image_template="legacy")
+    original.pop("image_quality", None)
+    original.pop("image_credit_cap", None)
+    original["selected_sources"] = {"pexels": True, "pixabay": True, "coverr": True, "openai": True, "flow": True}
+    manifest["signature"] = original
+    manifest["fingerprint"] = hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest()
+    scene = manifest["scenes"][1]
+    scene.pop("image_provider", None)
+    image = folder / "mixed" / scene["image_file"]
+    before = image.read_bytes()
+    path.write_text(json.dumps(manifest))
+    params.mixed_resume = True
+    images.reset_mock()
+    model.reset_mock()
+    mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    updated = json.loads(path.read_text())
+    assert updated["original_signature"] == original
+    assert updated["continuation_image_provider"] == "ai33_image"
+    assert updated["scenes"][1]["image_provider"] == "flow_browser"
+    assert image.read_bytes() == before
+    images.assert_not_called()
+    model.assert_not_called()
+
+
+def test_quote_failure_before_submission_does_not_consume_request_limit(setup, monkeypatch):
+    folder, subtitles, params, _, _, images, _ = setup
+    generate = Mock(side_effect=mixed.AI33Error("quote exceeds cap"))
+    monkeypatch.setattr(mixed.ai33_provider, "generate", generate)
+    with pytest.raises(mixed.MixedError, match="quote exceeds cap"):
+        mixed.prepare("job", params, SCRIPT, 30, str(subtitles))
+    saved = json.loads((folder / "mixed-scenes.json").read_text())
+    assert saved["image_requests"] == 0
+    assert not saved["scenes"][1].get("image_request_started")
+    images.assert_not_called()

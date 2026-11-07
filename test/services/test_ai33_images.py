@@ -166,10 +166,24 @@ class AI33ResumeTests(unittest.TestCase):
         return ImageJob(self.client, self.temp.name)
 
     def test_quote_cap_stops_before_submission(self):
+        callback = MagicMock()
         with self.assertRaises(AI33Error):
-            self.job().run(**{**self.kwargs, "max_credits": 11})
+            self.job().run(**{**self.kwargs, "max_credits": 11}, before_submit=callback)
         self.client.submit.assert_not_called()
+        callback.assert_not_called()
         self.assertFalse((Path(self.temp.name) / "ai33-image.json").exists())
+
+    @patch("app.services.ai33.images.download_png", return_value=b"png")
+    def test_submission_callback_runs_after_intent_before_post_and_not_on_resume(self, download):
+        def before():
+            state = json.loads(self.job().checkpoint.read_text())
+            self.assertEqual(state["status"], "submission_unconfirmed")
+            self.client.submit.assert_not_called()
+        callback = MagicMock(side_effect=before)
+        self.job().run(**self.kwargs, before_submit=callback)
+        self.job().run(**self.kwargs, before_submit=callback)
+        callback.assert_called_once()
+        self.assertEqual(self.client.submit.call_count, 1)
 
     def test_lost_submission_response_never_reposts(self):
         def lost(*args):

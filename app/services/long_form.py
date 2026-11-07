@@ -15,6 +15,7 @@ from moviepy import VideoFileClip
 
 from app.config import config
 from app.models import const
+from app.models.schema import VideoParams
 from app.services import generation_progress, llm, narration, subtitle, task_artifacts, voice
 from app.services import state as sm
 from app.utils import utils
@@ -25,7 +26,7 @@ class ChapterError(RuntimeError):
 
 
 def validate(params, *, external_audio=False):
-    if params.video_source == "mixed":
+    if params.video_source in {"mixed", "ai33_image"}:
         from app.services import mixed_materials
 
         mixed_materials.validate(params, external_audio=external_audio)
@@ -72,8 +73,8 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     payload["params"].pop("mixed_resume", None)
-    if params.video_source != "mixed":
-        for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates", "mixed_variable_pacing", "mixed_timeline_offset", "mixed_total_duration", "mixed_previous_sources", "mixed_is_chapter", "mixed_image_provider", "flow_profile", "flow_project_url", "flow_require_zero", "mixed_select_sources", "mixed_use_pexels", "mixed_use_pixabay", "mixed_use_coverr", "mixed_use_openai", "mixed_use_flow"):
+    if params.video_source not in {"mixed", "ai33_image"}:
+        for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates", "mixed_variable_pacing", "mixed_timeline_offset", "mixed_total_duration", "mixed_previous_sources", "mixed_is_chapter", "mixed_image_provider", "flow_profile", "flow_project_url", "flow_require_zero", "mixed_select_sources", "mixed_use_pexels", "mixed_use_pixabay", "mixed_use_coverr", "mixed_use_openai", "mixed_use_flow", "mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
             payload["params"].pop(key, None)
     if params.custom_audio_file:
         # Re-uploading the same recording from another path must still resume.
@@ -247,11 +248,48 @@ def _join(directory, inputs, expected_duration):
         temporary.unlink(missing_ok=True)
 
 
+def _migrate_image_provider(params, references, directory, manifest):
+    """Verify the original root fingerprint before allowing only AI33 migration."""
+    if params.video_source != "mixed" or not (directory / "script.json").is_file():
+        return False
+    saved = json.loads((directory / "script.json").read_text(encoding="utf-8"))["params"]
+    if saved.get("mixed_image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none"}:
+        return False
+    original = dict(saved)
+    original.pop("mixed_resume", None)
+    if original.get("custom_audio_file"):
+        original["custom_audio_file"] = "<external-narration>"
+    digest = hashlib.sha256(json.dumps({"params": original, "references": references}, sort_keys=True).encode()).hexdigest()
+    if digest != manifest.get("fingerprint"):
+        return False
+    before = VideoParams.model_validate(saved).model_dump(mode="json")
+    after = params.model_dump(mode="json")
+    for key in ("mixed_resume", "mixed_image_provider", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+        before.pop(key, None)
+        after.pop(key, None)
+    if before != after:
+        return False
+    # One-time original backup; never move/delete existing media.
+    backup = directory / "ai33-migration-backup"
+    backup.mkdir(exist_ok=True)
+    for name in ("script.json", "chapters.json"):
+        target = backup / name
+        if not target.exists():
+            target.write_bytes((directory / name).read_bytes())
+    manifest["original_fingerprint"] = manifest["fingerprint"]
+    manifest["fingerprint"] = _fingerprint(params, references)
+    manifest["continuation_image_provider"] = "ai33_image"
+    return True
+
+
 def _run_locked(task_id, params, directory, render_chapter, references, audio_file=None, audio_duration=None):
     checkpoint = directory / "chapters.json"
     fingerprint = _fingerprint(params, references)
     if checkpoint.exists():
         manifest = json.loads(checkpoint.read_text(encoding="utf-8"))
+        if manifest.get("version") == 1 and manifest.get("fingerprint") != fingerprint:
+            if _migrate_image_provider(params, references, directory, manifest):
+                _save(checkpoint, manifest)
         if manifest.get("version") != 1 or manifest.get("fingerprint") != fingerprint:
             raise ChapterError("Checkpoint settings differ; restore the original settings or use a new task ID")
     else:
@@ -285,7 +323,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
                 "video_terms": params.video_terms,
                 "custom_audio_file": chapter_audio,
             })
-            if params.video_source == "mixed":
+            if params.video_source in {"mixed", "ai33_image"}:
                 from app.services import mixed_materials
 
                 spent_elsewhere = sum(
@@ -302,6 +340,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
                         child_params.mixed_previous_sources.extend(s["provenance"] for s in previous_manifest.get("scenes", []) if s.get("provenance"))
                 child_params.mixed_timeline_offset = params.mixed_timeline_offset + duration
                 child_params.mixed_max_images = max(0, params.mixed_max_images - spent_elsewhere)
+                child_params.mixed_resume = (Path(utils.task_dir(child_id)) / "mixed-scenes.json").is_file()
             with generation_progress.task_scope(child_id):
                 result = render_chapter(child_id, child_params)
             if not result or not result.get("videos") or result.get("state") == const.TASK_STATE_FAILED:
@@ -333,7 +372,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
               "warnings": [dict(warning, chapter_index=index + 1)
                            for index, chapter in enumerate(chapters)
                            for warning in chapter.get("warnings", [])] or None}
-    if params.video_source == "mixed":
+    if params.video_source in {"mixed", "ai33_image"}:
         from app.services import mixed_materials
 
         result["mixed_image_requests"] = sum(

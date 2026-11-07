@@ -1436,18 +1436,8 @@ OPENAI_IMAGE_DOWNLOAD_BACKOFF_SECONDS = 2
 
 
 def is_openai_image_enabled(app_config: dict | None = None) -> bool:
-    """
-    判断 OpenAI 兼容文生图素材源是否已完成最小配置。
-
-    API Key 允许为空：完全本地的 ComfyUI/SD 网关通常不需要鉴权，为空时
-    请求不带 Authorization 头。供任务预检和 WebUI 在消耗 LLM、TTS 额度
-    前拦截缺失配置的任务。
-    """
-    app_config = config.app if app_config is None else app_config
-    return bool(
-        str(app_config.get("openai_image_base_url", "") or "").strip()
-        and str(app_config.get("openai_image_model", "") or "").strip()
-    )
+    """Legacy configuration is retained, but this provider cannot generate."""
+    return False
 
 
 def _openai_image_endpoint() -> tuple[str, str]:
@@ -1657,100 +1647,8 @@ def _parse_openai_image_response(
 
 
 def _request_openai_image(endpoint: str, payload: dict) -> tuple[bytes | None, str]:
-    """
-    调用 OpenAI 兼容 /images/generations 接口，带退避重试与 key 轮换。
-
-    429/5xx 按临时故障退避重试；401/403 只有在配置了多个 key 时才重试
-    （借助 get_api_key 的轮换机制换 key）；其余 4xx 是明确拒绝，快速失败
-    交给上层跳过该关键词。
-
-    计费安全：POST 的读超时与连接中断视为"未确认"状态——服务端可能已经
-    生成并扣费，只是响应没有返回，自动重新提交可能造成重复生成和重复
-    计费，因此抛出专用异常终止本地任务。只有连接阶段超时（ConnectTimeout，
-    请求确定没有送达服务端）才确认没有创建生成任务，可以安全重试。
-
-    API Key 允许为空：完全本地的 ComfyUI/SD 网关通常不需要鉴权，为空时
-    不发送 Authorization 头。
-    """
-    api_keys = config.app.get("openai_image_api_keys")
-    if isinstance(api_keys, (list, tuple)):
-        configured_keys = [k for k in api_keys if str(k or "").strip()]
-    elif str(api_keys or "").strip():
-        configured_keys = [api_keys]
-    else:
-        configured_keys = []
-
-    failure_detail = "no request attempt was made"
-    for attempt in range(1, OPENAI_IMAGE_MAX_ATTEMPTS + 1):
-        api_key = get_api_key("openai_image_api_keys") if configured_keys else ""
-        headers = {}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        retryable = False
-        try:
-            response = trace_http_call(
-                "POST", requests.post,
-                endpoint,
-                json=payload,
-                headers=headers,
-                proxies=config.proxy,
-                verify=_get_tls_verify(),
-                timeout=OPENAI_IMAGE_REQUEST_TIMEOUT,
-                allow_redirects=False,
-            )
-        except requests.exceptions.ConnectTimeout as e:
-            # 连接阶段超时：请求确定没有送达服务端，没有创建生成任务，
-            # 可以安全重试。
-            failure_detail = (
-                f"connect timeout: detail={_redact_request_error(e, api_key)}"
-            )
-            retryable = True
-        except Exception as e:
-            # 读超时/连接中断等属于"未确认"状态：服务端可能已经受理并扣费，
-            # 自动重新提交或处理后续关键词都可能重复计费，必须终止本地任务。
-            raise OpenAIImageUnconfirmedError(
-                "unconfirmed image request (no retry to avoid double billing): "
-                f"{type(e).__name__}, detail={_redact_request_error(e, api_key)}"
-            ) from e
-        else:
-            status = int(getattr(response, "status_code", 200) or 200)
-            if 300 <= status < 400:
-                response.close()
-                raise OpenAIImageUnconfirmedError(
-                    "image submission returned a redirect; no redirected request "
-                    "or retry was sent because the paid outcome is unconfirmed"
-                )
-            if status in OPENAI_IMAGE_KEY_ERROR_STATUS_CODES:
-                failure_detail = _openai_image_http_failure(response, status, api_key)
-                # 只有多 key 配置下，重试才可能轮换到可用 key。
-                retryable = len(configured_keys) > 1
-            elif status in OPENAI_IMAGE_RETRYABLE_STATUS_CODES:
-                failure_detail = _openai_image_http_failure(response, status, api_key)
-                retryable = True
-            elif status >= 400:
-                return None, _openai_image_http_failure(response, status, api_key)
-            else:
-                image_bytes, parse_error = _parse_openai_image_response(
-                    response, api_key
-                )
-                if image_bytes is not None:
-                    return image_bytes, ""
-                failure_detail = parse_error
-
-        if retryable and attempt < OPENAI_IMAGE_MAX_ATTEMPTS:
-            backoff_seconds = OPENAI_IMAGE_RETRY_BACKOFF_SECONDS[
-                min(attempt - 1, len(OPENAI_IMAGE_RETRY_BACKOFF_SECONDS) - 1)
-            ]
-            logger.warning(
-                "openai image request failed, retrying: "
-                f"attempt={attempt}/{OPENAI_IMAGE_MAX_ATTEMPTS}, "
-                f"next_retry_in={backoff_seconds}s, detail={failure_detail}"
-            )
-            time.sleep(backoff_seconds)
-            continue
-        return None, failure_detail
-
-    return None, failure_detail
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()
 
 
 def _save_openai_image_file(
@@ -1816,69 +1714,8 @@ def generate_images_openai(
     raise_on_refusal: bool = False,
     raise_on_technical: bool = False,
 ) -> List[MaterialInfo]:
-    """
-    用 OpenAI 兼容文生图接口为一个脚本关键词生成一张图片并保存到本地。
-
-    与 generate_videos_wavespeed 保持同一签名和空列表失败约定。图片没有
-    原生时长，``duration`` 记录目标片段时长（秒），供按需下载流程核算
-    是否已经凑够配音时长。API 返回的实际尺寸可能与请求不一致，这里以
-    图片真实尺寸写入 rendition，不依赖请求参数。
-    """
-    aspect = VideoAspect(video_aspect)
-    clip_duration = max(int(minimum_duration), 1)
-    endpoint, model = _openai_image_endpoint()
-    image_size = _openai_image_size(aspect)
-    payload = {
-        "model": model,
-        "prompt": _openai_image_prompt(search_term),
-        "n": 1,
-        "size": image_size,
-    }
-    logger.info(
-        f"generating image via openai-compatible endpoint: model={model}, "
-        f"term={search_term!r}, size={image_size}"
-    )
-    generation_progress.submitting("openai_image")
-    image_bytes, failure_detail = _request_openai_image(endpoint, payload)
-    if image_bytes is None:
-        logger.error(
-            f"openai image generation failed: term={search_term!r}, "
-            f"detail={failure_detail}"
-        )
-        if raise_on_refusal and re.search(
-            r"safety system|safety_violations|content_policy_violation|moderation_blocked|safety rejection",
-            failure_detail, re.I,
-        ):
-            raise OpenAIImageRefusalError("Image provider refused this request under its content policy")
-        if raise_on_technical:
-            raise OpenAIImageTechnicalError("Image API failed; check credentials/model/service. No provider fallback.")
-        return []
-
-    try:
-        image_path, width, height = _save_openai_image_file(image_bytes, save_dir)
-    except _OpenAIImageDecodeError as e:
-        # 兼容层可能返回 200 但 body 不是图片（如伪装成 JSON 的 HTML 错误页、
-        # 网关的降级提示页）。图片无法解码属于"该次生成已失败"，按素材源
-        # 约定返回空列表让上层跳过该关键词继续，而不是让异常中断整个任务。
-        logger.error(
-            "openai image response is not a decodable image, skipping term: "
-            f"term={search_term!r}, error={type(e).__name__}, detail={e}"
-        )
-        return []
-    item = MaterialInfo()
-    item.provider = "openai_image"
-    item.url = image_path
-    item.duration = clip_duration
-    item.source_info = {
-        "provider": "openai_image",
-        "search_term": search_term,
-        "rendition": {
-            "id": None,
-            "width": width,
-            "height": height,
-        },
-    }
-    return [item]
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()
 
 
 def generate_images_codex(
@@ -1889,40 +1726,8 @@ def generate_images_codex(
     *,
     context=None,
 ) -> List[MaterialInfo]:
-    """Obtain one Codex image using the existing PNG material representation."""
-    aspect = VideoAspect(video_aspect)
-    if minimum_duration <= 0:
-        return []
-    try:
-        context = context if context is not None else codex_image.capture_context()
-        codex_image.assert_current(context)
-        # Independent of the OpenAI-compatible provider's template and settings.
-        prompt = (
-            f"Create one image depicting: {search_term}. "
-            f"Compose the image for a {aspect.value} video frame."
-        )
-        generation_progress.submitting("codex_image")
-        image_bytes = codex_image.generate_image(prompt, context)
-        codex_image.assert_current(context)
-        try:
-            image_path, width, height = _save_openai_image_file(image_bytes, save_dir)
-        except _OpenAIImageDecodeError:
-            raise codex_image.CodexImageError("codex.image.invalid_result") from None
-        except OSError:
-            raise codex_image.CodexImageError("codex.image.save_failed") from None
-        codex_image.assert_current(context)
-    except codex_image.CodexImageError as error:
-        raise CodexImageMaterialError(error) from None
-    item = MaterialInfo()
-    item.provider = "codex_image"
-    item.url = image_path
-    item.duration = max(int(minimum_duration), 1)
-    item.source_info = {
-        "provider": "codex_image",
-        "search_term": search_term,
-        "rendition": {"id": None, "width": width, "height": height},
-    }
-    return [item]
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()
 
 
 def _render_openai_image_video(
@@ -2493,26 +2298,8 @@ def download_videos(
             material_directory=material_directory,
         )
     if source in {"openai_image", "codex_image"}:
-        # 与 WaveSpeed 相同的按需付费语义：文生图按张计费，逐段生成、凑够
-        # 所需时长立即停止。生成结果是一次性的本地图片文件，也不参与 24
-        # 小时搜索缓存——缓存会让不同任务反复拿到同一张图。
-        image_options = {}
-        if source == "codex_image":
-            image_options = {
-                "image_generator": generate_images_codex,
-                "provider": source,
-                "codex_image_context": codex_image_context,
-            }
-        return _download_videos_openai_image_on_demand(
-            task_id=task_id,
-            search_terms=search_terms,
-            video_aspect=video_aspect,
-            audio_duration=audio_duration,
-            max_clip_duration=max_clip_duration,
-            material_directory=material_directory,
-            image_motion=image_motion,
-            **image_options,
-        )
+        from app.services.ai33.policy import reject_legacy_generation
+        reject_legacy_generation()
 
     if match_script_order:
         return _download_videos_by_script_order(

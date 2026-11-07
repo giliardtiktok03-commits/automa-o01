@@ -68,44 +68,12 @@ def connect(profile, project):
 
 
 def start_test(profile, project, require_zero=True):
-    profile, project = normalized(profile, project)
-    validate(profile, project)
-    directory = _root() / 'tests'
-    directory.mkdir(exist_ok=True)
-    request = directory / (uuid.uuid4().hex + '.json')
-    task_artifacts._write_json_atomic(request, {
-        'profile': profile, 'project': project, 'action': 'generate', 'timeout': 180,
-        'require_zero': require_zero,
-        'prompt': 'A cozy empty cafe on a rainy morning, warm lighting, photorealistic, no text, no logos.'})
-    _launch(request)
-    return request
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()
 
 def generate(prompt, directory, profile, project, timeout=900, require_zero=True):
-    profile, project = normalized(profile, project)
-    validate(profile, project)
-    folder = Path(directory)
-    request = folder / ("flow-" + uuid.uuid4().hex + ".json")
-    task_artifacts._write_json_atomic(request, {"profile": profile, "project": project, "action": "generate",
-                                              "prompt": prompt, "timeout": timeout, "require_zero": require_zero})
-    result_file = request.with_suffix(".result.json")
-    process = _launch(request)
-    try:
-        process.wait(timeout=timeout + 60)
-    except subprocess.TimeoutExpired:
-        process.terminate()
-        process.wait(timeout=10)
-        raise FlowError("Flow browser timed out; review the project before any new generation") from None
-    if not result_file.exists():
-        raise FlowError("Flow browser closed without a result; review the project before retrying")
-    result = json.loads(result_file.read_text(encoding="utf-8"))
-    if result.get("status") == "refused":
-        raise FlowRefusal("Flow returned an explicit refusal; no resubmission")
-    if result.get("status") != "ready":
-        raise FlowError(result.get("error", "Flow did not provide an image"))
-    image = request.with_suffix(".png")
-    if not image.is_file():
-        raise FlowError("Flow image file is missing")
-    return image
+    from app.services.ai33.policy import reject_legacy_generation
+    reject_legacy_generation()
 
 
 def _save_image(download, target):

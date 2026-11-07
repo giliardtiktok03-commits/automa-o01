@@ -103,7 +103,7 @@ _SUPPORTED_VIDEO_SOURCES = frozenset({
     "mixed",
     "pexels", "pixabay", "coverr", "local", "wavespeed",
     "volcengine_seedance", "ofox", "metaso_minimax", "muapi",
-    "loomloom", "openai_image", "codex_image", "infistar", "jalapeno",
+    "loomloom", "ai33_image", "infistar", "jalapeno",
 })
 
 
@@ -738,7 +738,7 @@ def get_video_materials(
     mixed_script: str = "",
     mixed_subtitle: str = "",
 ):
-    if params.video_source == "mixed":
+    if params.video_source in {"mixed", "ai33_image"}:
         from app.services import mixed_materials
 
         try:
@@ -1081,7 +1081,7 @@ def generate_final_videos(
         # 每条视频占 50% 进度中的一份，合成与最终编码各占一半。片段处理是
         # 合成里最耗时的部分，逐段推进这一半的进度。
         combine_share = 50 / params.video_count / 2
-        if params.video_source == "mixed":
+        if params.video_source in {"mixed", "ai33_image"}:
             from app.services import mixed_materials
 
             mixed_materials.join(downloaded_videos, combined_video_path)
@@ -1587,8 +1587,15 @@ def _run_pipeline(
         generation_started_at=time.time(),
     )
 
+    if params.video_source == "ai33_image":
+        params = params.model_copy(update={
+            "mixed_use_pexels": False, "mixed_use_pixabay": False, "mixed_use_coverr": False,
+            "mixed_use_ai33": True, "mixed_select_sources": True, "mixed_image_provider": "ai33",
+            "match_materials_to_script": True, "video_concat_mode": VideoConcatMode.sequential,
+        })
+
     generation_progress.stage("preparing")
-    if getattr(params, "video_source", None) == "mixed":
+    if getattr(params, "video_source", None) in {"mixed", "ai33_image"}:
         from app.services import mixed_materials
 
         try:
@@ -1780,7 +1787,7 @@ def _run_pipeline(
     generation_progress.stage("terms")
     # 2. Generate terms
     video_terms = ""
-    if stop_at in {"terms", "materials", "video"} and params.video_source not in {"local", "mixed"}:
+    if stop_at in {"terms", "materials", "video"} and params.video_source not in {"local", "mixed", "ai33_image"}:
         video_terms = generate_terms(task_id, params, video_script)
         if not video_terms:
             return _mark_task_failed(
@@ -1860,7 +1867,7 @@ def _run_pipeline(
         task_id, params, video_script, sub_maker, audio_file,
         **({"correct_to_script": False} if preserve_audio_subtitles else {}),
     )
-    if (getattr(params, "video_source", None) == "mixed" and params.custom_audio_file
+    if (getattr(params, "video_source", None) in {"mixed", "ai33_image"} and params.custom_audio_file
             and params.subtitle_enabled and not subtitle_path):
         return _mark_task_failed(task_id, "subtitle", "Whisper did not produce timed subtitles for the imported narration",
                                  details={"error_key": "mixed.whisper_failed", "error_params": {}})
@@ -1890,7 +1897,7 @@ def _run_pipeline(
         video_terms,
         audio_duration,
         **({"mixed_script": video_script, "mixed_subtitle": subtitle_path}
-           if params.video_source == "mixed" else {}),
+           if params.video_source in {"mixed", "ai33_image"} else {}),
         loomloom_video_request=loomloom_video_request,
         **({"codex_image_context": codex_image_context}
            if codex_image_context is not None else {}),
@@ -1987,7 +1994,7 @@ def _run_pipeline(
         "cross_post_owner": _cross_post_process_owner if should_cross_post else None,
         "warnings": generation_warnings or None,
     }
-    if params.video_source == "mixed":
+    if params.video_source in {"mixed", "ai33_image"}:
         from app.services import mixed_materials
 
         kwargs["mixed_image_requests"] = mixed_materials.image_requests(task_id)

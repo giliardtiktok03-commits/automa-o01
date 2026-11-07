@@ -1,0 +1,30 @@
+MPT — AI33.Pro integrado à interface e ao modo misto
+
+1. Feche o MPT com Ctrl+C e encerre testes de geração que estejam rodando.
+2. Faça backup da instalação.
+3. Extraia este ZIP onde estão webui.bat e a pasta app, substituindo os arquivos.
+4. Preserve config.toml, storage, .venv e todos os resultados já pagos.
+5. Reabra webui.bat.
+
+Configurar:
+Configurações do Vídeo > Configurar fontes de material >
+APIs de geração de imagens por IA > AI33.Pro · Imagens IA.
+
+Cole a chave AI33, clique Conectar e carregar modelos AI33, selecione modelo,
+resolução/qualidade disponíveis e consulte o preço antes do primeiro vídeo.
+O teto padrão é 1000 créditos de cotação por imagem e pode ser ajustado.
+
+Depois escolha a fonte Misto: Pexels + Pixabay + Coverr + imagens AI33.
+Os bancos continuam prioritários. Ative/desative cada uma das quatro fontes.
+Também é possível escolher AI33.Pro como fonte única de imagens.
+
+OpenAI/ChatGPT continua no roteiro, planejamento e validação visual.
+Novas imagens sintéticas só usam AI33.Pro; OpenAI Image, Codex Image e Flow
+não geram mais imagens. Arquivos antigos não são apagados.
+
+As configurações AI33 agora ficam no MPT; a variável de ambiente do teste
+isolado não é necessária se a chave estiver salva na interface.
+Não compartilhe config.toml nem sua chave.
+
+Esta entrega NÃO inclui Skills nem os serviços AI33 de áudio.
+Leia docs/ai33-mpt-pt.md para limites, retomada e rollback.

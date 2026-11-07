@@ -102,10 +102,13 @@ class AI33Client:
         maximum = model.get("max_generations")
         if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 1:
             raise AI33Error("Model generation limit is not confirmed")
-        if not isinstance(parameters, dict) or set(parameters) != {"aspect_ratio", "resolution"}:
-            raise AI33Error("Specify only aspect_ratio and resolution")
-        for field, catalog_field in (("aspect_ratio", "aspect_ratios"), ("resolution", "resolutions")):
-            if parameters[field] not in model.get(catalog_field, []):
+        if not isinstance(parameters, dict) or "aspect_ratio" not in parameters or set(parameters) - {"aspect_ratio", "resolution", "quality"}:
+            raise AI33Error("Specify aspect_ratio and only supported resolution/quality")
+        prompt_limit = model.get("max_prompt_length", 4000)
+        if isinstance(prompt_limit, int) and len(prompt) > prompt_limit:
+            raise AI33Error(f"This model accepts at most {prompt_limit} prompt characters")
+        for field, catalog_field in (("aspect_ratio", "aspect_ratios"), ("resolution", "resolutions"), ("quality", "qualities")):
+            if field in parameters and parameters[field] not in model.get(catalog_field, []):
                 raise AI33Error(f"Unsupported model parameter: {field}")
 
     def price(self, model_id, parameters):
