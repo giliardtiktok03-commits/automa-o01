@@ -1,0 +1,31 @@
+MPT — AI33.Pro — primeira entrega: conector isolado
+
+Esta entrega adiciona o núcleo de imagens AI33.Pro e seus testes.
+AINDA NÃO ALTERA A INTERFACE NEM SUBSTITUI O GERADOR ATUAL NO MODO MISTO.
+Skills e integração ao pipeline serão entregues nas próximas etapas do plano.
+
+Instalação no Windows:
+1. Feche o MPT e faça backup da pasta atual.
+2. Extraia o ZIP na raiz do MPT, onde ficam webui.bat e a pasta app.
+3. Não apague nem substitua config.toml, storage ou .venv.
+
+Não é necessário instalar dependências novas. A interface continuará igual.
+Para consultar catálogo/preço ou testar o conector pelo terminal, consulte:
+docs/ai33-modernizacao-pt.md
+
+Cadastre a chave apenas no ambiente local AI33_API_KEY para este teste isolado.
+Nunca envie a chave no chat ou a inclua em screenshots.
+Gerar uma imagem pode consumir créditos. Não existe geração paga automática
+ao abrir o MPT. Catálogo e cotação são operações distintas da geração.
+
+Para retomar uma imagem, mantenha o mesmo diretório, prompt e parâmetros.
+Não apague ai33-image.json para contornar um envio não confirmado:
+isso pode provocar outra cobrança. Confira a tarefa no painel AI33 primeiro.
+
+Rollback: esta entrega somente adiciona os arquivos listados no ZIP.
+Removê-los restaura a instalação anterior, sem mexer em config ou storage.
+Não apague resultados já gerados nem checkpoints ao reverter o código.
+
+Validação: 158 testes de contrato/regressão passaram, mais uma execução
+complementar de 21 testes (com sobreposição). Sem chamadas pagas à AI33.
+Acesso real à API e custos por conta/modelo ainda precisam de teste local.
