@@ -11,7 +11,8 @@ CAPTCHA, login, segurança ou cotas.
 
 Aplique o ZIP na instalação modificada, após fechar o MPT e fazer backup.
 Tenha Chrome instalado e execute PREPARAR_FLOW_WINDOWS.bat uma vez. Reabra
-webui.bat, selecione Misto e escolha **Bancos → ChatGPT → Flow automático**.
+webui.bat, selecione Misto e mantenha marcadas as fontes desejadas. A ordem
+Bancos → ChatGPT → Flow é montada automaticamente com as fontes configuradas.
 Informe nome do perfil e URL do projeto; use Cadastrar / conectar conta para
 fazer login diretamente no Google e confira o avatar. Feche as janelas desse
 perfil antes de gerar. Sessão local em storage/flow_browser/profiles; não
@@ -27,7 +28,7 @@ Google pode impedir login num navegador controlado; a integração não contorna
    tenta o Flow. Não muda de provedor em recusa de segurança ou erro técnico.
 
 Esse encadeamento requer validação visual ativada e API de geração configurada.
-A opção Flow direto continua separada e não passa pela geração OpenAI.
+Para usar Flow diretamente na produção, deixe somente a caixa Flow marcada.
 
 ## Ações no navegador
 
@@ -56,3 +57,17 @@ logout, falha ou timeout interrompem sem repetir automaticamente.
 
 Recomenda-se uma nova tarefa curta para o primeiro teste do DOM na conta real.
 Não foi possível acessar ou validar o projeto privado do usuário neste ambiente.
+
+## Perfil e teste isolado
+
+O nome do perfil não é o e-mail Google. Exemplo: `giliard`. Espaços/formatadores
+invisíveis colados nas bordas são removidos; espaços internos e caminhos não são
+aceitos. E-mail, senha e código são digitados somente no Google durante o login.
+A sessão local persiste enquanto o Google permitir; um novo login pode ser exigido.
+
+Após conectar, feche a janela de conexão e clique em **Testar só o Flow — 1 imagem**.
+Não precisa de roteiro, áudio ou vídeo. O teste usa o prompt de uma cafeteria,
+o mesmo conector automático e a opção de zero créditos, sem consultar bancos
+ou OpenAI. O painel acompanha o resultado e mostra a imagem recebida. Timeout,
+CAPTCHA, erro ou recusa não provocam novas tentativas. Revise o projeto antes de
+clicar novamente. O teste real ainda depende dos seletores da sua página.

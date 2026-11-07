@@ -1567,6 +1567,9 @@ def _apply_restored_params(params):
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
+    for source in ("pexels", "pixabay", "coverr", "openai", "flow"):
+        key = "mixed_use_" + source
+        st.session_state[key] = params.get(key, True)
     _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "openai"))
     st.session_state["flow_require_zero"] = params.get("flow_require_zero", True)
     st.session_state["flow_profile"] = params.get("flow_profile", "principal")
@@ -6162,6 +6165,35 @@ def _render_script_settings(panel, params):
             )
 
 
+
+def _flow_test_running():
+    request = st.session_state.get("flow_test_request")
+    return bool(request and not Path(request).with_suffix(".result.json").exists()
+                and time.time() - st.session_state.get("flow_test_started", 0) < 240)
+
+
+@st.fragment(run_every=2)
+def _render_flow_test():
+    request = st.session_state.get("flow_test_request")
+    if not request:
+        return
+    request = Path(request)
+    result = request.with_suffix(".result.json")
+    if not result.exists():
+        st.info(tr("Flow Test Waiting") if _flow_test_running() else tr("Flow Test Timeout"))
+        return
+    try:
+        data = json.loads(result.read_text(encoding="utf-8"))
+        if data.get("status") == "ready" and request.with_suffix(".png").is_file():
+            st.success(tr("Flow Test Ready"))
+            st.image(str(request.with_suffix(".png")), width="stretch")
+        elif data.get("status") == "refused":
+            st.warning(tr("Flow Test Refused"))
+        else:
+            st.error(str(data.get("error") or tr("Flow Test Timeout")))
+    except (OSError, ValueError):
+        st.error(tr("Flow Test Timeout"))
+
 def _render_video_settings(panel, params):
     """渲染视频设置并返回本次选择的本地素材。"""
     uploaded_files = []
@@ -6211,26 +6243,40 @@ def _render_video_settings(panel, params):
             _set_runtime_config("app", "video_source", params.video_source)
             if params.video_source == "mixed":
                 st.info(tr("Mixed Materials Help"))
-                image_provider_labels = {"openai": tr("Flow OpenAI API"), "flow_browser": tr("Flow Browser"), "openai_flow": tr("Flow Last Resort")}
-                params.mixed_image_provider = stable_selectbox(
-                    tr("Mixed Image Provider"), options=["openai", "openai_flow", "flow_browser"],
-                    default_value=config.ui.get("mixed_image_provider", "openai"),
-                    key="mixed_image_provider", format_func=image_provider_labels.get)
-                _set_runtime_config("ui", "mixed_image_provider", params.mixed_image_provider)
-                if params.mixed_image_provider in {"flow_browser", "openai_flow"}:
+                params.mixed_select_sources = True
+                st.write(tr("Mixed Sources"))
+                for source in ("pexels", "pixabay", "coverr", "openai", "flow"):
+                    key = "mixed_use_" + source
+                    labels = {"pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr",
+                              "openai": tr("Mixed ChatGPT Images"), "flow": "Google Flow"}
+                    value = st.checkbox(labels[source], value=config.ui.get(key, True), key=key)
+                    setattr(params, key, value)
+                    _set_runtime_config("ui", key, value)
+                st.caption(tr("Mixed Sources Help"))
+                if params.mixed_use_flow:
                     st.info(tr("Flow Browser Help"))
                     params.flow_require_zero = st.checkbox(tr("Flow Require Zero"), value=True, key="flow_require_zero")
                     params.flow_profile = st.text_input(tr("Flow Profile"), value=config.ui.get("flow_profile", "principal"), key="flow_profile")
                     params.flow_project_url = st.text_input(tr("Flow Project"), value=config.ui.get("flow_project_url", ""), key="flow_project_url")
+                    from app.services import flow_browser
+                    params.flow_profile, params.flow_project_url = flow_browser.normalized(params.flow_profile, params.flow_project_url)
                     _set_runtime_config("ui", "flow_profile", params.flow_profile)
                     _set_runtime_config("ui", "flow_project_url", params.flow_project_url)
-                    if st.button(tr("Flow Connect"), key="flow_connect", disabled=bool(webui_task.queue_snapshot())):
+                    if st.button(tr("Flow Connect"), key="flow_connect", disabled=bool(webui_task.queue_snapshot()) or _flow_test_running()):
                         from app.services import flow_browser
                         try:
                             flow_browser.connect(params.flow_profile, params.flow_project_url)
                             st.success(tr("Flow Connect Started"))
                         except (ValueError, OSError) as exc:
-                            st.error(str(exc))
+                            st.error(tr(exc.key) if getattr(exc, "key", None) else str(exc))
+                    if st.button(tr("Flow Test"), key="flow_test", disabled=bool(webui_task.queue_snapshot()) or _flow_test_running()):
+                        try:
+                            request = flow_browser.start_test(params.flow_profile, params.flow_project_url, params.flow_require_zero)
+                            st.session_state["flow_test_request"] = str(request)
+                            st.session_state["flow_test_started"] = time.time()
+                        except (ValueError, OSError) as exc:
+                            st.error(tr(exc.key) if getattr(exc, "key", None) else str(exc))
+                    _render_flow_test()
                 params.mixed_variable_pacing = st.checkbox(
                     tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
                 st.caption(tr("Mixed Pacing Help"))
@@ -6251,6 +6297,8 @@ def _render_video_settings(panel, params):
                     tr("Mixed Scene Duration"), min_value=5, max_value=30,
                     value=10, key="mixed_scene_duration",
                 )
+                from app.services import mixed_materials
+                mixed_materials.configure_sources(params, config.snapshot_config_with_pending(config.app))
 
             loomloom_video_capability = None
             if params.video_source == "loomloom":
@@ -9274,7 +9322,7 @@ def _render_generation_controls(
         type="primary",
         key="generate_video_button",
         on_click=_prepare_generation_task,
-        disabled=False,
+        disabled=_flow_test_running(),
     )
     render_onboarding_tour()
     if start_button:

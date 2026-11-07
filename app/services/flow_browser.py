@@ -17,23 +17,33 @@ from app.services import task_artifacts
 
 
 class FlowError(ValueError):
-    pass
+    def __init__(self, message, *, key=None):
+        super().__init__(message)
+        self.key = key
 
 
 class FlowRefusal(FlowError):
     pass
 
 
+def normalized(profile, project):
+    # Trim pasted boundary whitespace/format markers; never change internal IDs.
+    def trim(value):
+        return str(value or "").strip().strip("\u200b\ufeff").strip()
+    return trim(profile), trim(project)
+
+
 def validate(profile, project):
+    profile, project = normalized(profile, project)
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", profile):
-        raise FlowError("Use a profile name with 1-48 letters, numbers, underscores or hyphens")
+        raise FlowError("Use a profile name with 1-48 letters, numbers, underscores or hyphens", key="flow.invalid_profile")
     u = urlparse(project)
     if (u.scheme != "https" or u.netloc != "flow.google.com" or u.query or u.fragment
             or not re.fullmatch(r"/project/[0-9a-fA-F-]{36}/?", u.path)):
-        raise FlowError("Use the HTTPS Flow project URL, without extra query parameters")
+        raise FlowError("Use the HTTPS Flow project URL, without extra query parameters", key="flow.invalid_project")
     uuid.UUID(u.path.strip('/').split('/')[-1])
     if importlib.util.find_spec("playwright") is None:
-        raise FlowError("Run PREPARAR_FLOW_WINDOWS.bat first to install the optional browser integration")
+        raise FlowError("Run PREPARAR_FLOW_WINDOWS.bat first to install the optional browser integration", key="flow.setup_required")
 
 
 def _root():
@@ -46,6 +56,7 @@ def _launch(request):
 
 
 def connect(profile, project):
+    profile, project = normalized(profile, project)
     validate(profile, project)
     folder = _root() / "requests"
     folder.mkdir(exist_ok=True)
@@ -55,7 +66,22 @@ def connect(profile, project):
     return request.with_suffix(".result.json")
 
 
+
+def start_test(profile, project, require_zero=True):
+    profile, project = normalized(profile, project)
+    validate(profile, project)
+    directory = _root() / 'tests'
+    directory.mkdir(exist_ok=True)
+    request = directory / (uuid.uuid4().hex + '.json')
+    task_artifacts._write_json_atomic(request, {
+        'profile': profile, 'project': project, 'action': 'generate', 'timeout': 180,
+        'require_zero': require_zero,
+        'prompt': 'A cozy empty cafe on a rainy morning, warm lighting, photorealistic, no text, no logos.'})
+    _launch(request)
+    return request
+
 def generate(prompt, directory, profile, project, timeout=900, require_zero=True):
+    profile, project = normalized(profile, project)
     validate(profile, project)
     folder = Path(directory)
     request = folder / ("flow-" + uuid.uuid4().hex + ".json")

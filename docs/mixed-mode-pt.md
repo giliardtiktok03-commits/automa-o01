@@ -195,3 +195,22 @@ Falhas técnicas, resultado desconhecido de pedido pago ou erro de autenticaçã
 não são transformados em cards. Uma recusa salva não é reenviada ao retomar o
 mesmo checkpoint. Uma nova tarefa é uma nova execução e pode repetir etapas.
 Essa mudança não adiciona curadoria histórica nem downloads de novos acervos.
+
+## Seleção individual das fontes
+
+Na interface, o modo misto tem cinco caixas: Pexels, Pixabay, Coverr, ChatGPT
+(imagens) e Flow. Todas começam marcadas; suas escolhas são preservadas após
+editar. Apenas fontes marcadas e configuradas são acionadas. A ordem é bancos,
+ChatGPT e Flow. Desmarcar ChatGPT controla somente a geração de imagens, não o
+modelo do roteiro nem o serviço de avaliação visual.
+
+Para produzir somente com Flow, desmarque as outras quatro. Para bancos apenas,
+desmarque ambos os geradores. Sem material aprovado, a tarefa para; não usa uma
+fonte desmarcada. Nenhuma fonte ativa/configurada gera erro na preparação.
+O limite de imagens continua valendo; API e Flow podem consumir duas unidades
+para uma cena. Recusas de segurança mantêm o card e não mudam de provedor.
+
+A API pode ativar essa seleção com `mixed_select_sources: true` e campos booleanos
+`mixed_use_pexels`, `mixed_use_pixabay`, `mixed_use_coverr`, `mixed_use_openai` e
+`mixed_use_flow`. Quando `mixed_select_sources` é falso, a preferência explícita
+`mixed_image_provider` continua disponível por compatibilidade.

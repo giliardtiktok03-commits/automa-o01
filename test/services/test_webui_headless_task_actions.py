@@ -150,15 +150,29 @@ def test_flow_profile_controls_open_manual_login_without_password_field(headless
     language = app.session_state['ui_language']
     app.session_state[f'video_source_select_{language}'] = 'mixed'
     app.run()
-    app.session_state[f'mixed_image_provider_{language}'] = 'flow_browser'
-    app.run()
     assert not app.exception
-    app.text_input(key='flow_profile').set_value('principal')
+    app.text_input(key='flow_profile').set_value(' giliard ')
     url = 'https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
     app.text_input(key='flow_project_url').set_value(url)
     connect = Mock()
     monkeypatch.setattr(flow_browser, 'connect', connect)
     app.button(key='flow_connect').click().run()
     assert not app.exception
-    connect.assert_called_once_with('principal', url)
-    assert config.ui['flow_profile'] == 'principal'
+    connect.assert_called_once_with('giliard', url)
+    assert config.ui['flow_profile'] == 'giliard'
+
+
+def test_mixed_sources_all_start_checked(headless_task_app, monkeypatch):
+    app, _ = headless_task_app
+    for source in ('pexels','pixabay','coverr','openai','flow'):
+        monkeypatch.setitem(config.ui,'mixed_use_'+source,True)
+    language=app.session_state['ui_language']
+    app.session_state[f'video_source_select_{language}']='mixed'
+    app.run()
+    assert not app.exception
+    for source in ('pexels','pixabay','coverr','openai','flow'):
+        assert app.checkbox(key='mixed_use_'+source).value is True
+    app.checkbox(key='mixed_use_flow').uncheck().run()
+    assert not app.exception
+    assert not app.checkbox(key='mixed_use_flow').value
+    assert all(item.key!='flow_connect' for item in app.button)

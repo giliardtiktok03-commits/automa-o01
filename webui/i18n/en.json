@@ -864,6 +864,19 @@
     "mixed.flow_failed": "Flow did not complete the image handoff. Check the browser, login, limits and profile. No automatic retry. Close the connection window before generation. Review the project after cancellation or timeout before a new task.",
     "mixed.flow_config": "Check the Flow profile/project URL and run PREPARAR_FLOW_WINDOWS.bat before generating. Detail: {detail}",
     "Flow Last Resort": "Stock → ChatGPT → automatic Flow (last resort)",
-    "Flow Require Zero": "Only submit if Flow shows zero-credit cost"
+    "Flow Require Zero": "Only submit if Flow shows zero-credit cost",
+    "flow.invalid_profile": "Use 1-48 unaccented letters, numbers, _ or -. Example: giliard. Do not enter email or password here.",
+    "flow.invalid_project": "Paste the full HTTPS Flow project URL without extra parameters.",
+    "flow.setup_required": "Run PREPARAR_FLOW_WINDOWS.bat once before connecting.",
+    "Flow Test": "Test Flow only — 1 image",
+    "Flow Test Waiting": "Testing Flow: waiting for one image, without stock searches or video rendering.",
+    "Flow Test Timeout": "Test did not complete. Review the browser/project before retrying. No automatic resubmission.",
+    "Flow Test Ready": "Test completed: Flow image received.",
+    "Flow Test Refused": "Flow refused generation under its safety policy. No resubmission.",
+    "Mixed Sources": "Active mixed-mode sources",
+    "Mixed ChatGPT Images": "ChatGPT — image generation",
+    "Mixed Sources Help": "All start checked. Only enabled and configured sources are used: stock → ChatGPT → Flow. Use the test button for Flow only, or uncheck the other four sources for Flow-only production. ChatGPT here controls image generation only; script and visual inspection settings are separate.",
+    "mixed.no_sources": "Enable and configure at least one material source.",
+    "mixed.no_images": "No approved clip from enabled sources; image generators are disabled or unconfigured. No image was ordered."
   }
 }

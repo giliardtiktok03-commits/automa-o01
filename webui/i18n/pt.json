@@ -609,6 +609,19 @@
     "mixed.flow_failed": "O Flow não concluiu a entrega da imagem. Confira a janela, o login, os limites e o perfil. Não houve repetição automática. Feche a janela de conexão antes de gerar. Após cancelamento ou timeout, revise o projeto antes de iniciar outra tarefa.",
     "mixed.flow_config": "Confira o perfil e link do projeto Flow e execute PREPARAR_FLOW_WINDOWS.bat antes de gerar. Detalhe: {detail}",
     "Flow Last Resort": "Bancos → ChatGPT → Flow automático (último recurso)",
-    "Flow Require Zero": "Só enviar se o Flow mostrar custo de 0 créditos"
+    "Flow Require Zero": "Só enviar se o Flow mostrar custo de 0 créditos",
+    "flow.invalid_profile": "Nome de perfil inválido. Use de 1 a 48 letras sem acento, números, _ ou -. Exemplo: giliard. Não use e-mail ou senha neste campo.",
+    "flow.invalid_project": "Cole o link HTTPS completo do projeto do Flow, sem parâmetros extras.",
+    "flow.setup_required": "Execute PREPARAR_FLOW_WINDOWS.bat uma vez antes de conectar a conta.",
+    "Flow Test": "Testar só o Flow — 1 imagem",
+    "Flow Test Waiting": "Testando o Flow: aguarde a janela configurar e gerar uma imagem. Não consulta bancos nem monta vídeo.",
+    "Flow Test Timeout": "O teste não concluiu. Confira a janela e o resultado no projeto antes de tentar novamente. Não houve repetição automática.",
+    "Flow Test Ready": "Teste concluído: imagem recebida do Flow.",
+    "Flow Test Refused": "O Flow recusou a geração por segurança. Nenhuma nova tentativa foi enviada.",
+    "Mixed Sources": "Fontes ativas do modo misto",
+    "Mixed ChatGPT Images": "ChatGPT — geração de imagens",
+    "Mixed Sources Help": "Todas vêm marcadas inicialmente. Apenas fontes marcadas e configuradas são usadas. Ordem: bancos → ChatGPT → Flow. Para testar só Flow, use o botão abaixo; para produzir só com ele, desmarque as outras quatro fontes. ChatGPT aqui controla apenas imagens; roteiro e análise visual têm configurações separadas.",
+    "mixed.no_sources": "Marque e configure pelo menos uma fonte de material.",
+    "mixed.no_images": "Nenhum clipe adequado foi encontrado nas fontes ativas. Os geradores de imagem estão desligados ou sem configuração; nenhuma imagem foi encomendada."
   }
 }

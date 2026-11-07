@@ -49,3 +49,29 @@ def test_download_is_decoded_not_trusted_by_extension(tmp_path):
         flow._save_image(Mock(save_as=save), tmp_path/'image.png')
     assert not (tmp_path/'image.png').exists()
     assert not (tmp_path/'image.download').exists()
+
+
+@pytest.mark.parametrize('name', ['giliard', ' giliard ', '\u200bgiliard\ufeff', '\tgiliard\n'])
+def test_profile_boundary_whitespace_is_normalized_before_launch(tmp_path, monkeypatch, name):
+    monkeypatch.setattr(flow, '_root', lambda: tmp_path)
+    monkeypatch.setattr(flow.importlib.util, 'find_spec', lambda *_: object())
+    launcher=Mock()
+    monkeypatch.setattr(flow, '_launch', launcher)
+    flow.connect(name, ' '+URL+' ')
+    request=launcher.call_args.args[0]
+    body=json.loads(request.read_text())
+    assert body['profile']=='giliard' and body['project']==URL
+    assert body['action']=='connect'
+
+
+def test_standalone_test_launches_one_image_without_video_pipeline(tmp_path, monkeypatch):
+    monkeypatch.setattr(flow, '_root', lambda: tmp_path)
+    monkeypatch.setattr(flow.importlib.util, 'find_spec', lambda *_: object())
+    launcher=Mock()
+    monkeypatch.setattr(flow, '_launch', launcher)
+    request=flow.start_test(' giliard ',URL,True)
+    body=json.loads(request.read_text())
+    assert body['profile']=='giliard' and body['action']=='generate'
+    assert body['timeout']==180 and body['require_zero'] is True
+    assert 'prompt' in body
+    assert launcher.call_count==1

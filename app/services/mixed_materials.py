@@ -60,10 +60,12 @@ class SceneChoice(BaseModel):
     alternate_queries: list[str] = Field(default_factory=list, max_length=2)
 
 
-def providers(settings=None):
+def providers(settings=None, params=None):
     settings = config.app if settings is None else settings
     result = []
     for name in ("pexels", "pixabay", "coverr"):
+        if params is not None and not getattr(params, "mixed_use_" + name, True):
+            continue
         keys = settings.get(name + "_api_keys", [])
         if isinstance(keys, str):
             keys = keys.split(",")
@@ -72,8 +74,18 @@ def providers(settings=None):
     return result
 
 
+
+def configure_sources(params, settings):
+    if not params.mixed_select_sources:
+        return
+    openai = params.mixed_use_openai and material.is_openai_image_enabled(settings)
+    flow = params.mixed_use_flow and bool(params.flow_project_url.strip())
+    params.mixed_image_provider = ("openai_flow" if openai and flow else
+                                   "openai" if openai else "flow_browser" if flow else "none")
+
 def validate(params, settings=None, *, external_audio=False):
     settings = config.app if settings is None else settings
+    configure_sources(params, settings)
     if ((external_audio or params.custom_audio_file) and params.subtitle_enabled
             and settings.get("subtitle_provider", "edge") != "whisper"):
         raise MixedError("Uploaded narration with subtitles requires Whisper; select Whisper or disable subtitles for estimated timing",
@@ -84,8 +96,9 @@ def validate(params, settings=None, *, external_audio=False):
         raise MixedError("Visual validation requires an OpenAI-compatible API key", key="mixed.vision_config")
     if params.video_count != 1:
         raise MixedError("Mixed mode requires one output video")
-    if not providers(settings):
-        raise MixedError("Configure at least one stock API: Pexels, Pixabay or Coverr")
+    if not providers(settings, params) and (not params.mixed_select_sources or
+                                          params.mixed_image_provider == "none" or not params.mixed_max_images):
+        raise MixedError("Select and configure at least one material source", key="mixed.no_sources")
     if params.mixed_max_images and params.mixed_image_provider in {"flow_browser", "openai_flow"}:
         try:
             flow_browser.validate(params.flow_profile, params.flow_project_url)
@@ -379,6 +392,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             params = params.model_copy(update={"mixed_total_duration": float(audio_duration)})
         signature = {"source_policy": "distinct-shots-v5", "image_provider": params.mixed_image_provider,
                      "flow_profile": params.flow_profile, "flow_require_zero": params.flow_require_zero, "flow_project_url": params.flow_project_url, "total_duration": params.mixed_total_duration,
+                     "selected_sources": {name: getattr(params, "mixed_use_" + name) for name in ("pexels", "pixabay", "coverr", "openai", "flow")},
                      "previous_sources": params.mixed_previous_sources, "variable_pacing": params.mixed_variable_pacing,
                      "timeline_offset": params.mixed_timeline_offset, "visual_validation": params.mixed_visual_validation,
                      "vision_model": params.mixed_vision_model, "candidates": params.mixed_max_candidates,
@@ -396,7 +410,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
             manifest = {"version": 1, "fingerprint": fingerprint, "timing": timing,
                         "image_requests": 0, "scenes": _plan(units, script)}
             _save(manifest_file, manifest)
-        pending_images = 0 if params.mixed_image_provider == "openai_flow" else sum(s["source"] == "image" and not s.get("image_file")
+        pending_images = 0 if params.mixed_select_sources or params.mixed_image_provider == "openai_flow" else sum(s["source"] == "image" and not s.get("image_file")
                              and not s.get("image_request_started")
                              for s in manifest["scenes"])
         if manifest["image_requests"] + pending_images > params.mixed_max_images:
@@ -409,7 +423,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     used[key] = max(used.get(key, 0), record.get("source_end", 0))
         for record in params.mixed_previous_sources:
             remember(record)
-        available = providers()
+        available = providers(params=params)
         stock_turn = 0
         for scene in manifest["scenes"]:
             generation_progress.stage("mixed_scene")
@@ -427,12 +441,15 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 _context_card(scene, params, scene_dir)
                 _save(manifest_file, manifest)
             source, provenance = None, None
-            if (scene["source"] == "stock" or params.mixed_image_provider == "openai_flow") and not scene.get("image_file"):
+            if available and (scene["source"] == "stock" or params.mixed_select_sources or params.mixed_image_provider == "openai_flow") and not scene.get("image_file"):
                 history = records or params.mixed_previous_sources
                 scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
+            if source is None and params.mixed_image_provider == "none":
+                raise MixedError("No approved stock material and image generators are disabled or unconfigured",
+                                 key="mixed.no_images")
             if source is None:
                 image = scene_dir / f"image-{scene['id']:03d}.source"
                 if scene.get("image_file"):
@@ -444,7 +461,7 @@ def prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         raise MixedError("A previous image request has an unknown result; review it before ordering again")
                     if manifest["image_requests"] >= params.mixed_max_images:
                         raise MixedError("AI image limit reached; no matching stock material was available for this scene")
-                    reserved = 0 if params.mixed_image_provider == "openai_flow" else sum(other["source"] == "image" and other["id"] != scene["id"]
+                    reserved = 0 if params.mixed_select_sources or params.mixed_image_provider == "openai_flow" else sum(other["source"] == "image" and other["id"] != scene["id"]
                                    and not other.get("image_file") and not other.get("image_request_started")
                                    for other in manifest["scenes"])
                     if manifest["image_requests"] + 1 + reserved > params.mixed_max_images:

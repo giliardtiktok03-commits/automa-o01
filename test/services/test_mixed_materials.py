@@ -623,3 +623,41 @@ def test_last_resort_never_switches_provider_on_refusal_or_technical_failure(set
         with pytest.raises(mixed.MixedError,match='technical'):
             mixed.prepare('job',params,SCRIPT,30,str(subtitles))
     fallback.assert_not_called()
+
+
+def test_sources_start_enabled_and_disabled_bank_is_never_searched(setup):
+    _, subtitles, params, _, search, _, _ = setup
+    assert all(getattr(params, 'mixed_use_'+name) for name in ('pexels','pixabay','coverr','openai','flow'))
+    params.mixed_use_pexels=False
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert all(call.args[0]=='pixabay' for call in search.call_args_list)
+
+
+def test_selecting_flow_only_skips_all_banks_and_openai(setup, monkeypatch):
+    folder, subtitles, params, _, search, images, _ = setup
+    params.mixed_select_sources=True
+    params.mixed_use_pexels=params.mixed_use_pixabay=params.mixed_use_coverr=params.mixed_use_openai=False
+    params.flow_project_url='https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
+    monkeypatch.setattr(mixed.flow_browser,'validate',lambda *_:None)
+    def make(*args,**kwargs):
+        file=folder/f'flow-{generate.call_count}.png'
+        file.write_bytes(str(generate.call_count).encode())
+        return file
+    generate=Mock(side_effect=make)
+    monkeypatch.setattr(mixed.flow_browser,'generate',generate)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert generate.call_count==3 and params.mixed_image_provider=='flow_browser'
+    search.assert_not_called()
+    images.assert_not_called()
+
+
+def test_disabled_image_generators_are_not_called(setup, monkeypatch):
+    _, subtitles, params, _, _, images, _ = setup
+    params.mixed_select_sources=True
+    params.mixed_use_openai=params.mixed_use_flow=False
+    generate=Mock()
+    monkeypatch.setattr(mixed.flow_browser,'generate',generate)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert params.mixed_image_provider=='none'
+    images.assert_not_called()
+    generate.assert_not_called()
