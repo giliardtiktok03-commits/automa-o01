@@ -2082,7 +2082,7 @@ def start(
             sm.state.patch_task(task_id, pending_provider=None, pending_remote_id=None, pending_scene=None, pending_message=None)
             if getattr(params, "mixed_resume", False):
                 from app.services import mixed_resume
-                return mixed_resume.run(task_id, params.mixed_max_images)
+                return mixed_resume.run(task_id, params.mixed_max_images, grok_unlimited=params.mixed_grok_unlimited)
             if getattr(params, "long_form", False):
                 from app.services import long_form
 

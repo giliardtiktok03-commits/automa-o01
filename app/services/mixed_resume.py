@@ -23,7 +23,7 @@ def _local(directory, name):
     return candidate
 
 
-def load(task_id, limit):
+def load(task_id, limit, *, grok_unlimited=None):
     task_id = str(UUID(task_id.strip()))
     directory = Path(utils.task_dir(task_id))
     if not directory.resolve().is_relative_to(Path(utils.task_dir()).resolve()):
@@ -54,7 +54,12 @@ def load(task_id, limit):
     params.mixed_max_images = VideoParams(
         video_subject="limit", mixed_max_images=limit
     ).mixed_max_images
-    if limit < manifest["image_requests"]:
+    if grok_unlimited is not None:
+        params.mixed_grok_unlimited = bool(grok_unlimited)
+    from app.config import config
+    uses_unlimited_grok = (params.mixed_grok_unlimited and params.video_source != "ai33_image"
+                          and bool(config.ui.get("mixed_use_grok", True)))
+    if not uses_unlimited_grok and limit < manifest["image_requests"]:
         raise ValueError("New total limit cannot be below requests already started")
     script = saved.get("script")
     if not isinstance(script, str) or not script.strip():
@@ -122,11 +127,11 @@ def load(task_id, limit):
     )
 
 
-def run(task_id, limit):
+def run(task_id, limit, *, grok_unlimited=None):
     from app.services import task
 
     sm.state.update_task(task_id, error=None, error_key=None, error_params={}, failed_stage=None)
-    project = load(task_id, limit)
+    project = load(task_id, limit, grok_unlimited=grok_unlimited)
     directory = project["directory"]
     with FileLock(str(directory / "mixed-resume.lock"), timeout=0):
         # Keep a pre-resume copy of manifests. Never move/delete source media.

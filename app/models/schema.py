@@ -138,6 +138,7 @@ class VideoParams(BaseModel):
     mixed_use_ai33: bool = False
     mixed_use_runware: bool = False
     mixed_use_grok: bool = True
+    mixed_grok_unlimited: bool = True
     grok_model: Optional[str] = None
     runware_model: Optional[str] = None
     runware_steps: Optional[int] = Field(default=None, ge=0, le=100)

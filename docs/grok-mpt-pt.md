@@ -8,7 +8,7 @@ A documentação web `docs.x.ai` ficou inacessível nesta sessão. O contrato fo
 
 A implementação usa `xai_sdk.Client` no host padrão oficial `api.x.ai`, autenticado com a chave xAI; chama `client.image.sample(model="grok-imagine-image", prompt=..., image_format="base64", aspect_ratio=...)`. Não implementa endpoints REST presumidos nem usa o site Grok por automação. Retorna uma imagem por chamada, com proporções 16:9, 9:16 e 1:1 correspondentes ao vídeo. Modelo pode ser ajustado pelo usuário conforme disponibilidade da conta.
 
-O SDK permite consultar `respect_moderation`, `base64` e `cost_usd` no resultado. Custo ausente não significa gratuidade. Não há cotação vinculante ou teto financeiro prévio nesta integração; o limite global de solicitações do MPT, compartilhado entre capítulos, continua aplicado. Saldo da API é separado da assinatura do aplicativo Grok.
+O SDK permite consultar `respect_moderation`, `base64` e `cost_usd` no resultado. Custo ausente não significa gratuidade. Não há cotação vinculante ou teto financeiro prévio nesta integração; o modo misto prioriza os bancos e permite Grok sem teto de quantidade por padrão (`mixed_grok_unlimited=True`), inclusive na retomada e nos capítulos. O teto numérico só se aplica ao Grok quando essa opção é desativada; AI33 mantém seu limite. O contador de pedidos permanece para auditoria. Saldo da API é separado da assinatura do aplicativo Grok.
 
 ## Segurança de execução e recuperação
 
@@ -33,3 +33,9 @@ No Windows existente, execute `PREPARAR_GROK_WINDOWS.bat` após extrair a atuali
 451 testes passaram (1 ignorado) na suíte selecionada de geração, interface Streamlit, recuperação, migração de projetos, Skills, progresso e fila. Há renderização real de um vídeo curto, com resposta do gerador simulada; nenhum teste solicitou imagem paga real. Foram verificados bloqueio de novos pedidos Runware, preservação de imagens antigas, ausência de repetição após timeout, parâmetros do SDK e card de recusa. O lockfile passou em `uv lock --check --offline`.
 
 A velocidade e o custo reais dependem da conta/modelo xAI e devem ser medidos no botão explícito de teste de uma imagem. A suíte ampliada do projeto tem falhas preexistentes registradas na entrega anterior; esta validação não significa que todo teste do repositório tenha passado.
+
+## Atualização: bancos primeiro e Grok sem limite
+
+`mixed_grok_unlimited` é uma preferência operacional, excluída do hash editorial. Alternar a opção não invalida cenas salvas. Em Grok ilimitado, validação e retomada aceitam que o contador exceda `mixed_max_images`, inclusive quando o teto é zero. Toda cena ainda não atendida procura primeiro os bancos habilitados; Grok é usado somente após falta de material aprovado. Pedidos conhecidos e resultados locais continuam recuperados sem reenvio. Não se trata de repetição infinita ou de crédito gratuito: há um pedido por cena ainda necessária, sujeito aos limites reais da xAI.
+
+464 testes passaram na suíte selecionada desta atualização, incluindo retomada com 130 pedidos já contabilizados, teto zero, múltiplos capítulos, prioridade aos bancos e controle opcional de teto na interface. A instalação incremental está em `LEIA-ME-GROK-SEM-LIMITE.txt`.

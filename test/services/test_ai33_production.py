@@ -106,7 +106,7 @@ def test_chapter_migration_requires_original_fingerprint_and_unchanged_editorial
     saved = params.model_dump(mode="json")
     for key in ("mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
         saved.pop(key)
-    original = {k: v for k, v in saved.items() if k != "mixed_resume"}
+    original = {k: v for k, v in saved.items() if k not in {"mixed_resume", "mixed_grok_unlimited"}}
     references = ["audio-digest", "", ""]
     fingerprint = hashlib.sha256(json.dumps({"params": original, "references": references}, sort_keys=True).encode()).hexdigest()
     manifest = {"version": 1, "fingerprint": fingerprint, "chapters": []}
@@ -142,6 +142,13 @@ def test_main_ui_exposes_ai33_in_mixed_sources_without_flow():
         assert not next(w for w in app.checkbox if "AI33.Pro" in w.label).value
         assert next(w for w in app.checkbox if "Grok" in w.label).value
         assert "Google Flow" not in labels
+        assert app.checkbox(key="mixed_grok_unlimited").value
+        assert app.number_input(key="mixed_max_images").disabled
+        app.checkbox(key="mixed_grok_unlimited").uncheck().run()
+        assert not app.exception
+        assert not app.number_input(key="mixed_max_images").disabled
+        app.checkbox(key="mixed_grok_unlimited").check().run()
+        assert not app.exception
         app.checkbox(key="mixed_use_ai33").check().run()
         assert not app.exception
         assert app.checkbox(key="mixed_use_ai33").value

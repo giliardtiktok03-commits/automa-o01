@@ -571,7 +571,7 @@
     "Mixed Material Source": "Misto: Pexels + Pixabay + Coverr + imagens AI33",
     "Mixed Image Limit": "Máximo de imagens IA no vídeo completo",
     "Mixed Scene Duration": "Duração desejada de cada cena (segundos)",
-    "Mixed Materials Help": "Prioriza Pexels, Pixabay e Coverr. A meta é usar bancos na maioria das cenas; se não houver material adequado, usa IA dentro do limite abaixo, reservando orçamento às reconstituições planejadas. A meta de 75% não é um bloqueio. Imagens e análise visual podem ter custo, inclusive em falhas. Sem legendas temporizadas, os tempos são estimados. Usa cortes simples e velocidade normal.",
+    "Mixed Materials Help": "Prioriza Pexels, Pixabay e Coverr. Se nenhum material adequado for aprovado, usa o Grok para a cena. Grok sem limite de imagens vem ativado por padrão e não bloqueia pelo teto numérico. Novas imagens e validação visual podem consumir saldo. Pedidos já enviados não são repetidos automaticamente. Sem legendas temporizadas, os tempos são estimados.",
     "Mixed Scene Progress": "Cena {current}/{total}",
     "Mixed Estimated Timing": "Os tempos das cenas foram estimados pelo texto. Ative legendas temporizadas para alinhar melhor com a voz.",
     "Subtitle Provider": "Provedor de legendas",

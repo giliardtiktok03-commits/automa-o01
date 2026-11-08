@@ -432,3 +432,25 @@ def test_mixed_image_budget_is_shared_across_chapters(setup, monkeypatch):
     assert budgets == [2, 1]
     assert offsets == [0, 2.0]
     assert params.mixed_max_images == 2
+
+
+def test_unlimited_grok_continues_chapters_when_numeric_budget_is_zero(setup,monkeypatch):
+    from app.services import mixed_materials
+    root,params,renderer,_,_=setup
+    params.video_source='mixed'
+    params.mixed_image_provider='grok'
+    params.mixed_grok_unlimited=True
+    params.mixed_max_images=0
+    monkeypatch.setattr(mixed_materials,'validate',lambda *args,**kwargs:None)
+    original=renderer.side_effect
+    seen=[]
+    def render(task_id,child):
+        seen.append(mixed_materials.grok_unlimited(child))
+        assert child.mixed_max_images==0
+        result=original(task_id,child)
+        (root/task_id/'mixed-scenes.json').write_text(json.dumps({'image_requests':130}))
+        return result
+    renderer.side_effect=render
+    result=lf.run('job',params,render_chapter=renderer)
+    assert seen==[True,True]
+    assert result['mixed_image_requests']==260

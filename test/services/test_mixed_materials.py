@@ -718,6 +718,8 @@ def test_grok_generates_only_missing_stock_scene_and_reuses_cache(setup, monkeyp
     params.mixed_use_ai33 = False
     params.mixed_use_grok = True
     mixed.config.app['grok_image_api_key'] = 'private-grok-key'
+    stock_search = search.side_effect
+    search.side_effect = lambda provider, method, query, *args: [] if query.endswith('2') else stock_search(provider, method, query, *args)
     paid = Mock()
     def generate(params, prompt, directory, *, before_submit=None, existing_only=False):
         assert not existing_only
@@ -730,7 +732,8 @@ def test_grok_generates_only_missing_stock_scene_and_reuses_cache(setup, monkeyp
     monkeypatch.setattr(mixed.grok_image, 'generate', generate)
     mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
     manifest = json.loads((folder / 'mixed-scenes.json').read_text())
-    assert [s['provenance']['provider'] for s in manifest['scenes']] == ['pexels', 'grok_image', 'pixabay']
+    assert [s['provenance']['provider'] for s in manifest['scenes'][:2]] == ['pexels', 'grok_image']
+    assert manifest['scenes'][2]['provenance']['provider'] in {'pexels', 'pixabay', 'coverr'}
     assert manifest['image_requests'] == 1
     images.assert_not_called()  # AI33 adapter was not invoked.
     mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
@@ -777,6 +780,8 @@ def test_grok_refusal_creates_identified_card_without_second_request(setup, monk
     params.mixed_use_ai33=False
     params.mixed_use_grok=True
     mixed.config.app['grok_image_api_key']='test-key'
+    stock_search = mixed.material._search_videos_with_cache.side_effect
+    mixed.material._search_videos_with_cache.side_effect = lambda provider, method, query, *args: [] if query.endswith('2') else stock_search(provider, method, query, *args)
     def refusal(params,prompt,directory,*,before_submit=None,existing_only=False):
         before_submit()
         raise mixed.grok_image.GrokRefusal('Provider refusal')
@@ -791,3 +796,69 @@ def test_grok_refusal_creates_identified_card_without_second_request(setup, monk
     assert manifest['scenes'][1]['image_refused']
     assert (folder/'mixed'/'card-002.png').is_file()
     images.assert_not_called()
+
+
+def test_unlimited_grok_exceeds_old_cap_and_searches_all_banks_first(setup,monkeypatch):
+    folder, subtitles, params, model, search, images, _=setup
+    params.mixed_use_ai33=False
+    params.mixed_use_grok=True
+    params.mixed_use_coverr=True
+    params.mixed_max_images=0
+    params.mixed_grok_unlimited=True
+    mixed.config.app.update(grok_image_api_key='test-key',coverr_api_keys=['test-coverr'])
+    search.side_effect=lambda *args: []
+    calls=[]
+    def generate(params,prompt,directory,*,before_submit=None,existing_only=False):
+        assert not existing_only
+        # All three sources were considered for this scene before ordering.
+        assert {c.args[0] for c in search.call_args_list[-3:]}=={'pexels','pixabay','coverr'}
+        before_submit()
+        out=Path(directory)/'image.png'
+        out.parent.mkdir(exist_ok=True)
+        calls.append(prompt)
+        out.write_bytes(f'new image {len(calls)}'.encode())
+        return out,{'request_id':str(len(calls))}
+    monkeypatch.setattr(mixed.grok_image,'generate',generate)
+    # Seed a checkpoint as if the old cap was reached, preserving the same plan.
+    params.mixed_grok_unlimited=False
+    with pytest.raises(mixed.MixedBudgetError):
+        mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    file=folder/'mixed-scenes.json'
+    state=json.loads(file.read_text())
+    state['image_requests']=130
+    file.write_text(json.dumps(state))
+    params.mixed_grok_unlimited=True
+    params.mixed_resume=True
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert len(calls)==3
+    assert json.loads(file.read_text())['image_requests']==133
+    assert search.call_count==9
+    images.assert_not_called()
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert len(calls)==3  # Saved images/scenes do not trigger extra orders.
+
+
+def test_unlimited_grok_still_uses_approved_stock_for_planned_image_scene(setup,monkeypatch):
+    folder, subtitles, params, _, search, images, _=setup
+    params.mixed_use_ai33=False
+    params.mixed_use_grok=True
+    params.mixed_max_images=0
+    mixed.config.app['grok_image_api_key']='test-key'
+    paid=Mock(side_effect=AssertionError('Stock should be preferred'))
+    monkeypatch.setattr(mixed.grok_image,'generate',paid)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    state=json.loads((folder/'mixed-scenes.json').read_text())
+    assert state['image_requests']==0
+    assert all(s['provenance']['provider'] in {'pexels','pixabay','coverr'} for s in state['scenes'])
+    paid.assert_not_called()
+    images.assert_not_called()
+
+
+def test_finite_grok_mode_still_enforces_explicit_cap(setup):
+    _, subtitles, params, _, _, _, _=setup
+    params.mixed_use_ai33=False
+    params.mixed_use_grok=True
+    params.mixed_grok_unlimited=False
+    params.mixed_max_images=0
+    with pytest.raises(mixed.MixedBudgetError):
+        mixed.prepare('job',params,SCRIPT,30,str(subtitles))

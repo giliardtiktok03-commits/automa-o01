@@ -1,0 +1,37 @@
+MPT — BANCOS PRIMEIRO, GROK SEM LIMITE DE QUANTIDADE
+
+1. Feche o MPT e faça backup da pasta.
+2. Extraia este ZIP na pasta que contém webui.bat, substituindo os arquivos.
+3. Reabra webui.bat. Não precisa reinstalar o SDK se já usa a versão Grok.
+4. No modo misto, mantenha Pexels, Pixabay, Coverr e Grok marcados.
+   Grok sem limite de imagens vem ativado por padrão.
+5. Para o projeto atual, abra Retomar projeto e use:
+   5ea95e86-2852-4ecc-9fde-5beabd62fcdd
+   Deixe Grok sem limite de imagens nesta retomada marcado e retome.
+   O teto numérico antigo deixa de bloquear: não precisa aumentar para 36/48/etc.
+
+COMPORTAMENTO
+- Consulta os bancos configurados/ativados antes de gerar, inclusive para
+  cenas que o planejamento inicialmente marcou como imagem sintética.
+- Usa Grok quando não houver material adequado aprovado.
+- Não limita a quantidade de imagens Grok para completar as cenas faltantes.
+- O contador continua registrando pedidos; imagens já salvas são reutilizadas.
+- A regra também vale nos capítulos. O teto antigo não bloqueia depois de
+  esgotar o orçamento de outro capítulo.
+- Se desativar Grok sem limite, o teto numérico volta a valer.
+- AI33 mantém seus próprios limites; Runware não volta às novas gerações.
+
+SEM LIMITE DE QUANTIDADE NÃO SIGNIFICA GRATUITO.
+Cada imagem nova pode consumir saldo xAI. A geração continua sujeita ao saldo,
+às cotas e à disponibilidade do provedor. A atualização remove o teto artificial
+no MPT; não contorna limites da conta nem repete pedidos com resposta incerta.
+Recusas explícitas mantêm o card informativo. Falhas técnicas continuam parando
+para revisão, preservando os arquivos e registros pagos.
+
+TESTES
+464 testes passaram na suíte selecionada. Incluem estoque antes de IA,
+continuação acima de 130 pedidos com teto numérico zero, reutilização sem novas
+cobranças, capítulos e controles da interface. As APIs foram simuladas.
+
+Não apague storage, grok-image.json, response.b64 ou as pastas dos projetos.
+Rollback: feche o MPT e restaure o backup; preserve uma cópia atualizada de storage.

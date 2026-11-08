@@ -73,6 +73,7 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     payload["params"].pop("mixed_resume", None)
+    payload["params"].pop("mixed_grok_unlimited", None)
     if params.mixed_image_provider != "grok":
         for key in ("grok_model", "mixed_use_grok"):
             payload["params"].pop(key, None)
@@ -266,6 +267,7 @@ def _migrate_image_provider(params, references, directory, manifest):
         return False
     original = dict(saved)
     original.pop("mixed_resume", None)
+    original.pop("mixed_grok_unlimited", None)
     if original.get("custom_audio_file"):
         original["custom_audio_file"] = "<external-narration>"
     candidates = [original]
@@ -286,7 +288,7 @@ def _migrate_image_provider(params, references, directory, manifest):
         return False
     before = VideoParams.model_validate(saved).model_dump(mode="json")
     after = params.model_dump(mode="json")
-    for key in ("mixed_resume", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    for key in ("mixed_resume", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
         before.pop(key, None)
         after.pop(key, None)
     if before != after:

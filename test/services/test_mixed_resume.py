@@ -43,7 +43,7 @@ def test_unknown_paid_request_is_blocked_without_resubmission(saved_project):
 def test_lower_total_budget_does_not_reset_started_count(saved_project):
     _,_,requests=saved_project
     with pytest.raises(ValueError,match='below requests'):
-        resume.load(ID,11)
+        resume.load(ID,11,grok_unlimited=False)
     requests.assert_not_called()
 
 
@@ -64,3 +64,16 @@ def test_media_changes_after_checkpoint_are_blocked(saved_project):
     with pytest.raises(ValueError,match='changed'):
         resume.load(ID,24)
     requests.assert_not_called()
+
+
+def test_unlimited_resume_ignores_old_total_cap_but_keeps_started_count(saved_project,monkeypatch):
+    from app.config import config
+    directory,manifest,requests=saved_project
+    monkeypatch.setattr(config,'ui',{'mixed_use_grok':True})
+    manifest['image_requests']=130
+    (directory/'mixed-scenes.json').write_text(json.dumps(manifest))
+    project=resume.load(ID,0,grok_unlimited=True)
+    assert project['started']==130 and project['params'].mixed_grok_unlimited
+    requests.assert_not_called()
+    with pytest.raises(ValueError,match='below requests'):
+        resume.load(ID,0,grok_unlimited=False)

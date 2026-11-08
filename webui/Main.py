@@ -1574,6 +1574,7 @@ def _apply_restored_params(params):
     st.session_state["long_form_chapter_minutes"] = params.get("chapter_duration_minutes", 3)
     st.session_state["long_form_resume_task_id"] = ""
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
+    st.session_state["mixed_grok_unlimited"] = params.get("mixed_grok_unlimited", True)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
     st.session_state["channel_skills_enabled"] = params.get("skills_enabled", False)
@@ -6221,8 +6222,14 @@ def _render_video_settings(panel, params):
                     params.mixed_max_candidates = st.number_input(
                         tr("Mixed Candidates"), min_value=1, max_value=6, value=3,
                         step=1, key="mixed_max_candidates")
+                params.mixed_grok_unlimited = st.checkbox(
+                    "Grok sem limite de imagens", value=config.ui.get("mixed_grok_unlimited", True),
+                    key="mixed_grok_unlimited", disabled=not params.mixed_use_grok)
+                _set_runtime_config("ui", "mixed_grok_unlimited", params.mixed_grok_unlimited)
+                if params.mixed_use_grok and params.mixed_grok_unlimited:
+                    st.caption("Consulta Pexels, Pixabay e Coverr antes. Sem material aprovado, gera pelo Grok até concluir as cenas faltantes, sem limite de quantidade. Cada nova imagem pode consumir saldo xAI; pedidos já enviados não são repetidos automaticamente.")
                 params.mixed_max_images = st.number_input(
-                    tr("Mixed Image Limit"), min_value=0, max_value=120,
+                    tr("Mixed Image Limit"), disabled=params.mixed_use_grok and params.mixed_grok_unlimited, min_value=0, max_value=120,
                     value=12, step=1, key="mixed_max_images",
                 )
                 params.mixed_scene_duration = st.slider(
@@ -6235,7 +6242,10 @@ def _render_video_settings(panel, params):
             if params.video_source in {"ai33_image", "grok_image"}:
                 provider_name = "Grok" if params.video_source == "grok_image" else "AI33.Pro"
                 st.info(f"Todas as cenas usarão imagens {provider_name}. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
-                params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit")
+                if params.video_source == "grok_image":
+                    params.mixed_grok_unlimited = st.checkbox("Grok sem limite de imagens", value=True, key="grok_only_unlimited")
+                    st.caption("Novas imagens podem consumir saldo xAI. O modo misto prioriza bancos antes de gerar.")
+                params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit", disabled=params.video_source == "grok_image" and params.mixed_grok_unlimited)
                 params.mixed_variable_pacing = st.checkbox(tr("Mixed Variable Pacing"), value=True, key="ai33_only_pacing")
                 params.mixed_scene_duration = st.slider(tr("Mixed Scene Duration"), min_value=5, max_value=30, value=10, key="ai33_only_duration")
 
@@ -9212,7 +9222,11 @@ def _render_mixed_resume():
     with st.expander(tr("Mixed Resume Project")):
         st.caption(tr("Mixed Resume Help"))
         resume_id = st.text_input(tr("Mixed Resume ID"), key="mixed_resume_id").strip()
-        limit = st.number_input(tr("Mixed Resume Limit"), min_value=0, max_value=120, value=24,
+        grok_selected = bool(config.snapshot_config_with_pending(config.ui).get("mixed_use_grok", True))
+        unlimited = st.checkbox("Grok sem limite de imagens nesta retomada", value=True,
+                                key="mixed_resume_grok_unlimited", disabled=not grok_selected) and grok_selected
+        st.caption("Quando Grok estiver selecionado, completa as cenas sem teto de quantidade; novas imagens podem consumir saldo. Materiais salvos são reaproveitados.")
+        limit = st.number_input(tr("Mixed Resume Limit"), disabled=unlimited, min_value=0, max_value=120, value=24,
                                 step=1, key="mixed_resume_limit")
         check = st.button(tr("Mixed Resume Check"), key="mixed_resume_check")
         resume = st.button(tr("Mixed Resume Start"), key="mixed_resume_start", disabled=_flow_test_running())
@@ -9220,9 +9234,9 @@ def _render_mixed_resume():
             try:
                 if webui_task.is_generation_active(resume_id):
                     raise ValueError(tr("Generating Video"))
-                project = mixed_resume.load(resume_id, limit)
+                project = mixed_resume.load(resume_id, limit, grok_unlimited=unlimited)
                 st.info(tr("Mixed Resume Summary").format(ready=project['ready'], total=project['total'],
-                                                         started=project['started'], limit=limit))
+                                                         started=project['started'], limit='sem limite (Grok)' if unlimited and project['params'].video_source != 'ai33_image' else limit))
                 if resume:
                     task_id = webui_task.submit_generation(project['task_id'], project['params'],
                                                            capture_logs=not config.ui.get('hide_log',False))

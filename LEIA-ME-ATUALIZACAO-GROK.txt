@@ -19,7 +19,7 @@ uma chave e saldo da API. Não há promessa de geração gratuita nem prazo fixo
 
 ChatGPT continua com roteiro, prompts, planejamento e validação visual.
 O Grok gera somente imagens. Não há geração de imagens pela OpenAI, nem
-fallback para Runware. O limite global de imagens continua válido.
+fallback para Runware. Grok sem limite de imagens fica ativado por padrão no modo misto e na retomada.
 Uma recusa explícita de segurança gera um card informativo identificado,
 sem reformular o prompt nem solicitar outra imagem.
 

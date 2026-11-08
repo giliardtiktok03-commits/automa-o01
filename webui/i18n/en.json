@@ -826,7 +826,7 @@
     "Mixed Material Source": "Mixed: Pexels + Pixabay + Coverr + AI33 images",
     "Mixed Image Limit": "Maximum AI images for the entire video",
     "Mixed Scene Duration": "Target scene duration (seconds)",
-    "Mixed Materials Help": "Prioritizes Pexels, Pixabay and Coverr. Stock is preferred, but unsuitable or missing footage falls back to AI within the request limit, reserving budget for planned reconstructions. The 75% stock target is not a hard cap. Image generation and visual inspection may incur charges, including failures. Without timed subtitles, timing is estimated. Uses hard cuts and normal speed.",
+    "Mixed Materials Help": "Prioritizes Pexels, Pixabay and Coverr. If no suitable material is approved, Grok generates the scene image. Unlimited Grok images is on by default and ignores the numeric image cap. New images and visual validation may incur costs. Previously submitted requests are not automatically repeated. Without timed subtitles, scene times are estimated.",
     "Mixed Scene Progress": "Scene {current}/{total}",
     "Mixed Estimated Timing": "Scene timings were estimated from text. Enable timed subtitles for closer narration alignment.",
     "Subtitle Provider": "Subtitle provider",
