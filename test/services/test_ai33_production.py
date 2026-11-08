@@ -22,7 +22,7 @@ from app.services.ai33.policy import SyntheticImagePolicyError
 ])
 def test_legacy_synthetic_image_entry_points_stop_before_network(entry):
     with patch("requests.sessions.Session.request") as network:
-        with pytest.raises(SyntheticImagePolicyError, match="Runware ou AI33"):
+        with pytest.raises(SyntheticImagePolicyError, match="Grok ou AI33"):
             entry()
         network.assert_not_called()
 
@@ -140,9 +140,9 @@ def test_main_ui_exposes_ai33_in_mixed_sources_without_flow():
         labels = [widget.label for widget in app.checkbox]
         assert "AI33.Pro · Imagens IA (opcional)" in labels
         assert not next(w for w in app.checkbox if "AI33.Pro" in w.label).value
-        assert next(w for w in app.checkbox if "Runware" in w.label).value
+        assert next(w for w in app.checkbox if "Grok" in w.label).value
         assert "Google Flow" not in labels
         app.checkbox(key="mixed_use_ai33").check().run()
         assert not app.exception
         assert app.checkbox(key="mixed_use_ai33").value
-        assert app.checkbox(key="mixed_use_runware").value
+        assert app.checkbox(key="mixed_use_grok").value

@@ -26,12 +26,10 @@ log_requests = false
 [app]
 # Synthetic images: AI33.Pro only. Configure these in Material Sources > AI Image.
 # Do not commit config.toml or copy its credentials into projects.
-# Runware: uma imagem por solicitação; custo em USD retornado após gerar.
-runware_api_key = ""
-runware_image_model = "runware:100@1"
-runware_image_steps = 4
-runware_image_size = 1024
-runware_image_wait_minutes = 10
+# Imagens Grok via SDK oficial xAI; chave separada do ChatGPT.
+grok_image_api_key = ""
+grok_image_model = "grok-imagine-image"
+grok_image_timeout_seconds = 600
 
 ai33_api_key = ""
 ai33_image_model = "bytedance-seedream-4.5"

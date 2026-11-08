@@ -95,8 +95,8 @@ def configured_material_providers(settings, groups, codex_connected=False):
     }
     from app.services.ai33 import provider as ai33_provider
     enabled["ai33_image"] = ai33_provider.is_enabled(settings)
-    from app.services import runware_image
-    enabled["runware_image"] = runware_image.is_enabled(settings)
+    from app.services import grok_image
+    enabled["grok_image"] = grok_image.is_enabled(settings)
     enabled.update(
         {
             "metaso_minimax": metaso_minimax.is_enabled(settings),

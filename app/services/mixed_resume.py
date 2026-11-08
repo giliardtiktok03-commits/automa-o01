@@ -46,7 +46,7 @@ def load(task_id, limit):
     ):
         raise ValueError("Invalid scene checkpoint")
     params = VideoParams.model_validate(saved["params"])
-    if params.video_source not in {"mixed", "ai33_image", "runware_image"} or params.long_form or params.mixed_is_chapter:
+    if params.video_source not in {"mixed", "ai33_image", "grok_image", "runware_image"} or params.long_form or params.mixed_is_chapter:
         raise ValueError(
             "This resume action requires a single-video mixed project; use chapter resume for long-form projects"
         )
@@ -93,13 +93,13 @@ def load(task_id, limit):
                     "A previously generated image changed; review project before resuming"
                 )
         elif scene.get("image_request_started") and not scene.get("image_refused"):
-            provider = "runware" if scene.get("runware_job") else "ai33"
+            provider = "grok" if scene.get("grok_job") else "runware" if scene.get("runware_job") else "ai33"
             ledger = directory / "mixed" / f"{provider}-{scene['id']:03d}" / (provider + "-image.json")
             if not scene.get(provider + "_job") or not ledger.is_file():
                 raise ValueError("A previous image request has an unknown result; review it before resuming, no automatic resubmission")
             from app.services.ai33 import AI33Client
             attempt = json.loads(ledger.read_text(encoding="utf-8"))
-            if not AI33Client.valid_task_id(attempt.get("task_id")):
+            if not AI33Client.valid_task_id(attempt.get("task_id") or attempt.get("request_id")):
                 raise ValueError("Image submission is unconfirmed; reconcile before resuming")
     duration = voice.get_audio_duration(str(audio))
     if not params.custom_audio_file:
@@ -144,13 +144,15 @@ def run(task_id, limit):
         params = project["params"]
         # Current source preferences affect only new images; paid jobs keep their provider.
         from app.config import config
-        params.mixed_use_runware = bool(config.ui.get("mixed_use_runware", True))
-        params.mixed_use_ai33 = bool(config.ui.get("mixed_use_ai33", False)) if config.ui.get("image_source_policy") == "runware-v1" else False
+        params.mixed_use_runware = False
+        params.mixed_use_grok = bool(config.ui.get("mixed_use_grok", True))
+        params.mixed_use_ai33 = bool(config.ui.get("mixed_use_ai33", False)) if config.ui.get("image_source_policy") == "grok-v1" else False
         if params.video_source == "ai33_image":
             params.mixed_use_runware = False
+            params.mixed_use_grok = False
             params.mixed_use_ai33 = True
-        elif params.video_source == "runware_image":
-            params.mixed_use_runware = True
+        elif params.video_source in {"grok_image", "runware_image"}:
+            params.mixed_use_grok = True
             params.mixed_use_ai33 = False
         sm.state.update_task(
             project["task_id"],

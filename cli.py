@@ -49,7 +49,7 @@ _CLI_VIDEO_SOURCES = (
     "jalapeno",
     "metaso_minimax",
     "muapi",
-    "runware_image", "ai33_image",
+    "grok_image", "ai33_image",
     "local",
 )
 

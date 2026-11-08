@@ -170,6 +170,8 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
                 return image, {key: state[key] for key in ("task_id", "model", "cost_usd") if key in state}
             rows = None
         else:
+            if not existing_only:
+                raise RunwareError("Runware removida das novas gerações. Selecione Grok.")
             if existing_only:
                 raise RunwareError("Registro Runware ausente; não será reenviada uma geração paga")
             task_id = str(uuid4())

@@ -1,0 +1,39 @@
+MPT — GROK PARA IMAGENS IA
+
+1. Feche o MPT e faça backup da pasta inteira.
+2. Extraia este ZIP na pasta que contém webui.bat, substituindo os arquivos.
+   Não apague config.toml, storage ou .venv: eles não estão no pacote.
+3. Execute PREPARAR_GROK_WINDOWS.bat uma vez para instalar o SDK oficial xAI.
+   O instalador também ajusta packaging para 25.0, exigência do SDK.
+4. Abra webui.bat.
+5. Entre em Configurar fontes de material > Imagens IA > Grok.
+6. Cadastre uma chave da API xAI, obtida em https://console.x.ai/.
+   Modelo inicial: grok-imagine-image.
+7. Use Gerar 1 imagem de teste Grok (cobrado).
+   A tela mostra imagem, tempo e custo quando informado pela xAI.
+8. No modo misto, mantenha Pexels, Pixabay, Coverr e Grok marcados.
+   AI33 continua opcional e desmarcada inicialmente. Runware saiu das opções.
+
+A API xAI usa saldo próprio; a assinatura do aplicativo Grok não substitui
+uma chave e saldo da API. Não há promessa de geração gratuita nem prazo fixo.
+
+ChatGPT continua com roteiro, prompts, planejamento e validação visual.
+O Grok gera somente imagens. Não há geração de imagens pela OpenAI, nem
+fallback para Runware. O limite global de imagens continua válido.
+Uma recusa explícita de segurança gera um card informativo identificado,
+sem reformular o prompt nem solicitar outra imagem.
+
+PROJETOS SALVOS
+Imagens já baixadas continuam utilizáveis. Registros antigos Runware ficam
+apenas para recuperar pedidos já iniciados, nunca para novas gerações.
+Retome com o mesmo projeto/pasta. Não apague os registros de pedidos pagos.
+A API Grok usada nesta etapa é síncrona. Se houver perda da resposta sem
+resultado salvo, o MPT interrompe para revisão no painel xAI; ele não promete
+consultar uma tarefa remota sem ID nem repete o pedido pago automaticamente.
+Resultados já recebidos localmente podem ser recuperados sem nova cobrança.
+
+ROLLBACK
+Feche o MPT e restaure o backup completo. Antes, preserve também uma cópia
+atualizada de storage para não perder imagens pagas depois da atualização.
+Para restaurar exatamente as dependências anteriores, use o lockfile e as
+instruções de instalação do backup. O ZIP não altera sua chave ChatGPT.
