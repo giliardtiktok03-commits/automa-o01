@@ -1,0 +1,17 @@
+CORREÇÃO — FORMATO DA RESPOSTA GROK
+
+Feche o MPT e faça backup. Extraia este ZIP na pasta de webui.bat,
+substituindo app/services/grok_image.py. Não precisa reinstalar o SDK.
+
+Reabra o MPT e use Retomar projeto com o ID:
+5ea95e86-2852-4ecc-9fde-5beabd62fcdd
+
+Mantenha a mesma pasta de projeto e os arquivos grok-image.json e response.b64.
+A correção aceita o prefixo data:image/...;base64, usado pelo SDK oficial xAI,
+bem como base64 simples. Resposta salva válida é convertida localmente sem
+outra solicitação de geração para essa imagem. As próximas cenas ainda podem
+consumir saldo normalmente quando precisarem de novas imagens.
+
+79 testes passaram, incluindo recuperação de resposta já salva sem usar o SDK
+ou chamar a API. Se o arquivo salvo continuar inválido, o sistema interrompe
+sem solicitar outra imagem automaticamente. Não apague os registros pagos.

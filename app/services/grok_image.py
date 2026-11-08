@@ -125,7 +125,17 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
             finally:
                 client.close()
         try:
-            content = base64.b64decode((folder/'response.b64').read_bytes(), validate=True)
+            encoded = (folder/'response.b64').read_bytes()
+            if len(encoded) > 36*1024*1024:
+                raise ValueError()
+            # The official SDK decodes an image data URI (base64 property
+            # includes the prefix). Keep support for plain base64 as well.
+            if encoded.startswith(b'data:'):
+                header, separator, encoded = encoded.partition(b',')
+                if not separator or not header.startswith(b'data:image/') or not header.endswith(b';base64'):
+                    raise ValueError()
+            encoded = b''.join(encoded.split())
+            content = base64.b64decode(encoded, validate=True)
             with Image.open(io.BytesIO(content)) as source:
                 if source.width*source.height > 50_000_000:
                     raise ValueError()

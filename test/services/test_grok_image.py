@@ -147,3 +147,41 @@ def test_image_key_is_separate_from_existing_grok_text_configuration(monkeypatch
         grok.freeze(params,{'grok_api_key':'text-only-key'})
     grok.freeze(params,{'grok_image_api_key':'image-only-key'})
     assert params.grok_model==grok.DEFAULT_MODEL
+
+
+@pytest.mark.parametrize('mime', ['image/png', 'image/jpeg', 'image/webp'])
+def test_sdk_data_uri_is_accepted_without_another_paid_request(setup,tmp_path,mime):
+    params,client,_=setup
+    encoded=client.image.sample.return_value.base64
+    client.image.sample.return_value.base64=f'data:{mime};base64,{encoded}'
+    image,_=grok.generate(params,'Historic scene',tmp_path)
+    assert Image.open(image).size==(160,90)
+    client.image.sample.assert_called_once()
+
+
+def test_resume_existing_prefixed_response_recovers_without_sdk_or_paid_call(setup,tmp_path):
+    params,client,_=setup
+    encoded=client.image.sample.return_value.base64
+    image,_=grok.generate(params,'Historic scene',tmp_path)
+    image.unlink()
+    state=json.loads((tmp_path/'grok-image.json').read_text())
+    state['status']='received'
+    state.pop('sha256',None)
+    (tmp_path/'grok-image.json').write_text(json.dumps(state))
+    (tmp_path/'response.b64').write_text('data:image/png;base64,\n'+encoded+'\n')
+    client.image.sample.reset_mock()
+    with patch.object(grok,'_client',side_effect=AssertionError('No SDK or paid request needed')):
+        recovered,_=grok.generate(params,'Historic scene',tmp_path,existing_only=True)
+    assert Image.open(recovered).size==(160,90)
+    client.image.sample.assert_not_called()
+
+
+@pytest.mark.parametrize('value',['data:text/html;base64,PHNjcmlwdD4=','data:image/png,not-base64','https://example.test/image.png','@@@not-base64'])
+def test_invalid_saved_response_still_blocks_resubmission(setup,tmp_path,value):
+    params,client,_=setup
+    client.image.sample.return_value.base64=value
+    with pytest.raises(grok.GrokError,match='não é uma imagem válida'):
+        grok.generate(params,'Historic scene',tmp_path)
+    with pytest.raises(grok.GrokError,match='não é uma imagem válida'):
+        grok.generate(params,'Historic scene',tmp_path,existing_only=True)
+    client.image.sample.assert_called_once()
