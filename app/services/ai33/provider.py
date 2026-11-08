@@ -1,6 +1,7 @@
 """MPT adapter. Keys stay in runtime config, never in VideoParams/manifests."""
 
 import json
+import math
 import os
 from pathlib import Path
 
@@ -47,12 +48,22 @@ def parameters(params):
     return values
 
 
-def generate(params, prompt, directory, *, before_submit=None):
+def generate(params, prompt, directory, *, before_submit=None, existing_only=False):
     freeze(params)
+    try:
+        minutes = float(config.app.get("ai33_image_wait_minutes", 45))
+    except (ValueError, TypeError):
+        raise AI33Error("Configure um prazo AI33 entre 1 e 120 minutos") from None
+    if not math.isfinite(minutes) or not 1 <= minutes <= 120:
+        raise AI33Error("Configure um prazo AI33 entre 1 e 120 minutos")
+    def report(task_id, status, progress):
+        mapped = {"doing": "processing", "done": "completed", "error": "error"}.get(status, "")
+        generation_progress.remote("ai33_image", task_id, mapped, progress=progress)
     generation_progress.stage("ai33_image")
     path = ImageJob(AI33Client(api_key()), directory).run(
         model_id=params.ai33_model, parameters=parameters(params), prompt=prompt,
         max_credits=params.ai33_max_credits, before_submit=before_submit,
+        wait_seconds=minutes * 60, on_status=report, existing_only=existing_only,
     )
     checkpoint = json.loads((Path(directory) / "ai33-image.json").read_text(encoding="utf-8"))
     return path, {k: checkpoint[k] for k in ("task_id", "model_id", "quoted_credits", "actual_credits") if k in checkpoint}

@@ -4,6 +4,8 @@ import hashlib
 import io
 import ipaddress
 import json
+import logging
+import math
 import os
 from pathlib import Path
 import socket
@@ -17,6 +19,14 @@ from PIL import Image
 import requests
 
 from .client import AI33Error, credits
+
+
+class AI33PendingError(AI33Error):
+    """Known paid task is still pending, not a failed generation."""
+
+    def __init__(self, task_id):
+        self.task_id = task_id
+        super().__init__(f"AI33 ainda está processando a imagem. Tarefa {task_id} preservada; retome o mesmo projeto sem reenviar a geração.")
 
 
 def _atomic(path, content):
@@ -100,10 +110,20 @@ class ImageJob:
     def _save(self, state):
         _atomic(self.checkpoint, json.dumps(state, ensure_ascii=False, indent=2).encode("utf-8"))
 
-    def run(self, *, model_id, parameters, prompt, max_credits, max_polls=150, before_submit=None):
+    def run(self, *, model_id, parameters, prompt, max_credits, max_polls=150, before_submit=None,
+            wait_seconds=None, on_status=None, existing_only=False):
         credits(max_credits)
         if isinstance(max_polls, bool) or not isinstance(max_polls, int) or max_polls < 1:
             raise AI33Error("max_polls must be a positive integer")
+        if wait_seconds is not None and (isinstance(wait_seconds, bool) or not isinstance(wait_seconds, (int, float))
+                                         or not math.isfinite(wait_seconds) or not 0 < wait_seconds <= 7200):
+            raise AI33Error("wait_seconds must be positive and at most 7200")
+        def notify(task_id, status, progress=None):
+            if on_status is not None:
+                try:
+                    on_status(task_id, status, progress)
+                except Exception:
+                    logging.getLogger(__name__).warning("AI33 progress notification failed; paid task retained")
         specification = {"model_id": model_id, "parameters": parameters, "prompt": prompt}
         fingerprint = hashlib.sha256(json.dumps(specification, sort_keys=True).encode()).hexdigest()
         with FileLock(str(self.checkpoint) + ".lock", timeout=0):
@@ -120,6 +140,8 @@ class ImageJob:
                 if state.get("status") == "error":
                     raise AI33Error("AI33 task failed; no automatic paid retry or assumed safety refusal")
             else:
+                if existing_only:
+                    raise AI33Error("Registro AI33 ausente; geração paga não será reenviada")
                 self.client.validate(model_id, parameters, prompt)
                 estimate = self.client.price(model_id, parameters)
                 if estimate > max_credits:
@@ -134,12 +156,16 @@ class ImageJob:
                 state["task_id"] = self.client.submit(model_id, parameters, prompt)
                 state["status"] = "submitted"
                 self._save(state)
-            for attempt in range(max_polls):
+            notify(state["task_id"], state["status"])
+            deadline = time.monotonic() + wait_seconds if wait_seconds is not None else None
+            attempt = 0
+            while True:
                 result = self.client.task(state["task_id"])
                 state["status"] = result["status"]
                 if "credit_cost" in result:
                     state["actual_credits"] = credits(result["credit_cost"])
                 self._save(state)
+                notify(state["task_id"], state["status"], result.get("progress"))
                 if state["status"] == "error":
                     raise AI33Error("AI33 task failed; inspect provider history, no automatic retry")
                 if state["status"] == "done":
@@ -152,6 +178,13 @@ class ImageJob:
                     state.update(status="saved", sha256=hashlib.sha256(content).hexdigest(), file="image.png")
                     self._save(state)
                     return self.output
-                if attempt + 1 < max_polls:
+                attempt += 1
+                if deadline is not None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise AI33PendingError(state["task_id"])
+                    time.sleep(min(4, remaining))
+                elif attempt >= max_polls:
+                    raise AI33PendingError(state["task_id"])
+                else:
                     time.sleep(4)
-            raise AI33Error("AI33 polling limit reached; resume the same directory and task")

@@ -26,7 +26,7 @@ class ChapterError(RuntimeError):
 
 
 def validate(params, *, external_audio=False):
-    if params.video_source in {"mixed", "ai33_image"}:
+    if params.video_source in {"mixed", "ai33_image", "runware_image"}:
         from app.services import mixed_materials
 
         mixed_materials.validate(params, external_audio=external_audio)
@@ -73,11 +73,14 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     payload["params"].pop("mixed_resume", None)
+    if params.mixed_image_provider != "runware":
+        for key in ("runware_model", "runware_steps", "runware_size", "mixed_use_runware"):
+            payload["params"].pop(key, None)
     if not params.skills_enabled or not params.skill_snapshot:
         for key in ("skills_enabled", "skill_ids", "skill_snapshot"):
             payload["params"].pop(key, None)
-    if params.video_source not in {"mixed", "ai33_image"}:
-        for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates", "mixed_variable_pacing", "mixed_timeline_offset", "mixed_total_duration", "mixed_previous_sources", "mixed_is_chapter", "mixed_image_provider", "flow_profile", "flow_project_url", "flow_require_zero", "mixed_select_sources", "mixed_use_pexels", "mixed_use_pixabay", "mixed_use_coverr", "mixed_use_openai", "mixed_use_flow", "mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    if params.video_source not in {"mixed", "ai33_image", "runware_image"}:
+        for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates", "mixed_variable_pacing", "mixed_timeline_offset", "mixed_total_duration", "mixed_previous_sources", "mixed_is_chapter", "mixed_image_provider", "flow_profile", "flow_project_url", "flow_require_zero", "mixed_select_sources", "mixed_use_pexels", "mixed_use_pixabay", "mixed_use_coverr", "mixed_use_openai", "mixed_use_flow", "mixed_use_ai33", "mixed_use_runware", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
             payload["params"].pop(key, None)
     if params.custom_audio_file:
         # Re-uploading the same recording from another path must still resume.
@@ -252,22 +255,32 @@ def _join(directory, inputs, expected_duration):
 
 
 def _migrate_image_provider(params, references, directory, manifest):
-    """Verify the original root fingerprint before allowing only AI33 migration."""
+    """Verify the original root fingerprint before allowing an image-provider migration."""
     if params.video_source != "mixed" or not (directory / "script.json").is_file():
         return False
     saved = json.loads((directory / "script.json").read_text(encoding="utf-8"))["params"]
-    if saved.get("mixed_image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none"}:
+    if saved.get("mixed_image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none", "ai33", "runware"}:
         return False
     original = dict(saved)
     original.pop("mixed_resume", None)
     if original.get("custom_audio_file"):
         original["custom_audio_file"] = "<external-narration>"
-    digest = hashlib.sha256(json.dumps({"params": original, "references": references}, sort_keys=True).encode()).hexdigest()
-    if digest != manifest.get("fingerprint"):
+    candidates = [original]
+    normalized = dict(original)
+    if not normalized.get("skills_enabled") or not normalized.get("skill_snapshot"):
+        for key in ("skills_enabled", "skill_ids", "skill_snapshot"):
+            normalized.pop(key, None)
+    candidates.append(dict(normalized))
+    if normalized.get("mixed_image_provider") != "runware":
+        for key in ("runware_model", "runware_steps", "runware_size", "mixed_use_runware"):
+            normalized.pop(key, None)
+    candidates.append(normalized)
+    if not any(hashlib.sha256(json.dumps({"params": candidate, "references": references}, sort_keys=True).encode()).hexdigest()
+               == manifest.get("fingerprint") for candidate in candidates):
         return False
     before = VideoParams.model_validate(saved).model_dump(mode="json")
     after = params.model_dump(mode="json")
-    for key in ("mixed_resume", "mixed_image_provider", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    for key in ("mixed_resume", "mixed_image_provider", "mixed_use_ai33", "mixed_use_runware", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
         before.pop(key, None)
         after.pop(key, None)
     if before != after:
@@ -281,7 +294,7 @@ def _migrate_image_provider(params, references, directory, manifest):
             target.write_bytes((directory / name).read_bytes())
     manifest["original_fingerprint"] = manifest["fingerprint"]
     manifest["fingerprint"] = _fingerprint(params, references)
-    manifest["continuation_image_provider"] = "ai33_image"
+    manifest["continuation_image_provider"] = params.mixed_image_provider + "_image"
     return True
 
 
@@ -326,7 +339,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
                 "video_terms": params.video_terms,
                 "custom_audio_file": chapter_audio,
             })
-            if params.video_source in {"mixed", "ai33_image"}:
+            if params.video_source in {"mixed", "ai33_image", "runware_image"}:
                 from app.services import mixed_materials
 
                 spent_elsewhere = sum(
@@ -375,7 +388,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
               "warnings": [dict(warning, chapter_index=index + 1)
                            for index, chapter in enumerate(chapters)
                            for warning in chapter.get("warnings", [])] or None}
-    if params.video_source in {"mixed", "ai33_image"}:
+    if params.video_source in {"mixed", "ai33_image", "runware_image"}:
         from app.services import mixed_materials
 
         result["mixed_image_requests"] = sum(

@@ -1,0 +1,38 @@
+ATUALIZAÇÃO MPT — RUNWARE
+
+1. Feche o MPT e faça backup da pasta inteira.
+2. Extraia este ZIP na pasta que contém webui.bat, substituindo os arquivos.
+   O pacote não contém config.toml, storage, chaves ou .venv.
+3. Abra webui.bat.
+4. Em Configurar fontes de material, selecione Imagens IA > Runware.
+5. Cadastre sua chave de https://my.runware.ai/.
+   Inicial: modelo runware:100@1 (FLUX.1 Schnell), 4 passos, lado maior 1024.
+6. Clique em Conectar e consultar modelos: essa consulta não gera imagem.
+7. Para medir o tempo real, use Gerar 1 imagem de teste (cobrado).
+   A imagem, o tempo e o custo retornado ficam na tela e em storage/runware-tests.
+8. Na Fonte do Vídeo, selecione Misto. Pexels, Pixabay, Coverr e Runware
+   ficam marcados por padrão; AI33 fica desmarcada na primeira abertura.
+   As escolhas seguintes ficam salvas. Se habilitar ambas, Runware tem prioridade.
+
+ChatGPT continua responsável por roteiro, planejamento e validação visual.
+Não há geração de imagens pela OpenAI nem troca automática de gerador em falhas.
+Runware também aparece como fonte independente para vídeos só com imagens IA.
+
+O limite de imagens é compartilhado pelo vídeo inteiro, inclusive capítulos.
+Runware retorna custo em USD após gerar; não há teto financeiro prévio nesta
+integração. A referência pública de preços não é uma cotação vinculante.
+Não é possível garantir velocidade antes do teste na sua conta.
+
+PROJETOS ANTIGOS
+Use Retomar projeto com o mesmo ID e pasta. Materiais já salvos são reutilizados.
+Uma tarefa AI33 paga ainda pendente será consultada no próprio AI33, mesmo com
+AI33 desmarcada. Mantenha a chave AI33 local para recuperar esse resultado.
+As próximas imagens do modo misto usam a seleção atual, normalmente Runware.
+Não apague registros ai33-image.json/runware-image.json ou as pastas dos projetos.
+Pedidos com resposta perdida não são enviados novamente automaticamente.
+Uma tarefa pendente deixa o projeto aguardando o provedor, disponível para retomar.
+
+ROLLBACK
+Feche o MPT e restaure o backup completo. Preserve também uma cópia atual de
+storage antes de restaurar, para não perder imagens pagas após a atualização.
+Versões anteriores não reconhecem projetos Runware.

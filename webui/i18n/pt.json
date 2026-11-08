@@ -1,6 +1,9 @@
 {
   "Language": "Português",
   "Translation": {
+        "Generation Remote Progress": "Progresso informado pelo provedor: {progress}%",
+        "Generation Pending Hint": "A tarefa da imagem continua no provedor. Use Retomar projeto com o mesmo ID (ou a retomada de capítulos). Os materiais salvos e a solicitação existente serão preservados, sem reenviar essa geração.",
+        "Task Status Waiting": "Aguardando provedor de imagens",
     "llm_provider_label.openai_codex": "OpenAI - Codex",
     "codex.oauth.login": "Conectar ChatGPT com um código",
     "codex.oauth.disconnect": "Desconectar ChatGPT",

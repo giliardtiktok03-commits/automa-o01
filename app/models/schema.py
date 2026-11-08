@@ -134,8 +134,12 @@ class VideoParams(BaseModel):
     mixed_total_duration: float = Field(default=0, ge=0, allow_inf_nan=False)
     mixed_previous_sources: list[dict[str, Any]] = Field(default_factory=list)
     mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
-    mixed_image_provider: Literal["ai33", "openai", "flow_browser", "openai_flow", "none"] = "ai33"
-    mixed_use_ai33: bool = True
+    mixed_image_provider: Literal["runware", "ai33", "openai", "flow_browser", "openai_flow", "none"] = "runware"
+    mixed_use_ai33: bool = False
+    mixed_use_runware: bool = True
+    runware_model: Optional[str] = None
+    runware_steps: Optional[int] = Field(default=None, ge=0, le=100)
+    runware_size: Optional[int] = None
     ai33_model: Optional[str] = None
     ai33_resolution: Optional[str] = None
     ai33_quality: Optional[str] = None

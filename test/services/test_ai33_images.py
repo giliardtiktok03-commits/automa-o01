@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from PIL import Image
 import requests
+import pytest
 
 from app.services.ai33 import AI33Client, AI33Error, ImageJob
 from app.services.ai33.images import download_png, _public_https
@@ -300,3 +301,27 @@ class AI33DownloadTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_ai33_existing_only_missing_checkpoint_never_submits(tmp_path):
+    client = MagicMock()
+    with pytest.raises(AI33Error, match='ausente'):
+        ImageJob(client, tmp_path).run(model_id='model', parameters=PARAMS, prompt='illustration', max_credits=12, existing_only=True)
+    client.submit.assert_not_called()
+    client.price.assert_not_called()
+
+
+def test_ai33_wall_clock_deadline_is_pending_and_preserves_task(tmp_path):
+    from app.services.ai33.images import AI33PendingError
+    client = MagicMock()
+    client.price.return_value = 12
+    client.submit.return_value = '30258ee8-cfc0-4485-b1bc-2f9ba34bdc07'
+    client.task.return_value = {'status': 'doing', 'progress': 25}
+    callback = MagicMock()
+    with patch('app.services.ai33.images.time.monotonic', side_effect=[0, 61]), pytest.raises(AI33PendingError) as pending:
+        ImageJob(client, tmp_path).run(model_id='model', parameters=PARAMS, prompt='illustration', max_credits=12,
+                                      wait_seconds=60, on_status=callback)
+    assert pending.value.task_id == client.submit.return_value
+    assert json.loads((tmp_path/'ai33-image.json').read_text())['status'] == 'doing'
+    callback.assert_any_call(client.submit.return_value, 'doing', 25)
+    client.submit.assert_called_once()

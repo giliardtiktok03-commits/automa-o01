@@ -18,8 +18,9 @@ from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoFitMode
 from app.services import generation_progress, llm, material, task_artifacts, visual_validation, flow_browser
 from app.services import state as sm
+from app.services import runware_image
 from app.services.ai33 import provider as ai33_provider
-from app.services.ai33 import AI33Error, AI33Client
+from app.services.ai33 import AI33Error, AI33Client, AI33PendingError
 from app.utils import utils
 from app.utils.subtitle_reader import moviepy_subtitles
 
@@ -37,6 +38,15 @@ class MixedError(ValueError):
         super().__init__(message)
         self.key = key
         self.params = params or {}
+
+
+class MixedPending(MixedError):
+    def __init__(self, pending, scene_id, origin_task_id, provider="ai33_image"):
+        super().__init__(str(pending))
+        self.provider = provider
+        self.remote_id = pending.task_id
+        self.scene_id = scene_id
+        self.origin_task_id = origin_task_id
 
 
 class MixedBudgetError(MixedError):
@@ -79,8 +89,8 @@ def providers(settings=None, params=None):
 
 def configure_sources(params, settings):
     # Legacy names remain readable, but no new generation can use those providers.
-    enabled = params.mixed_use_ai33 and (params.mixed_select_sources or params.mixed_image_provider != "none")
-    params.mixed_image_provider = "ai33" if enabled else "none"
+    enabled = params.mixed_select_sources or params.mixed_image_provider != "none"
+    params.mixed_image_provider = ("runware" if params.mixed_use_runware else "ai33" if params.mixed_use_ai33 else "none") if enabled else "none"
 
 
 def validate(params, settings=None, *, external_audio=False):
@@ -96,6 +106,11 @@ def validate(params, settings=None, *, external_audio=False):
         raise MixedError("Mixed mode requires one output video")
     if not providers(settings, params) and (params.mixed_image_provider == "none" or not params.mixed_max_images):
         raise MixedError("Select and configure at least one material source", key="mixed.no_sources")
+    if params.mixed_max_images and params.mixed_image_provider == "runware":
+        try:
+            runware_image.freeze(params, settings)
+        except runware_image.RunwareError as exc:
+            raise MixedError(str(exc)) from exc
     if params.mixed_max_images and params.mixed_image_provider == "ai33":
         try:
             ai33_provider.freeze(params, settings)
@@ -405,12 +420,12 @@ def checkpoint_matches(signature, fingerprint):
 def legacy_continuation(signature, manifest):
     """Only image-provider fields may migrate; narration/editing must still match."""
     previous = manifest.get("signature")
-    if not isinstance(previous, dict) or previous.get("image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none"}:
+    if not isinstance(previous, dict) or previous.get("image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none", "ai33", "runware"}:
         return False
     original_hash = hashlib.sha256(json.dumps(previous, sort_keys=True).encode()).hexdigest()
     if original_hash != manifest.get("fingerprint"):
         return False
-    image_fields = {"image_provider", "image_model", "image_size", "image_template", "image_quality", "image_credit_cap", "selected_sources"}
+    image_fields = {"image_provider", "image_model", "image_size", "image_template", "image_quality", "image_credit_cap", "image_steps", "selected_sources"}
     before = {k: v for k, v in previous.items() if k not in image_fields}
     after = {k: v for k, v in signature.items() if k not in image_fields}
     old_sources = previous.get("selected_sources", {})
@@ -451,6 +466,10 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                      "image_size": params.ai33_resolution,
                      "image_quality": params.ai33_quality,
                      "image_credit_cap": params.ai33_max_credits}
+        if params.mixed_image_provider == "runware":
+            signature.update(image_model=params.runware_model, image_size=params.runware_size,
+                             image_quality=None, image_credit_cap=None, image_steps=params.runware_steps)
+            signature["selected_sources"]["runware"] = True
         if params.skills_enabled and params.skill_snapshot:
             signature["channel_skills"] = [{"id": item.skill_id, "sha256": item.sha256} for item in params.skill_snapshot]
         fingerprint = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
@@ -465,11 +484,12 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 if migration:
                     manifest.setdefault("original_signature", manifest["signature"])
                     manifest.setdefault("original_fingerprint", manifest["fingerprint"])
-                    manifest["continuation_image_provider"] = "ai33_image"
+                    manifest.setdefault("continuation_history", []).append(manifest["signature"])
+                    manifest["continuation_image_provider"] = params.mixed_image_provider + "_image"
                     for saved_scene in manifest["scenes"]:
                         if saved_scene.get("image_file"):
                             original_provider = manifest["signature"].get("image_provider", "openai")
-                            saved_scene.setdefault("image_provider", "flow_browser" if original_provider == "flow_browser" or saved_scene.get("flow_image_received") else "openai_image")
+                            saved_scene.setdefault("image_provider", original_provider + "_image" if original_provider in {"ai33", "runware"} else "flow_browser" if original_provider == "flow_browser" or saved_scene.get("flow_image_received") else "openai_image")
                 manifest["previous_fingerprint"] = manifest["fingerprint"]
                 manifest["fingerprint"] = fingerprint
                 manifest["signature"] = signature
@@ -515,7 +535,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
-            if source is None and params.mixed_image_provider == "none" and not scene.get("image_file"):
+            if source is None and params.mixed_image_provider == "none" and not scene.get("image_file") and not scene.get("ai33_job") and not scene.get("runware_job"):
                 raise MixedError("No approved stock material and image generators are disabled or unconfigured",
                                  key="mixed.no_images")
             if source is None:
@@ -526,7 +546,21 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         raise MixedError("A paid image is missing or changed; review the task before ordering another")
                 else:
                     resuming_ai33 = bool(scene.get("ai33_job"))
-                    if scene.get("image_request_started") and not resuming_ai33:
+                    resuming_runware = bool(scene.get("runware_job"))
+                    provider = "ai33" if resuming_ai33 else "runware" if resuming_runware else params.mixed_image_provider
+                    job_params = params.model_copy(deep=True)
+                    if scene.get("image_settings"):
+                        for key, value in scene["image_settings"].items():
+                            if key in {"ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "runware_model", "runware_steps", "runware_size"}:
+                                setattr(job_params, key, value)
+                    elif resuming_ai33:
+                        # Old paid jobs retain the original frozen specification.
+                        candidates = list(reversed(manifest.get("continuation_history", []))) + [manifest.get("original_signature", {}), manifest["signature"]]
+                        previous = next((item for item in candidates if item.get("image_provider") == "ai33"), {})
+                        for key, field in {"image_model": "ai33_model", "image_size": "ai33_resolution", "image_quality": "ai33_quality", "image_credit_cap": "ai33_max_credits"}.items():
+                            if key in previous:
+                                setattr(job_params, field, previous[key])
+                    if scene.get("image_request_started") and not (resuming_ai33 or resuming_runware):
                         raise MixedError("A previous image request has an unknown result; review it before ordering again")
                     if not scene.get("image_request_started"):
                         if manifest["image_requests"] >= params.mixed_max_images:
@@ -537,10 +571,10 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                             for other in manifest["scenes"])
                         if manifest["image_requests"] + 1 + reserved > params.mixed_max_images:
                             raise MixedError("The remaining AI budget is reserved for planned historical/illustrative scenes")
-                    job_dir = scene_dir / f"ai33-{scene['id']:03d}"
+                    job_dir = scene_dir / f"{provider}-{scene['id']:03d}"
                     # An interrupted attempt without a ledger is ambiguous; never repost.
-                    if resuming_ai33 and not (job_dir / "ai33-image.json").is_file():
-                        raise MixedError("AI33 attempt has no checkpoint; reconcile before another paid request")
+                    if (resuming_ai33 or resuming_runware) and not (job_dir / (provider + "-image.json")).is_file():
+                        raise MixedError("Image attempt has no checkpoint; reconcile before another paid request")
                     prompt = (f"Illustrate this narration: {scene['text']}\n{scene['image_prompt']}\n"
                               f"Period: {scene['period']}. Location: {scene['location']}. "
                               + ("Historical reconstruction, no contemporary buildings, clothing, vehicles or machinery. "
@@ -552,15 +586,28 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         def mark_submitted():
                             manifest["image_requests"] += 1
                             scene["image_request_started"] = True
-                            scene["ai33_job"] = f"ai33-{scene['id']:03d}"
+                            scene[provider + "_job"] = f"{provider}-{scene['id']:03d}"
+                            fields = ("ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits") if provider == "ai33" else ("runware_model", "runware_steps", "runware_size")
+                            scene["image_settings"] = {key: getattr(job_params, key) for key in fields}
                             _save(manifest_file, manifest)
-                        generated, details = ai33_provider.generate(params, prompt, job_dir, before_submit=mark_submitted)
-                        # Keep legacy image_file as a basename, while the AI33 ledger
+                        if provider == "runware":
+                            generated, details = runware_image.generate(job_params, prompt, job_dir, before_submit=mark_submitted,
+                                                                        existing_only=resuming_runware)
+                        else:
+                            kwargs = {"existing_only": True} if resuming_ai33 else {}
+                            generated, details = ai33_provider.generate(job_params, prompt, job_dir, before_submit=mark_submitted, **kwargs)
+                        # Keep image_file as a basename, while the provider ledger
                         # and original downloaded image remain in their own directory.
                         from app.services.ai33.images import _atomic
                         _atomic(image, generated.read_bytes())
-                        scene["image_provider"] = "ai33_image"
-                        scene["ai33"] = details
+                        scene["image_provider"] = provider + "_image"
+                        scene[provider] = details
+                    except runware_image.RunwarePending as exc:
+                        raise MixedPending(exc, scene["id"], task_id, "runware_image") from exc
+                    except runware_image.RunwareError as exc:
+                        raise MixedError(str(exc)) from exc
+                    except AI33PendingError as exc:
+                        raise MixedPending(exc, scene["id"], task_id) from exc
                     except AI33Error as exc:
                         # Generic AI33 errors have no documented moderation code.
                         # Retain the attempt and stop; never invent a refusal/fallback.
@@ -588,7 +635,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
             output_paths.append(str(output))
             records.append(scene["provenance"])
         counts = {provider: sum(record["provider"] == provider for record in records)
-                  for provider in ("pexels", "pixabay", "coverr", "ai33_image", "openai_image")}
+                  for provider in ("pexels", "pixabay", "coverr", "runware_image", "ai33_image", "openai_image")}
         cards = sum(record["provider"] == "editorial_card" for record in records)
         if cards:
             counts["editorial_card"] = cards
@@ -596,7 +643,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if flow_count:
             counts["flow_browser"] = flow_count
         logger.info("Mixed sources used: Pexels={}, Pixabay={}, Coverr={}, AI={}",
-                    counts["pexels"], counts["pixabay"], counts["coverr"], counts["ai33_image"] + counts["openai_image"])
+                    counts["pexels"], counts["pixabay"], counts["coverr"], counts["runware_image"] + counts["ai33_image"] + counts["openai_image"])
         sm.state.update_task(task_id, mixed_source_counts=counts)
         material._persist_material_sources(task_id, records)
         task_artifacts.patch_script_data(task_id, mixed_scene_plan=manifest, mixed_timing=timing)

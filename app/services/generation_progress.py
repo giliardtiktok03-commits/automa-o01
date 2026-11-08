@@ -1,6 +1,7 @@
 """把不同供应商的长任务状态传给共享任务存储，不改变计费请求及重试策略。"""
 
 import re
+import math
 import threading
 import time
 from contextlib import contextmanager
@@ -96,7 +97,7 @@ def submitting(provider):
         reporter.publish("submitting", reset=True, provider=provider)
 
 
-def remote(provider, task_id, status="", *, retrying=False):
+def remote(provider, task_id, status="", *, retrying=False, progress=None):
     reporter = _current.get()
     if not reporter:
         return
@@ -112,6 +113,8 @@ def remote(provider, task_id, status="", *, retrying=False):
     )
     fields = {"provider": provider or reporter.activity.get("provider", ""),
               "remote_id": task_id, "retrying": retrying}
+    if isinstance(progress, (int, float)) and not isinstance(progress, bool) and math.isfinite(progress) and 0 <= progress <= 100:
+        fields["remote_progress"] = progress
     if not retrying and status:
         fields["confirmed_at"] = time.time()
         # 只保留固定状态类别，不把网关的任意文本落到界面和日志。

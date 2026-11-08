@@ -22,7 +22,7 @@ from app.services.ai33.policy import SyntheticImagePolicyError
 ])
 def test_legacy_synthetic_image_entry_points_stop_before_network(entry):
     with patch("requests.sessions.Session.request") as network:
-        with pytest.raises(SyntheticImagePolicyError, match="exclusivamente AI33"):
+        with pytest.raises(SyntheticImagePolicyError, match="Runware ou AI33"):
             entry()
         network.assert_not_called()
 
@@ -132,11 +132,17 @@ def test_main_ui_exposes_ai33_in_mixed_sources_without_flow():
     from app.services import version_checker
     root = Path(__file__).resolve().parents[2]
     with patch.dict(config.app, {"video_source": "mixed", "llm_provider": "openai"}, clear=True), \
-         patch.dict(config.ui, {"language": "pt"}, clear=True), \
+         patch.dict(config.ui, {"language": "pt", "mixed_use_ai33": True}, clear=True), \
          patch.object(config, "try_save_config", return_value=True), \
          patch.object(version_checker, "get_available_update", return_value=None):
         app = AppTest.from_file(str(root / "webui/Main.py"), default_timeout=30).run()
         assert not app.exception
         labels = [widget.label for widget in app.checkbox]
-        assert "AI33.Pro · Imagens IA" in labels
+        assert "AI33.Pro · Imagens IA (opcional)" in labels
+        assert not next(w for w in app.checkbox if "AI33.Pro" in w.label).value
+        assert next(w for w in app.checkbox if "Runware" in w.label).value
         assert "Google Flow" not in labels
+        app.checkbox(key="mixed_use_ai33").check().run()
+        assert not app.exception
+        assert app.checkbox(key="mixed_use_ai33").value
+        assert app.checkbox(key="mixed_use_runware").value

@@ -34,6 +34,7 @@ PUNCTUATIONS = [
 TASK_STATE_FAILED = -1
 TASK_STATE_COMPLETE = 1
 TASK_STATE_PROCESSING = 4
+TASK_STATE_WAITING = 2  # Worker paused; an existing remote task can be resumed.
 
 CROSS_POST_STATE_PENDING = "pending"
 CROSS_POST_STATE_PROCESSING = "processing"

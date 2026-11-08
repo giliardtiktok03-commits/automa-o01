@@ -49,7 +49,7 @@ _CLI_VIDEO_SOURCES = (
     "jalapeno",
     "metaso_minimax",
     "muapi",
-    "ai33_image",
+    "runware_image", "ai33_image",
     "local",
 )
 
@@ -1722,6 +1722,7 @@ def _run_batch_tasks(args: argparse.Namespace, tasks: list[VideoParams]) -> int:
     task_summaries: list[dict[str, Any]] = []
     used_task_ids: set[str] = set()
     failed_count = 0
+    pending_count = 0
 
     for index, params in enumerate(tasks, start=1):
         task_id = utils.get_uuid()
@@ -1764,7 +1765,9 @@ def _run_batch_tasks(args: argparse.Namespace, tasks: list[VideoParams]) -> int:
                     f"stop_at={args.stop_at}, stage={failed_stage}, error={error}"
                 )
 
-        status = "failed" if error is not None else "succeeded"
+        status = "failed" if error is not None else "waiting" if isinstance(result, dict) and result.get("state") == getattr(tm.const, "TASK_STATE_WAITING", 2) else "succeeded"
+        if status == "waiting":
+            pending_count += 1
         if status == "failed":
             failed_count += 1
         task_summaries.append(
@@ -1782,14 +1785,15 @@ def _run_batch_tasks(args: argparse.Namespace, tasks: list[VideoParams]) -> int:
         json.dumps(
             {
                 "total": len(task_summaries),
-                "succeeded": len(task_summaries) - failed_count,
+                "succeeded": len(task_summaries) - failed_count - pending_count,
                 "failed": failed_count,
+                **({"waiting": pending_count} if pending_count else {}),
                 "tasks": task_summaries,
             },
             ensure_ascii=False,
         )
     )
-    return 1 if failed_count else 0
+    return 1 if failed_count else 3 if pending_count else 0
 
 
 def run_cli(argv: Sequence[str] | None = None) -> int:
@@ -1849,7 +1853,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(json.dumps({"task_id": task_id, "result": result}, ensure_ascii=False))
-    return 0
+    return 3 if result.get("state") == getattr(tm.const, "TASK_STATE_WAITING", 2) else 0
 
 
 if __name__ == "__main__":

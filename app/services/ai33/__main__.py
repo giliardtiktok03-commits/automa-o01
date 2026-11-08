@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--prompt-file", type=Path)
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--max-credits", type=float)
+    parser.add_argument("--wait-minutes", type=float, default=45)
     args = parser.parse_args()
     client = AI33Client(os.environ.get("AI33_API_KEY"))
     if args.action == "models":
@@ -35,6 +36,7 @@ def main():
     path = ImageJob(client, args.directory).run(
         model_id=args.model, parameters=parameters,
         prompt=args.prompt_file.read_text(encoding="utf-8-sig"), max_credits=args.max_credits,
+        wait_seconds=args.wait_minutes * 60,
     )
     print(f"Imagem salva: {path}")
 

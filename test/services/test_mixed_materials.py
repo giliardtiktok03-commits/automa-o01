@@ -65,7 +65,7 @@ def setup(tmp_path, monkeypatch):
         output.write_bytes((str(source)+str(frames)).encode())
     rendering = Mock(side_effect=render)
     monkeypatch.setattr(mixed, "render", rendering)
-    params = VideoParams(video_subject="Café", video_script=SCRIPT, video_source="mixed", mixed_visual_validation=False, mixed_variable_pacing=False, mixed_scene_duration=5)
+    params = VideoParams(video_subject="Café", video_script=SCRIPT, video_source="mixed", mixed_use_ai33=True, mixed_use_runware=False, mixed_visual_validation=False, mixed_variable_pacing=False, mixed_scene_duration=5)
     return folder, subtitles, params, model, search, images, rendering
 
 
@@ -199,7 +199,7 @@ def test_real_render_and_concat_preserve_scene_order_and_duration(tmp_path, monk
         assert clip.get_frame(2.0)[0, 0, 2] > 200
 
 
-@pytest.mark.parametrize("source", ["mixed", "ai33_image"])
+@pytest.mark.parametrize("source", ["mixed", "ai33_image", "runware_image"])
 def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch, source):
     from moviepy import VideoFileClip
     from app.services import task as tm
@@ -214,7 +214,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch,
     monkeypatch.setattr(mixed.sm, "state", MemoryState())
     monkeypatch.setattr(VideoAspect, "to_resolution", lambda self: (160, 90))
     monkeypatch.setattr(mixed.config, "app", {"pexels_api_keys": ["test"], "pixabay_api_keys": ["test"],
-                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test", "ai33_api_key": "test-ai33", "ai33_image_model": "test"})
+                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test", "ai33_api_key": "test-ai33", "ai33_image_model": "test", "runware_api_key": "test-runware"})
     clips = {}
     for provider, color in (("pexels", "red"), ("openai_image", "blue"), ("pixabay", "green")):
         target = tmp_path / (provider + ".mp4")
@@ -247,16 +247,19 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch,
             before_submit()
         return Path(generate()[0].url), {"task_id": "test-id"}
     monkeypatch.setattr(mixed.ai33_provider, "generate", generate_ai33)
+    def generate_runware(params, prompt, directory, *, before_submit=None, existing_only=False):
+        return generate_ai33(params, prompt, directory, before_submit=before_submit)
+    monkeypatch.setattr(mixed.runware_image, "generate", generate_runware)
     def render_image(image, *args, **kwargs):
         index = int(Path(image).read_text()) - 1
-        return clips[("pexels", "openai_image", "pixabay")[index]] if source == "ai33_image" else clips["openai_image"]
+        return clips[("pexels", "openai_image", "pixabay")[index]] if source in {"ai33_image", "runware_image"} else clips["openai_image"]
     monkeypatch.setattr(mixed.material, "_render_openai_image_video", render_image)
     monkeypatch.setattr(tm, "generate_audio", lambda *args, **kwargs: (str(audio), 6, None))
     monkeypatch.setattr(tm, "generate_subtitle", lambda *args, **kwargs: str(subtitles))
     terms = Mock(side_effect=AssertionError("Mixed mode must plan from narration, not global search terms"))
     monkeypatch.setattr(tm, "generate_terms", terms)
     monkeypatch.setattr(tm.upload_post.upload_post_service, "is_configured", lambda: False)
-    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source=source, mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
+    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source=source, mixed_use_ai33=True, mixed_use_runware=False, mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
                          bgm_type="", n_threads=1, video_clip_speed=2.0)
     result = tm.start("integration", params)
     assert result.get("videos"), result
@@ -386,7 +389,7 @@ def test_coverr_is_rotated_alongside_pexels_and_pixabay(setup, monkeypatch):
     assert [s["provenance"]["provider"] for s in scenes] == ["pexels", "pixabay", "coverr"]
     images.assert_not_called()
     assert mixed.sm.state.get_task("job")["mixed_source_counts"] == {
-        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0}
+        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0, "runware_image": 0}
 
 
 def test_coverr_can_be_the_only_configured_bank(setup, monkeypatch):
@@ -633,6 +636,7 @@ def test_saved_project_resumes_after_limit_without_script_audio_or_paid_repetiti
     spies=[Mock() for _ in range(3)]
     for name,spy in zip(('generate_script','generate_audio','generate_subtitle'),spies):
         monkeypatch.setattr(task,name,spy)
+    monkeypatch.setattr(mixed.config, "ui", {"image_source_policy": "runware-v1", "mixed_use_ai33": True, "mixed_use_runware": False})
     result=task.start(task_id,saved['params'])
     assert result['videos'] and result['mixed_image_requests']==2
     assert images.call_count==2 and rendering.call_count==1
@@ -707,3 +711,84 @@ def test_quote_failure_before_submission_does_not_consume_request_limit(setup, m
     assert saved["image_requests"] == 0
     assert not saved["scenes"][1].get("image_request_started")
     images.assert_not_called()
+
+
+def test_runware_generates_only_missing_stock_scene_and_reuses_cache(setup, monkeypatch):
+    folder, subtitles, params, model, search, images, rendering = setup
+    params.mixed_use_ai33 = False
+    params.mixed_use_runware = True
+    mixed.config.app['runware_api_key'] = 'private-runware-key'
+    paid = Mock()
+    def generate(params, prompt, directory, *, before_submit=None, existing_only=False):
+        assert not existing_only
+        before_submit()
+        output = Path(directory) / 'image.png'
+        output.parent.mkdir(exist_ok=True)
+        output.write_bytes(b'new runware image')
+        paid()
+        return output, {'task_id': 'test-runware-task', 'cost_usd': 0.001}
+    monkeypatch.setattr(mixed.runware_image, 'generate', generate)
+    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    manifest = json.loads((folder / 'mixed-scenes.json').read_text())
+    assert [s['provenance']['provider'] for s in manifest['scenes']] == ['pexels', 'runware_image', 'pixabay']
+    assert manifest['image_requests'] == 1
+    images.assert_not_called()  # AI33 adapter was not invoked.
+    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    paid.assert_called_once()
+
+
+def test_paid_ai33_pending_is_recovered_while_unchecked_then_new_images_use_runware(setup, monkeypatch):
+    folder, subtitles, params, model, search, images, rendering = setup
+    remote_id = '30258ee8-cfc0-4485-b1bc-2f9ba34bdc07'
+    def pending(params, prompt, directory, *, before_submit=None):
+        Path(directory).mkdir(exist_ok=True)
+        (Path(directory) / 'ai33-image.json').write_text(json.dumps({'task_id': remote_id}))
+        before_submit()
+        raise mixed.AI33PendingError(remote_id)
+    monkeypatch.setattr(mixed.ai33_provider, 'generate', pending)
+    with pytest.raises(mixed.MixedPending):
+        mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    params.mixed_resume = True
+    params.mixed_use_ai33 = False
+    params.mixed_use_runware = True
+    mixed.config.app['runware_api_key'] = 'test-key'
+    mixed.config.app['ai33_image_model'] = 'different-current-model'
+    def recover(params, prompt, directory, *, before_submit=None, existing_only=False):
+        assert existing_only and params.ai33_model == 'test-model'
+        image = Path(directory) / 'image.png'
+        image.write_bytes(b'previously paid AI33 image')
+        return image, {'task_id': remote_id}
+    recovery = Mock(side_effect=recover)
+    monkeypatch.setattr(mixed.ai33_provider, 'generate', recovery)
+    new_paid = Mock(side_effect=AssertionError('No new image should be ordered'))
+    monkeypatch.setattr(mixed.runware_image, 'generate', new_paid)
+    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    manifest = json.loads((folder / 'mixed-scenes.json').read_text())
+    assert manifest['image_requests'] == 1
+    assert manifest['signature']['image_provider'] == 'runware'
+    assert manifest['scenes'][1]['image_provider'] == 'ai33_image'
+    recovery.assert_called_once()
+    new_paid.assert_not_called()
+
+
+def test_runware_timeout_marks_project_waiting_without_failure(setup, monkeypatch):
+    from app.services import task
+    folder, subtitles, params, _, _, _, _ = setup
+    params.mixed_use_ai33 = False
+    params.mixed_use_runware = True
+    mixed.config.app['runware_api_key'] = 'test-key'
+    remote_id = '91b22d3e-9826-4974-985b-ab17bc22f148'
+    def pending(params, prompt, directory, *, before_submit=None, existing_only=False):
+        Path(directory).mkdir(exist_ok=True)
+        (Path(directory) / 'runware-image.json').write_text(json.dumps({'task_id': remote_id}))
+        before_submit()
+        raise mixed.runware_image.RunwarePending(remote_id)
+    monkeypatch.setattr(mixed.runware_image, 'generate', pending)
+    task.save_script_data('job', SCRIPT, [], params)
+    with pytest.raises(mixed.MixedPending) as error:
+        mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    result = task._mark_provider_pending('job', error.value)
+    assert result['state'] == task.const.TASK_STATE_WAITING
+    assert result['pending_provider'] == 'runware_image' and result['error'] is None
+    assert result['pending_remote_id'] == remote_id
+    assert json.loads((folder/'script.json').read_text())['provider_pending']['remote_id'] == remote_id

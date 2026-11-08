@@ -145,7 +145,7 @@ VIDEO_SOURCE_GROUPS = {
         "wavespeed",
         "muapi",
     ),
-    "ai_image": ("ai33_image",),
+    "ai_image": ("runware_image", "ai33_image",),
     "local": ("local",),
 }
 # Upload-Post 的 API Key 与发布用户分别在两个页面管理，并且发布用户名称
@@ -974,6 +974,8 @@ def _prepare_generation_task():
 
 def _task_state_label(state, has_video):
     normalized_state = _normalize_task_state(state)
+    if normalized_state == const.TASK_STATE_WAITING:
+        return tr("Task Status Waiting")
     if normalized_state == const.TASK_STATE_COMPLETE:
         return tr("Task Status Complete")
     if normalized_state == const.TASK_STATE_FAILED:
@@ -1042,11 +1044,16 @@ def _scan_history_tasks(limit=30):
             or script_text[:40]
             or name
         )
+        pending = script_data.get("provider_pending")
+        pending = pending if isinstance(pending, dict) and not video_file else {}
         tasks.append(
             {
                 "task_id": name,
                 "subject": subject,
-                "state": const.TASK_STATE_COMPLETE if video_file else None,
+                "state": const.TASK_STATE_COMPLETE if video_file else const.TASK_STATE_WAITING if pending else None,
+                "pending_remote_id": pending.get("remote_id"),
+                "pending_message": pending.get("message"),
+                "pending_scene": pending.get("scene"),
                 "progress": 100 if video_file else 0,
                 "mtime": mtime,
                 "task_path": task_path,
@@ -1571,10 +1578,10 @@ def _apply_restored_params(params):
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
     st.session_state["channel_skills_enabled"] = params.get("skills_enabled", False)
     st.session_state["channel_skill_ids"] = list(params.get("skill_ids", []))
-    for source in ("pexels", "pixabay", "coverr", "ai33"):
+    for source in ("pexels", "pixabay", "coverr", "runware", "ai33"):
         key = "mixed_use_" + source
-        st.session_state[key] = params.get(key, True)
-    _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "ai33"))
+        st.session_state[key] = params.get(key, True) if source not in {"ai33", "runware"} else source == "runware"
+    _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "runware"))
     st.session_state["flow_require_zero"] = params.get("flow_require_zero", True)
     st.session_state["flow_profile"] = params.get("flow_profile", "principal")
     st.session_state["flow_project_url"] = params.get("flow_project_url", "")
@@ -2122,6 +2129,8 @@ def _render_generation_activity(task):
     if phase == "downloading" and activity.get("downloaded_bytes"):
         downloaded = activity["downloaded_bytes"] / (1024 * 1024)
         st.caption(tr("Generation Downloaded").format(size=f"{downloaded:.1f}"))
+    if activity.get("provider") in {"ai33_image", "runware_image"} and isinstance(activity.get("remote_progress"), (int, float)):
+        st.caption(tr("Generation Remote Progress").format(progress=activity["remote_progress"]))
     if activity.get("remote_id"):
         st.caption(tr("Generation Remote Task").format(task_id=activity["remote_id"]))
 
@@ -2148,7 +2157,9 @@ def _render_generation_task_snapshot(task_id, task):
     if isinstance(task.get("mixed_source_counts"), Mapping):
         counts = task["mixed_source_counts"]
         display_counts = {name: counts.get(name, 0) for name in ("pexels", "pixabay", "coverr", "openai_image")}
-        display_counts["openai_image"] += counts.get("ai33_image", 0)
+        display_counts["openai_image"] += counts.get("ai33_image", 0) + counts.get("runware_image", 0)
+        if counts.get("runware_image"):
+            st.caption(f"Imagens Runware utilizadas: {counts['runware_image']}")
         st.caption(tr("Mixed Source Counts").format(**display_counts))
         if counts.get("ai33_image"):
             st.caption(f"Imagens AI33.Pro utilizadas: {counts['ai33_image']}")
@@ -2158,6 +2169,15 @@ def _render_generation_task_snapshot(task_id, task):
             title=task.get("chapter_title", ""),
         ))
         st.caption(tr("Chapter Task ID").format(task_id=task_id))
+    if state == const.TASK_STATE_WAITING:
+        st.warning(tr("Task Status Waiting"))
+        st.info(str(task.get("pending_message") or tr("Generation Pending Hint")))
+        if task.get("pending_remote_id"):
+            st.caption(tr("Generation Remote Task").format(task_id=task["pending_remote_id"]))
+        st.caption(tr("Generation Pending Hint"))
+        st.code(task_id, language=None)
+        _render_generation_logs(task_id)
+        return
     if state == const.TASK_STATE_PROCESSING:
         _render_generation_activity(task)
         st.progress(
@@ -2293,7 +2313,7 @@ def _render_running_generation_task(task_id):
         st.warning(tr("Generation Task Unavailable"))
         return
     state = _normalize_task_state((task or {}).get("state"))
-    if state in {const.TASK_STATE_COMPLETE, const.TASK_STATE_FAILED}:
+    if state in {const.TASK_STATE_COMPLETE, const.TASK_STATE_FAILED, const.TASK_STATE_WAITING}:
         _remove_active_generation_task(task_id)
         # 完整页面脚本现在没有耗时生成逻辑，可以安全 rerun 并把结果改为静态
         # 渲染。这样任务结束后不会让浏览器永久保留一个两秒轮询的 Fragment。
@@ -2331,7 +2351,7 @@ def _render_current_generation_task():
         st.warning(tr("Generation Task Unavailable"))
         return
     state = _normalize_task_state((task or {}).get("state"))
-    if state in {const.TASK_STATE_COMPLETE, const.TASK_STATE_FAILED}:
+    if state in {const.TASK_STATE_COMPLETE, const.TASK_STATE_FAILED, const.TASK_STATE_WAITING}:
         _remove_active_generation_task(task_id)
         _render_generation_task_snapshot(task_id, task)
         return
@@ -3457,6 +3477,7 @@ def _material_provider_labels():
         "jalapeno": tr("Jalapeno Cloud AI Video"),
         "wavespeed": tr("WaveSpeed AI Video"),
         "muapi": tr("MuAPI AI Video"),
+        "runware_image": "Runware · Imagens IA",
         "ai33_image": "AI33.Pro · Imagens IA",
         "codex_image": tr("codex.image.label"),
         "local": tr("Local file"),
@@ -4151,6 +4172,9 @@ def _render_material_provider_settings(provider):
 
         with st.container():
             render_codex_login(tr)
+    elif provider == "runware_image":
+        from webui.runware_settings import render
+        render(app_settings, _set_runtime_config)
     elif provider == "ai33_image":
         from webui.ai33_settings import render
         render(app_settings, _set_runtime_config)
@@ -6140,6 +6164,7 @@ def _render_video_settings(panel, params):
                 "metaso_minimax": tr("Metaso MiniMax H3"),
                 "muapi": tr("MuAPI AI Video"),
                 "loomloom": tr("Shengsuan Cloud AI Video"),
+                "runware_image": "Runware · Imagens IA",
                 "ai33_image": "AI33.Pro · Imagens IA",
                 "codex_image": tr("codex.image.label"),
                 "local": tr("Local file"),
@@ -6168,13 +6193,17 @@ def _render_video_settings(panel, params):
                 st.info(tr("Mixed Materials Help"))
                 params.mixed_select_sources = True
                 st.write(tr("Mixed Sources"))
-                for source in ("pexels", "pixabay", "coverr", "ai33"):
+                for source in ("pexels", "pixabay", "coverr", "runware", "ai33"):
                     key = "mixed_use_" + source
-                    labels = {"pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "ai33": "AI33.Pro · Imagens IA"}
-                    value = st.checkbox(labels[source], value=config.ui.get(key, True), key=key)
+                    labels = {"pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "runware": "Runware · Imagens IA", "ai33": "AI33.Pro · Imagens IA (opcional)"}
+                    if config.ui.get("image_source_policy") != "runware-v1" and source == "ai33":
+                        st.session_state[key] = False
+                        _set_runtime_config("ui", key, False)
+                    value = st.checkbox(labels[source], value=config.ui.get(key, source != "ai33"), key=key)
                     setattr(params, key, value)
                     _set_runtime_config("ui", key, value)
-                st.caption(tr("Mixed Sources Help"))
+                _set_runtime_config("ui", "image_source_policy", "runware-v1")
+                st.caption("Prioriza Pexels, Pixabay e Coverr. Runware gera quando faltar material adequado. AI33 fica desmarcada por padrão; se ambas forem ativadas, Runware tem prioridade. Não troca de gerador automaticamente em falhas.")
                 params.mixed_variable_pacing = st.checkbox(
                     tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
                 st.caption(tr("Mixed Pacing Help"))
@@ -6198,9 +6227,10 @@ def _render_video_settings(panel, params):
                 from app.services import mixed_materials
                 mixed_materials.configure_sources(params, config.snapshot_config_with_pending(config.app))
 
-            if params.video_source == "ai33_image":
-                st.info("Todas as cenas usarão imagens AI33.Pro. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
-                params.mixed_max_images = st.number_input("Máximo de imagens AI33 neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit")
+            if params.video_source in {"ai33_image", "runware_image"}:
+                provider_name = "Runware" if params.video_source == "runware_image" else "AI33.Pro"
+                st.info(f"Todas as cenas usarão imagens {provider_name}. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
+                params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit")
                 params.mixed_variable_pacing = st.checkbox(tr("Mixed Variable Pacing"), value=True, key="ai33_only_pacing")
                 params.mixed_scene_duration = st.slider(tr("Mixed Scene Duration"), min_value=5, max_value=30, value=10, key="ai33_only_duration")
 
@@ -6249,7 +6279,7 @@ def _render_video_settings(panel, params):
             # 文案顺序匹配会从关键词生成到最终合成全程保持叙事顺序，因此开启时
             # 顺序拼接是唯一符合实际执行逻辑的选项。同步控件值可避免界面仍显示
             # “随机拼接”，同时保留用户原选择，关闭后自动恢复。
-            if params.video_source in {"mixed", "ai33_image"}:
+            if params.video_source in {"mixed", "ai33_image", "runware_image"}:
                 st.session_state.setdefault("mixed_previous_match", st.session_state.get("match_materials_to_script", False))
                 st.session_state["match_materials_to_script"] = True
             elif "mixed_previous_match" in st.session_state:
@@ -6275,7 +6305,7 @@ def _render_video_settings(panel, params):
                 tr("Match Materials to Script Order"),
                 help=tr("Match Materials to Script Order Help"),
                 key="match_materials_to_script",
-                disabled=params.video_source in {"mixed", "ai33_image"},
+                disabled=params.video_source in {"mixed", "ai33_image", "runware_image"},
                 on_change=sync_script_order_concat_mode,
             )
             _set_runtime_config(
@@ -6310,7 +6340,7 @@ def _render_video_settings(panel, params):
                     VideoTransitionMode.none.value,
                 ),
                 key="video_transition_mode_select",
-                disabled=params.video_source in {"mixed", "ai33_image"},
+                disabled=params.video_source in {"mixed", "ai33_image", "runware_image"},
                 format_func=lambda value: dict(
                     (v, label) for label, v in video_transition_modes
                 )[value],
@@ -6382,7 +6412,7 @@ def _render_video_settings(panel, params):
                 "ui", "video_fit_mode", params.video_fit_mode.value
             )
 
-            if params.video_source in {"local", "ai33_image", "mixed"}:
+            if params.video_source in {"local", "ai33_image", "runware_image", "mixed"}:
                 image_motion_labels = {
                     ImageMotion.static.value: tr("Static Image"),
                     ImageMotion.zoom.value: tr("Slow Zoom"),
@@ -6436,7 +6466,7 @@ def _render_video_settings(panel, params):
                     else 3,
                 ),
                 key="video_clip_duration_select",
-                disabled=params.video_source in {"mixed", "ai33_image"},
+                disabled=params.video_source in {"mixed", "ai33_image", "runware_image"},
                 help=tr("Clip Duration Help"),
             )
             _set_runtime_config(
@@ -6459,7 +6489,7 @@ def _render_video_settings(panel, params):
                 step=0.05,
                 format="%.2fx",
                 key=clip_speed_key,
-                disabled=params.video_source in {"mixed", "ai33_image"},
+                disabled=params.video_source in {"mixed", "ai33_image", "runware_image"},
                 help=tr("Clip Speed Help"),
             )
             _set_runtime_config("ui", "video_clip_speed", params.video_clip_speed)
@@ -9330,14 +9360,18 @@ def _render_generation_controls(
             "metaso_minimax",
             "muapi",
             "loomloom",
-            "ai33_image",
+            "runware_image", "ai33_image",
             "local",
         ]:
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
             st.stop()
 
-        if params.video_source in {"mixed", "ai33_image"}:
+        if params.video_source in {"mixed", "ai33_image", "runware_image"}:
+            if params.video_source != "mixed":
+                params.mixed_use_ai33 = params.video_source == "ai33_image"
+                params.mixed_use_runware = params.video_source == "runware_image"
+                params.mixed_select_sources = True
             from app.services import mixed_materials
 
             try:
@@ -9468,6 +9502,15 @@ def _render_generation_controls(
             _remove_active_generation_task(task_id)
             st.error(tr("Confirm MuAPI Charge Required"))
             st.stop()
+
+        if params.video_source == "runware_image":
+            from app.services import runware_image
+            try:
+                runware_image.freeze(params, config.snapshot_config_with_pending(config.app))
+            except runware_image.RunwareError as exc:
+                _remove_active_generation_task(task_id)
+                st.error(str(exc))
+                st.stop()
 
         if params.video_source == "ai33_image":
             from app.services.ai33 import provider as ai33_provider, AI33Error

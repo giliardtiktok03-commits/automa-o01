@@ -1,6 +1,9 @@
 {
   "Language": "English",
   "Translation": {
+        "Generation Remote Progress": "Provider progress: {progress}%",
+        "Generation Pending Hint": "The image task is still pending. Resume the same project ID (or chapters). Saved materials and the existing request are preserved, without submitting that generation again.",
+        "Task Status Waiting": "Waiting for image provider",
     "llm_provider_label.openai_codex": "OpenAI - Codex",
     "codex.oauth.login": "Connect ChatGPT with a code",
     "codex.oauth.disconnect": "Disconnect ChatGPT",

@@ -103,7 +103,7 @@ _SUPPORTED_VIDEO_SOURCES = frozenset({
     "mixed",
     "pexels", "pixabay", "coverr", "local", "wavespeed",
     "volcengine_seedance", "ofox", "metaso_minimax", "muapi",
-    "loomloom", "ai33_image", "infistar", "jalapeno",
+    "loomloom", "runware_image", "ai33_image", "infistar", "jalapeno",
 })
 
 
@@ -144,7 +144,7 @@ def is_task_busy(task: dict | None) -> bool:
     # 可以避免 API 与 WebUI 分别维护规则后出现一个允许删除、另一个禁止
     # 删除的不一致行为。
     return (
-        state == const.TASK_STATE_PROCESSING
+        state in {const.TASK_STATE_PROCESSING, const.TASK_STATE_WAITING}
         or task.get("cross_post_state") in _ACTIVE_CROSS_POST_STATES
     )
 
@@ -264,6 +264,22 @@ def _is_cross_post_owner_alive(owner: str | None) -> bool:
         )
         return True
     return True
+
+
+def _mark_provider_pending(task_id, pending):
+    existing = sm.state.get_task(task_id) or {}
+    result = {"task_id": task_id, "state": const.TASK_STATE_WAITING,
+              "progress": int(existing.get("progress", 0) or 0),
+              "failed_stage": None, "error": None, "error_key": None, "error_params": {},
+              "pending_provider": pending.provider, "pending_remote_id": pending.remote_id,
+              "pending_scene": pending.scene_id, "pending_message": str(pending),
+              "pending_origin_task_id": pending.origin_task_id}
+    sm.state.update_task(task_id, **{key: value for key, value in result.items() if key != "task_id"})
+    task_artifacts.patch_script_data(task_id, provider_pending={
+        "provider": pending.provider, "remote_id": pending.remote_id, "scene": pending.scene_id,
+        "origin_task_id": pending.origin_task_id, "message": str(pending)})
+    logger.warning("Project waiting for image provider: task_id={}, scene={}, remote_id={}; no paid resubmission", task_id, pending.scene_id, pending.remote_id)
+    return result
 
 
 def _mark_task_failed(
@@ -741,11 +757,13 @@ def get_video_materials(
     mixed_script: str = "",
     mixed_subtitle: str = "",
 ):
-    if params.video_source in {"mixed", "ai33_image"}:
+    if params.video_source in {"mixed", "ai33_image", "runware_image"}:
         from app.services import mixed_materials
 
         try:
             return mixed_materials.prepare(task_id, params, mixed_script, audio_duration, mixed_subtitle)
+        except mixed_materials.MixedPending:
+            raise
         except (mixed_materials.MixedError, material.OpenAIImagePaidResultError) as exc:
             details = ({"error_key": exc.key, "error_params": exc.params}
                        if getattr(exc, "key", None) else None)
@@ -1084,7 +1102,7 @@ def generate_final_videos(
         # 每条视频占 50% 进度中的一份，合成与最终编码各占一半。片段处理是
         # 合成里最耗时的部分，逐段推进这一半的进度。
         combine_share = 50 / params.video_count / 2
-        if params.video_source in {"mixed", "ai33_image"}:
+        if params.video_source in {"mixed", "ai33_image", "runware_image"}:
             from app.services import mixed_materials
 
             mixed_materials.join(downloaded_videos, combined_video_path)
@@ -1590,15 +1608,17 @@ def _run_pipeline(
         generation_started_at=time.time(),
     )
 
-    if params.video_source == "ai33_image":
+    if params.video_source in {"ai33_image", "runware_image"}:
         params = params.model_copy(update={
             "mixed_use_pexels": False, "mixed_use_pixabay": False, "mixed_use_coverr": False,
-            "mixed_use_ai33": True, "mixed_select_sources": True, "mixed_image_provider": "ai33",
+            "mixed_use_ai33": params.video_source == "ai33_image",
+            "mixed_use_runware": params.video_source == "runware_image", "mixed_select_sources": True,
+            "mixed_image_provider": "ai33" if params.video_source == "ai33_image" else "runware",
             "match_materials_to_script": True, "video_concat_mode": VideoConcatMode.sequential,
         })
 
     generation_progress.stage("preparing")
-    if getattr(params, "video_source", None) in {"mixed", "ai33_image"}:
+    if getattr(params, "video_source", None) in {"mixed", "ai33_image", "runware_image"}:
         from app.services import mixed_materials
 
         try:
@@ -1790,7 +1810,7 @@ def _run_pipeline(
     generation_progress.stage("terms")
     # 2. Generate terms
     video_terms = ""
-    if stop_at in {"terms", "materials", "video"} and params.video_source not in {"local", "mixed", "ai33_image"}:
+    if stop_at in {"terms", "materials", "video"} and params.video_source not in {"local", "mixed", "ai33_image", "runware_image"}:
         video_terms = generate_terms(task_id, params, video_script)
         if not video_terms:
             return _mark_task_failed(
@@ -1870,7 +1890,7 @@ def _run_pipeline(
         task_id, params, video_script, sub_maker, audio_file,
         **({"correct_to_script": False} if preserve_audio_subtitles else {}),
     )
-    if (getattr(params, "video_source", None) in {"mixed", "ai33_image"} and params.custom_audio_file
+    if (getattr(params, "video_source", None) in {"mixed", "ai33_image", "runware_image"} and params.custom_audio_file
             and params.subtitle_enabled and not subtitle_path):
         return _mark_task_failed(task_id, "subtitle", "Whisper did not produce timed subtitles for the imported narration",
                                  details={"error_key": "mixed.whisper_failed", "error_params": {}})
@@ -1900,7 +1920,7 @@ def _run_pipeline(
         video_terms,
         audio_duration,
         **({"mixed_script": video_script, "mixed_subtitle": subtitle_path}
-           if params.video_source in {"mixed", "ai33_image"} else {}),
+           if params.video_source in {"mixed", "ai33_image", "runware_image"} else {}),
         loomloom_video_request=loomloom_video_request,
         **({"codex_image_context": codex_image_context}
            if codex_image_context is not None else {}),
@@ -1997,7 +2017,7 @@ def _run_pipeline(
         "cross_post_owner": _cross_post_process_owner if should_cross_post else None,
         "warnings": generation_warnings or None,
     }
-    if params.video_source in {"mixed", "ai33_image"}:
+    if params.video_source in {"mixed", "ai33_image", "runware_image"}:
         from app.services import mixed_materials
 
         kwargs["mixed_image_requests"] = mixed_materials.image_requests(task_id)
@@ -2057,6 +2077,9 @@ def start(
         return _mark_task_failed(task_id, "skills", str(exc))
     with generation_progress.task_scope(task_id), channel_skill_runtime.scope(params.skill_snapshot):
         try:
+            from app.services import mixed_materials
+            task_artifacts.patch_script_data(task_id, provider_pending=None)
+            sm.state.patch_task(task_id, pending_provider=None, pending_remote_id=None, pending_scene=None, pending_message=None)
             if getattr(params, "mixed_resume", False):
                 from app.services import mixed_resume
                 return mixed_resume.run(task_id, params.mixed_max_images)
@@ -2100,6 +2123,8 @@ def start(
                 **({"jalapeno_video_endpoint": jalapeno_video_endpoint}
                    if jalapeno_video_endpoint is not None else {}),
             )
+        except mixed_materials.MixedPending as pending:
+            return _mark_provider_pending(task_id, pending)
         except Exception as exc:
             logger.exception(
                 f"unexpected task pipeline failure, task_id: {task_id}, error: {exc}"

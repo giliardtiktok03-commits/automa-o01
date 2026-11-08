@@ -72,6 +72,14 @@ def render(settings, set_config):
     )
     set_config("app", "ai33_image_max_credits", cap)
     st.caption("A cotação é verificada antes de cada envio. O provedor não documenta travamento de preço. O limite de imagens do modo misto também se aplica.")
+    wait = st.number_input(
+        "Espera máxima por imagem AI33 (minutos)", min_value=1, max_value=120,
+        value=int(settings.get("ai33_image_wait_minutes", 45)), step=5,
+        key="ai33_image_wait_minutes_input", on_change=save,
+        args=("ai33_image_wait_minutes", "ai33_image_wait_minutes_input"),
+    )
+    set_config("app", "ai33_image_wait_minutes", wait)
+    st.caption("Durante esse prazo, o MPT consulta a mesma tarefa. Se a imagem continuar pendente, o projeto fica aguardando AI33 e pode ser retomado. O prazo não acelera o provedor nem altera o custo autorizado.")
     aspect = st.selectbox("Proporção para consultar preço", ["16:9", "9:16", "1:1"], key="ai33_quote_aspect")
     if st.button("Consultar preço AI33 (sem gerar imagem)", disabled=not key, key="ai33_quote"):
         params = {"aspect_ratio": aspect, **selected}
