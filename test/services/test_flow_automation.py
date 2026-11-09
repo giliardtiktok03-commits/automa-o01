@@ -77,6 +77,10 @@ class Page:
 
     def get_by_role(self, role, name=None, **_):
         pattern = name.pattern if hasattr(name, "pattern") else name
+        if role == "radio" and pattern and "16:9" in pattern:
+            return Node(self,"16:9","16:9",visible=self.ratio)
+        if role == "radio" and pattern and "x1" in pattern:
+            return Node(self,"x1","x1")
         if pattern and "Imagem" in pattern:
             return Node(self, "image-mode")
         if pattern and "Nano Banana [0-9" in pattern:
@@ -151,10 +155,10 @@ def test_real_chromium_visible_ui_single_submit_download(tmp_path):
     html='''<html><body>
 <button aria-label="Gatilho de configurações" onclick="let x=document.getElementById('settings');x.hidden=!x.hidden">Nano Banana 2.1 x1</button>
 <div id="settings" hidden>
-<button role="tab" aria-selected="false" onclick="this.setAttribute('aria-selected','true')">Imagem</button>
-<button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">16:9</button>
-<button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">x1</button>
-<button aria-label="Modelo da imagem">🍌 Nano Banana 2.1 keyboard_arrow_down</button><p>A geração vai usar 0 créditos</p></div>
+<button role="radio" aria-checked="true"><i>image</i> Imagem</button>
+<button role="radio" aria-checked="false" onclick="this.setAttribute('aria-checked','true')"><i>crop_16_9</i> <div><span>16:9</span></div></button>
+<button role="radio" aria-checked="false" onclick="let el=this;setTimeout(()=>el.setAttribute('aria-checked','true'),60)"><div><span>x1</span></div></button>
+<button aria-label="Selecionar família de modelos">🍌 Nano Banana 2.1 keyboard_arrow_down</button><p>A geração vai usar 0 créditos</p></div>
 <textarea></textarea>
 <button aria-label="Iniciar geração" onclick="submitOne()">Enviar</button><div id="results"></div>
 <script>

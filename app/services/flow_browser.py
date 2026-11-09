@@ -191,7 +191,7 @@ def _diagnostic(request_file,page,stage,exc,submitted):
     data={'stage':stage,'exception_type':type(exc).__name__,'submitted':submitted}
     try:
         if page and urlparse(page.url).hostname=='flow.google.com':
-            data['controls']=page.evaluate("""() => Array.from(document.querySelectorAll('button,[role=tab],[role=combobox],textarea,[contenteditable=true]')).filter(el=>el.getClientRects().length).slice(0,80).map(el=>({tag:el.tagName,role:el.getAttribute('role'),label:(el.getAttribute('aria-label')||el.innerText||el.getAttribute('placeholder')||'').slice(0,120),selected:el.getAttribute('aria-selected')||el.getAttribute('aria-pressed')||el.getAttribute('data-state')})).filter(x=>!/@|https?:|account|conta do google/i.test(x.label))""")
+            data['controls']=page.evaluate("""() => Array.from(document.querySelectorAll('button,[role=tab],[role=combobox],textarea,[contenteditable=true]')).filter(el=>el.getClientRects().length).slice(0,80).map(el=>({tag:el.tagName,role:el.getAttribute('role'),label:(el.getAttribute('aria-label')||el.innerText||el.getAttribute('placeholder')||'').slice(0,120),selected:el.getAttribute('aria-checked')||el.getAttribute('aria-selected')||el.getAttribute('aria-pressed')||el.getAttribute('data-state')})).filter(x=>!/@|https?:|account|conta do google/i.test(x.label))""")
     except Exception:
         pass
     task_artifacts._write_json_atomic(request_file.with_suffix('.diagnostic.json'),data)

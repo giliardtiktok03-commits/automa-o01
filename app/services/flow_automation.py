@@ -46,8 +46,15 @@ def _selected(node):
 
 
 def _choose(page, text):
-    node = _one_visible(page.get_by_text(text, exact=True), text)
+    radios=page.get_by_role('radio',name=re.compile(r'(?:^|\s)'+re.escape(text)+r'$',re.I))
+    if any(radios.nth(i).is_visible() for i in range(radios.count())):
+        node=_one_visible(radios,text)
+    else:
+        node = _one_visible(page.get_by_text(text, exact=True), text)
     if not _selected(node):node.click(timeout=5000)
+    deadline=time.monotonic()+3
+    while not _selected(node) and time.monotonic()<deadline:
+        page.wait_for_timeout(100)
     if not _selected(node):
         raise FlowError(f'Cannot confirm selected Flow option: {text}. No generation was submitted.')
 
@@ -56,7 +63,7 @@ def _image_mode(page):
     deadline=time.monotonic()+8
     while time.monotonic()<deadline:
         for role in ('tab','button','radio'):
-            nodes=page.get_by_role(role,name=re.compile(r'^(Imagem|Image)$',re.I))
+            nodes=page.get_by_role(role,name=re.compile(r'^(?:image\s+)?(Imagem|Image)$',re.I))
             visible=[nodes.nth(i) for i in range(nodes.count()) if nodes.nth(i).is_visible()]
             if len(visible)==1:return visible[0]
         page.wait_for_timeout(100)

@@ -1,0 +1,20 @@
+CORREÇÃO FLOW — PROPORÇÃO E QUANTIDADE
+
+O diagnóstico recebido confirma submitted=false e etapa
+selecionando_proporcao_quantidade. As opções são botões com role=radio.
+A correção seleciona esses controles diretamente e confirma aria-checked,
+incluindo uma pequena espera pela atualização assíncrona do estado.
+Também inclui aria-checked nos próximos diagnósticos.
+
+1. Feche o MPT e as janelas do perfil Flow. Faça backup.
+2. Extraia o ZIP na pasta de webui.bat, substituindo os arquivos.
+3. Reabra e teste UMA imagem, mantendo 0 créditos marcado.
+4. Atualize o resultado. Se parar em outra etapa, envie o novo diagnóstico.
+
+Não precisa reinstalar Playwright, refazer o login nem apagar o perfil.
+O teste diagnosticado não enviou um prompt ao Flow.
+Não repita pedidos que apareçam como enviados ou resultado não confirmado.
+
+98 testes passaram, incluindo Chromium com controles radio, ícones, rótulos
+aninhados e atualização assíncrona de aria-checked. O teste da conta/interface
+real continua sendo necessário; nenhuma geração real foi feita nesta validação.
