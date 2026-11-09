@@ -1,0 +1,29 @@
+FLOW — ERRO REAL E VERIFICAÇÃO SEM GERAR
+
+A mensagem FlowError genérica era causada por classes de erro duplicadas entre
+o processo __main__ do navegador e o módulo importado pelo controlador.
+A correção usa classes compartilhadas e preserva o motivo original nos novos
+erros. Mensagens de erro já perdidas em testes antigos não são reconstruídas.
+
+1. Feche o MPT e as janelas do perfil Flow. Faça backup.
+2. Extraia este ZIP na pasta do webui.bat, substituindo todos os arquivos.
+   Inclua o NOVO app/services/flow_errors.py. Não precisa reinstalar pacotes.
+3. Reabra e entre em Configurar fontes de material > Google Flow.
+4. NÃO clique em Testar envio automático neste momento.
+5. Clique em Verificar projeto do último teste sem gerar imagem.
+6. Aguarde o Chrome abrir/fechar e clique em Atualizar resultado do teste.
+7. Use Baixar diagnóstico da verificação sem gerar e envie o JSON para análise.
+
+A verificação usa o projeto gravado no último teste do mesmo perfil, quando
+esse registro existe. Não envia prompt, não clica em Gerar e não tenta novamente
+uma geração antiga. Ela também não comprova se a tentativa anterior foi aceita.
+Registra o projeto visitado, os controles e mensagens de erro visíveis na UI.
+Senhas, cookies, tokens e valores de campos não são coletados.
+
+Um resultado antigo ainda pode mostrar a mensagem genérica anterior; envie o
+NOVO diagnóstico da VERIFICAÇÃO SOMENTE LEITURA, não o antigo do teste.
+
+102 testes passaram na suíte direcionada. Incluem identidade das exceções em
+módulo executado separadamente, erro real preservado, inspeção sem chamada à
+geração, projeto original recuperado e testes de navegador local simulado.
+Nenhuma conta Google foi acessada nem imagem real gerada nesses testes.

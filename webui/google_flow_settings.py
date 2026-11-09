@@ -49,7 +49,29 @@ def render(settings,set_config):
                 st.session_state.google_flow_test_started=time.time()
                 st.info('Teste iniciado no Chrome. Ao concluir, clique em Atualizar resultado do teste.')
             except (ValueError,OSError) as exc:st.error(str(exc))
+    if st.button('Verificar projeto do último teste sem gerar imagem', disabled=not project, key='google_flow_inspect'):
+        try:
+            inspection=flow_browser.start_inspection(profile,project,use_latest_test=True)
+            st.session_state.google_flow_inspection_request=str(inspection)
+            st.info('Verificação somente leitura iniciada usando o projeto registrado no último teste deste perfil, quando disponível. Nenhum novo prompt será enviado. Depois clique em Atualizar resultado do teste.')
+        except (ValueError,OSError) as exc:st.error(str(exc))
     st.button('Atualizar resultado do teste',key='google_flow_refresh')
+    inspection=st.session_state.get('google_flow_inspection_request')
+    if inspection:
+        inspection=Path(inspection)
+        state_file=inspection.with_suffix('.result.json')
+        if state_file.exists():
+            state=json.loads(state_file.read_text(encoding='utf-8'))
+            if state.get('status')=='inspected':
+                st.success('Verificação somente leitura concluída. Nenhuma geração foi iniciada nesta verificação.')
+                st.caption('Ela não comprova se a tentativa anterior foi aceita. Use o diagnóstico abaixo para conferir o projeto.')
+            else:st.warning(str(state.get('error') or 'Verificação interrompida'))
+            diagnostic=inspection.with_suffix('.diagnostic.json')
+            if diagnostic.exists():
+                payload=json.loads(diagnostic.read_text(encoding='utf-8'))
+                for message in payload.get('visible_messages',[]):st.write(message)
+                st.download_button('Baixar diagnóstico da verificação sem gerar',data=diagnostic.read_bytes(),file_name='diagnostico-flow-verificacao.json',mime='application/json',key='google_flow_inspection_download')
+        else:st.info('Aguardando a verificação somente leitura.')
     request=st.session_state.get('google_flow_test_request')
     if request:
         path=Path(request)

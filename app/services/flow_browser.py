@@ -22,14 +22,7 @@ from app.services import task_artifacts
 from app.utils.atomic_files import write_bytes_atomic
 
 
-class FlowError(ValueError):
-    def __init__(self,message,*,key=None):
-        super().__init__(message)
-        self.key=key
-
-
-class FlowRefusal(FlowError):
-    pass
+from app.services.flow_errors import FlowError, FlowRefusal
 
 
 def normalized(profile,project):
@@ -91,6 +84,33 @@ def start_test(profile,project,require_zero=True,*,model="Nano Banana 2.1",aspec
     task_artifacts._write_json_atomic(request,{'profile':profile,'project':project,'action':'generate','timeout':180,
          'require_zero':require_zero,'aspect':aspect,'model':model,
          'prompt':'A cozy empty cafe on a rainy morning, warm lighting, photorealistic, no text, no logos.'})
+    _launch(request)
+    return request
+
+
+def latest_test(profile):
+    folder=_root()/'tests'
+    matches=[]
+    for path in folder.glob('*/flow-request.json'):
+        try:
+            data=json.loads(path.read_text(encoding='utf-8'))
+            if data.get('action')=='generate' and data.get('profile')==profile:
+                matches.append((path.stat().st_mtime_ns,path,data))
+        except (OSError,ValueError):
+            continue
+    return max(matches,key=lambda entry:entry[0]) if matches else None
+
+
+def start_inspection(profile,project,*,use_latest_test=False):
+    profile,project=normalized(profile,project)
+    if use_latest_test:
+        previous=latest_test(profile)
+        if previous:project=previous[2]['project']
+    validate(profile,project)
+    folder=_root()/'tests'/uuid.uuid4().hex
+    folder.mkdir(parents=True)
+    request=folder/'flow-request.json'
+    task_artifacts._write_json_atomic(request,{'profile':profile,'project':project,'action':'inspect'})
     _launch(request)
     return request
 
@@ -189,8 +209,14 @@ def _wait_devtools(chrome, port_file, timeout=45):
 
 def _diagnostic(request_file,page,stage,exc,submitted):
     data={'stage':stage,'exception_type':type(exc).__name__,'submitted':submitted}
+    if isinstance(exc,FlowError):data['reason']=str(exc)[:500]
     try:
         if page and urlparse(page.url).hostname=='flow.google.com':
+            path=urlparse(page.url).path
+            if re.fullmatch(r'/project/[0-9a-fA-F-]{36}/?',path):data['project_id']=path.strip('/').split('/')[-1]
+            body=page.locator('body').inner_text(timeout=3000)
+            keywords=re.compile(r'erro|error|failed|não foi possível|something went wrong|try again|tentar de novo|quota|limite|blocked|atividade incomum|unusual',re.I)
+            data['visible_messages']=[line.strip()[:300] for line in body.splitlines() if keywords.search(line) and not re.search(r'@|https?://',line)][:12]
             data['controls']=page.evaluate("""() => Array.from(document.querySelectorAll('button,[role=tab],[role=combobox],textarea,[contenteditable=true]')).filter(el=>el.getClientRects().length).slice(0,80).map(el=>({tag:el.tagName,role:el.getAttribute('role'),label:(el.getAttribute('aria-label')||el.innerText||el.getAttribute('placeholder')||'').slice(0,120),selected:el.getAttribute('aria-checked')||el.getAttribute('aria-selected')||el.getAttribute('aria-pressed')||el.getAttribute('data-state')})).filter(x=>!/@|https?:|account|conta do google/i.test(x.label))""")
     except Exception:
         pass
@@ -237,6 +263,14 @@ def _browser(request_file):
                     if page is None:page=context.pages[0] if context.pages else context.new_page()
                     if page.url.rstrip('/')!=data['project'].rstrip('/'):
                         page.goto(data['project'],wait_until='domcontentloaded',timeout=60000)
+                    if data['action']=='inspect':
+                        stage='verificacao_somente_leitura'
+                        if urlparse(page.url).hostname!='flow.google.com':raise FlowError('A sessão requer login manual no Google')
+                        page.locator('textarea, [contenteditable="true"]').first.wait_for(state='visible',timeout=30000)
+                        page.wait_for_timeout(1000)
+                        _diagnostic(request_file,page,stage,FlowError('Verificação somente leitura; nenhum pedido enviado'),False)
+                        task_artifacts._write_json_atomic(result_file,{'status':'inspected','submitted':False,'stage':stage})
+                        return
                     from app.services import flow_automation
                     def mark():
                         task_artifacts._write_json_atomic(marker,{'submitted':True})

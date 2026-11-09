@@ -153,3 +153,72 @@ def test_diagnostic_records_stage_and_submission_without_exception_message(tmp_p
     assert data['stage']=='selecionando_imagem' and data['submitted'] is False
     assert data['exception_type']=='RuntimeError'
     assert 'secret-token' not in json.dumps(data)
+
+
+def test_flow_errors_are_identical_when_worker_module_is_executed_separately():
+    import runpy
+    namespace=runpy.run_path(str(Path(flow.__file__)),run_name='flow_worker_test')
+    assert namespace['FlowError'] is flow.FlowError
+    assert namespace['FlowRefusal'] is flow.FlowRefusal
+
+
+@pytest.mark.parametrize('action',['generate','inspect'])
+def test_separate_worker_preserves_real_error_or_inspects_without_sending(tmp_path,monkeypatch,action):
+    import runpy
+    from unittest.mock import MagicMock,patch
+    namespace=runpy.run_path(str(Path(flow.__file__)),run_name='flow_worker_test')
+    worker=namespace['_browser']
+    scope=worker.__globals__
+    scope['validate']=lambda *_:None
+    scope['_root']=lambda:tmp_path
+    scope['_chrome_executable']=lambda:'chrome.exe'
+    scope['_wait_devtools']=lambda *_:'9222'
+    page=MagicMock()
+    page.url=URL
+    page.locator.return_value.inner_text.return_value='Não foi possível concluir a geração.'
+    page.evaluate.return_value=[]
+    context=MagicMock()
+    context.pages=[page]
+    browser=MagicMock()
+    browser.contexts=[context]
+    p=MagicMock()
+    p.chromium.connect_over_cdp.return_value=browser
+    manager=MagicMock()
+    manager.__enter__.return_value=p
+    process=MagicMock()
+    process.poll.return_value=0
+    request=tmp_path/'flow-request.json'
+    request.write_text(json.dumps({'profile':'principal','project':URL,'action':action,'prompt':'test'}))
+    def fail(*args,**kwargs):
+        kwargs['on_stage']('aguardando_imagem')
+        raise flow.FlowError('Flow generation result timed out. Review project before another request.')
+    with patch.object(flow.subprocess,'Popen',return_value=process),patch('playwright.sync_api.sync_playwright',return_value=manager),patch('app.services.flow_automation.generate',side_effect=fail) as generate:
+        worker(request)
+    result=json.loads(request.with_suffix('.result.json').read_text())
+    diagnostic=json.loads(request.with_suffix('.diagnostic.json').read_text())
+    if action=='generate':
+        assert 'generation result timed out' in result['error']
+        assert result['stage']=='aguardando_imagem'
+        assert diagnostic['reason'].startswith('Flow generation result timed out')
+        generate.assert_called_once()
+    else:
+        assert result['status']=='inspected' and result['submitted'] is False
+        assert diagnostic['visible_messages']==['Não foi possível concluir a geração.']
+        generate.assert_not_called()
+    browser.close.assert_called_once()
+
+
+def test_read_only_inspection_uses_recorded_project_without_new_generation(tmp_path,monkeypatch):
+    monkeypatch.setattr(flow,'_root',lambda:tmp_path)
+    monkeypatch.setattr(flow,'validate',lambda *_:None)
+    previous=tmp_path/'tests'/'previous'/'flow-request.json'
+    previous.parent.mkdir(parents=True)
+    previous.write_text(json.dumps({'action':'generate','profile':'principal','project':URL,'prompt':'private prompt'}))
+    launcher=Mock()
+    monkeypatch.setattr(flow,'_launch',launcher)
+    request=flow.start_inspection('principal','https://flow.google.com/project/11111111-1111-1111-1111-111111111111',use_latest_test=True)
+    data=json.loads(request.read_text())
+    assert data=={'action':'inspect','profile':'principal','project':URL}
+    assert 'prompt' not in data
+    launcher.assert_called_once()
+    assert flow.latest_test('principal')[1]==previous
