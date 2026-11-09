@@ -1,2 +1,2 @@
-# Optional, installed only for the assisted Google Flow browser integration.
+# Optional, installed only for the Google Flow visible Chrome integration.
 playwright>=1.49,<2

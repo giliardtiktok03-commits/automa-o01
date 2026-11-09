@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 from PIL import Image
 import pytest
 from app.services import flow_automation as flow
@@ -131,3 +131,45 @@ def test_logged_out_browser_stops_without_submitting(tmp_path):
     with pytest.raises(flow.FlowError, match="login"):
         flow.generate(page, "scene", tmp_path / "result.png")
     assert page.submissions == 0
+
+
+def test_real_chromium_visible_ui_single_submit_download(tmp_path):
+    import base64,io,shutil
+    from playwright.sync_api import sync_playwright
+    chromium=shutil.which('chromium')
+    if not chromium:pytest.skip('Local Chromium not installed')
+    out=io.BytesIO()
+    Image.new('RGB',(320,180),'blue').save(out,format='PNG')
+    data='data:image/png;base64,'+base64.b64encode(out.getvalue()).decode()
+    html='''<html><body>
+<button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Imagem</button>
+<button onclick="let x=document.getElementById('settings');x.hidden=!x.hidden">Nano Banana 2.1 x1</button>
+<div id="settings" hidden>
+<button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">16:9</button>
+<button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">x1</button>
+<button>Nano Banana 2.1</button><p>A geração vai usar 0 créditos</p></div>
+<textarea></textarea>
+<button aria-label="Send prompt" onclick="submitOne()">Enviar</button><div id="results"></div>
+<script>
+window.submissions=0;
+function submitOne(){window.submissions++;let card=document.createElement('div');
+let img=document.createElement('img');img.src=DATA;card.appendChild(img);
+let button=document.createElement('button');button.setAttribute('aria-label','Download');button.textContent='Baixar';
+button.onclick=()=>{let link=document.createElement('a');link.href=DATA;link.download='image.png';link.click()};
+card.appendChild(button);document.getElementById('results').appendChild(card);}
+</script></body></html>'''.replace('DATA',repr(data))
+    with sync_playwright() as p:
+        # Synthetic HTML only; no Google account or external website is accessed.
+        browser=p.chromium.launch(executable_path=chromium,headless=True)
+        try:
+            page=browser.new_page(accept_downloads=True)
+            page.route('**/*',lambda route:route.fulfill(status=200,content_type='text/html; charset=utf-8',body=html))
+            page.goto('https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66')
+            before=Mock()
+            target=tmp_path/'result.png'
+            flow.generate(page,'Historical documentary test',target,timeout=10,before_submit=before)
+            before.assert_called_once()
+            assert page.evaluate('window.submissions')==1
+            assert page.locator('textarea').input_value()=='Historical documentary test'
+            with Image.open(target) as image:assert image.size==(320,180)
+        finally:browser.close()

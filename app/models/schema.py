@@ -134,10 +134,17 @@ class VideoParams(BaseModel):
     mixed_total_duration: float = Field(default=0, ge=0, allow_inf_nan=False)
     mixed_previous_sources: list[dict[str, Any]] = Field(default_factory=list)
     mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
-    mixed_image_provider: Literal["grok", "runware", "ai33", "openai", "flow_browser", "openai_flow", "none"] = "grok"
+    mixed_image_provider: Literal["google_flow", "grok", "runware", "ai33", "openai", "flow_browser", "openai_flow", "none"] = "grok"
     mixed_use_ai33: bool = False
     mixed_use_runware: bool = False
     mixed_use_grok: bool = True
+    mixed_use_google_flow: bool = False
+    google_flow_mode: Optional[Literal["automatic", "manual_import"]] = None
+    google_flow_profile: Optional[str] = None
+    google_flow_project_url: Optional[str] = None
+    google_flow_model: Optional[str] = None
+    google_flow_timeout: Optional[int] = Field(default=None, ge=30, le=1800)
+    google_flow_require_zero: Optional[bool] = None
     mixed_grok_unlimited: bool = True
     grok_model: Optional[str] = None
     runware_model: Optional[str] = None

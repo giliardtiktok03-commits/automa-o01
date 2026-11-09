@@ -31,6 +31,14 @@ grok_image_api_key = ""
 grok_image_model = "grok-imagine-image"
 grok_image_timeout_seconds = 600
 
+# Google Flow: optional visible Chrome integration; manual Google login.
+google_flow_access_mode = "automatic"
+google_flow_profile = "principal"
+google_flow_project_url = ""
+google_flow_model = "Nano Banana 2.1"
+google_flow_require_zero = true
+google_flow_timeout_seconds = 900
+
 ai33_api_key = ""
 ai33_image_model = "bytedance-seedream-4.5"
 ai33_image_resolution = "2K"

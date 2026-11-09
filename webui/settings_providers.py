@@ -95,6 +95,14 @@ def configured_material_providers(settings, groups, codex_connected=False):
     }
     from app.services.ai33 import provider as ai33_provider
     enabled["ai33_image"] = ai33_provider.is_enabled(settings)
+    from app.services import flow_browser
+    enabled["google_flow"] = settings.get("google_flow_access_mode") == "manual_import"
+    if not enabled["google_flow"] and settings.get("google_flow_project_url"):
+        try:
+            flow_browser.validate(settings.get("google_flow_profile", "principal"), settings["google_flow_project_url"])
+            enabled["google_flow"] = True
+        except ValueError:
+            pass
     from app.services import grok_image
     enabled["grok_image"] = grok_image.is_enabled(settings)
     enabled.update(

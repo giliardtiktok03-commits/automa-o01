@@ -8,5 +8,5 @@ class SyntheticImagePolicyError(ValueError):
 def reject_legacy_generation():
     raise SyntheticImagePolicyError(
         "Novas imagens sintéticas usam Grok ou AI33.Pro explicitamente habilitada. "
-        "Selecione Grok ou o modo misto; arquivos antigos continuam utilizáveis."
+        "Selecione Grok, Google Flow ou o modo misto; arquivos antigos continuam utilizáveis."
     )

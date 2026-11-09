@@ -16,9 +16,6 @@ from app.services.ai33.policy import SyntheticImagePolicyError
     lambda: material._request_openai_image("https://example.test", {}),
     lambda: material.generate_images_codex("test", 1),
     lambda: codex_image.generate_image("test", None),
-    lambda: flow_browser.generate("test", "unused", "profile", "unused"),
-    lambda: flow_browser.start_test("profile", "unused"),
-    lambda: flow_automation.generate(None, "test", "unused"),
 ])
 def test_legacy_synthetic_image_entry_points_stop_before_network(entry):
     with patch("requests.sessions.Session.request") as network:
@@ -104,7 +101,7 @@ def test_chapter_migration_requires_original_fingerprint_and_unchanged_editorial
     from app.services import task_artifacts
     params = VideoParams(video_subject="history", video_source="mixed", mixed_image_provider="openai")
     saved = params.model_dump(mode="json")
-    for key in ("mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines"):
+    for key in ("mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines", "mixed_use_google_flow", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"):
         saved.pop(key)
     original = {k: v for k, v in saved.items() if k not in {"mixed_resume", "mixed_grok_unlimited"}}
     references = ["audio-digest", "", ""]

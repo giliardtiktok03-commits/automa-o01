@@ -13,6 +13,7 @@ where uv >nul 2>nul
 if not errorlevel 1 (
  uv pip install --python %FLOW_PY% -r requirements-flow.txt
 ) else (
+ %FLOW_PY% -m ensurepip --upgrade
  %FLOW_PY% -m pip install -r requirements-flow.txt
 )
 if errorlevel 1 (

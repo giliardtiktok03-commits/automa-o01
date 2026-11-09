@@ -152,7 +152,7 @@ def test_old_chapter_fingerprint_ignores_new_inactive_fields():
     params = VideoParams(video_subject="topic", video_source="mixed")
     raw = params.model_dump(mode="json")
     for key in ("skills_enabled", "skill_ids", "skill_snapshot", "mixed_resume", "mixed_grok_unlimited", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines",
-                "runware_model", "runware_steps", "runware_size", "mixed_use_runware"):
+                "runware_model", "runware_steps", "runware_size", "mixed_use_runware", "mixed_use_google_flow", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"):
         raw.pop(key)
     expected = hashlib.sha256(json.dumps({"params": raw, "references": []}, sort_keys=True).encode()).hexdigest()
     assert long_form._fingerprint(params, []) == expected

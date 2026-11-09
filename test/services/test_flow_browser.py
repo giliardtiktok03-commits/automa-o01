@@ -77,31 +77,57 @@ def test_standalone_test_launches_one_image_without_video_pipeline(tmp_path, mon
     assert launcher.call_count==1
 
 
-def test_browser_keeps_chrome_sandbox_and_reuses_initial_tab(tmp_path, monkeypatch):
-    import sys
-    import types
-    from unittest.mock import MagicMock
-    monkeypatch.setattr(flow, 'validate', lambda *_: None)
-    monkeypatch.setattr(flow, '_root', lambda: tmp_path)
-    page = MagicMock()
-    context = MagicMock()
-    context.pages = [page]
-    page.goto.side_effect = lambda *_a, **_k: setattr(context, 'pages', [])
-    playwright = MagicMock()
-    playwright.chromium.launch_persistent_context.return_value = context
-    manager = MagicMock()
-    manager.__enter__.return_value = playwright
-    api = types.ModuleType('playwright.sync_api')
-    api.sync_playwright = lambda: manager
-    monkeypatch.setitem(sys.modules, 'playwright', types.ModuleType('playwright'))
-    monkeypatch.setitem(sys.modules, 'playwright.sync_api', api)
-    request = tmp_path/'connect.json'
-    request.write_text(json.dumps({'profile':'giliard', 'project':URL, 'action':'connect'}))
+def test_login_uses_regular_chrome_without_automation_port(tmp_path,monkeypatch):
+    monkeypatch.setattr(flow,'validate',lambda *_:None)
+    monkeypatch.setattr(flow,'_root',lambda:tmp_path)
+    monkeypatch.setattr(flow,'_chrome_executable',lambda:'chrome.exe')
+    process=Mock()
+    process.poll.return_value=0
+    launch=Mock(return_value=process)
+    monkeypatch.setattr(flow.subprocess,'Popen',launch)
+    request=tmp_path/'connect.json'
+    request.write_text(json.dumps({'profile':'giliard','project':URL,'action':'connect'}))
     flow._browser(request)
-    kwargs = playwright.chromium.launch_persistent_context.call_args.kwargs
-    assert kwargs['chromium_sandbox'] is True
-    assert kwargs['headless'] is False
-    assert 'ignore_default_args' not in kwargs
-    context.new_page.assert_not_called()
+    args=launch.call_args.args[0]
+    assert args[0]=='chrome.exe'
+    assert not any('remote-debugging' in arg or 'no-sandbox' in arg or 'disable-blink' in arg for arg in args)
+    assert '--user-data-dir='+str(tmp_path/'profiles'/'giliard') in args
     assert json.loads(request.with_suffix('.result.json').read_text())['status']=='closed'
-    context.close.assert_called_once()
+    process.wait.assert_called_once()
+
+
+def test_submitted_unknown_result_is_never_reposted(tmp_path,monkeypatch):
+    monkeypatch.setattr(flow,'validate',lambda *_:None)
+    def lost(request):
+        request.with_suffix('.submitted.json').write_text(json.dumps({'submitted':True}))
+        return Mock()
+    launcher=Mock(side_effect=lost)
+    monkeypatch.setattr(flow,'_launch',launcher)
+    for _ in range(2):
+        with pytest.raises(flow.FlowError):flow.generate('Test scene',tmp_path,'principal',URL)
+    launcher.assert_called_once()
+
+
+def test_ready_image_is_reused_without_another_browser_launch(tmp_path,monkeypatch):
+    monkeypatch.setattr(flow,'validate',lambda *_:None)
+    def ready(request):
+        Image.new('RGB',(320,180),'blue').save(request.with_suffix('.png'))
+        request.with_suffix('.result.json').write_text(json.dumps({'status':'ready','submitted':True}))
+        return Mock()
+    launcher=Mock(side_effect=ready)
+    monkeypatch.setattr(flow,'_launch',launcher)
+    first=flow.generate('Test scene',tmp_path,'principal',URL)
+    assert flow.generate('Test scene',tmp_path,'principal',URL)==first
+    launcher.assert_called_once()
+
+
+def test_failed_controls_before_submission_can_be_retried_explicitly(tmp_path,monkeypatch):
+    monkeypatch.setattr(flow,'validate',lambda *_:None)
+    def blocked(request):
+        request.with_suffix('.result.json').write_text(json.dumps({'status':'failed','submitted':False,'error':'control missing'}))
+        return Mock()
+    launcher=Mock(side_effect=blocked)
+    monkeypatch.setattr(flow,'_launch',launcher)
+    for _ in range(2):
+        with pytest.raises(flow.FlowError):flow.generate('Test scene',tmp_path,'principal',URL)
+    assert launcher.call_count==2  # Neither attempt submitted a generation.

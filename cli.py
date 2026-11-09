@@ -49,7 +49,7 @@ _CLI_VIDEO_SOURCES = (
     "jalapeno",
     "metaso_minimax",
     "muapi",
-    "grok_image", "ai33_image",
+    "google_flow", "grok_image", "ai33_image",
     "local",
 )
 

@@ -199,7 +199,7 @@ def test_real_render_and_concat_preserve_scene_order_and_duration(tmp_path, monk
         assert clip.get_frame(2.0)[0, 0, 2] > 200
 
 
-@pytest.mark.parametrize("source", ["mixed", "ai33_image", "grok_image"])
+@pytest.mark.parametrize("source", ["mixed", "ai33_image", "grok_image", "google_flow"])
 def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch, source):
     from moviepy import VideoFileClip
     from app.services import task as tm
@@ -250,16 +250,19 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch,
     def generate_runware(params, prompt, directory, *, before_submit=None, existing_only=False):
         return generate_ai33(params, prompt, directory, before_submit=before_submit)
     monkeypatch.setattr(mixed.grok_image, "generate", generate_runware)
+    def generate_flow(params, prompt, folder, scene_id, job_folder, *, before_submit=None):
+        return generate_ai33(params, prompt, job_folder, before_submit=before_submit)
+    monkeypatch.setattr(mixed.google_flow, "generate", generate_flow)
     def render_image(image, *args, **kwargs):
         index = int(Path(image).read_text()) - 1
-        return clips[("pexels", "openai_image", "pixabay")[index]] if source in {"ai33_image", "grok_image"} else clips["openai_image"]
+        return clips[("pexels", "openai_image", "pixabay")[index]] if source in {"ai33_image", "grok_image", "google_flow"} else clips["openai_image"]
     monkeypatch.setattr(mixed.material, "_render_openai_image_video", render_image)
     monkeypatch.setattr(tm, "generate_audio", lambda *args, **kwargs: (str(audio), 6, None))
     monkeypatch.setattr(tm, "generate_subtitle", lambda *args, **kwargs: str(subtitles))
     terms = Mock(side_effect=AssertionError("Mixed mode must plan from narration, not global search terms"))
     monkeypatch.setattr(tm, "generate_terms", terms)
     monkeypatch.setattr(tm.upload_post.upload_post_service, "is_configured", lambda: False)
-    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source=source, mixed_use_ai33=True, mixed_use_runware=False, mixed_use_grok=False, mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
+    params = VideoParams(video_subject="Coffee", video_script=SCRIPT, video_source=source, google_flow_mode="manual_import", mixed_use_ai33=True, mixed_use_runware=False, mixed_use_grok=False, mixed_visual_validation=False, mixed_variable_pacing=False, subtitle_enabled=False,
                          bgm_type="", n_threads=1, video_clip_speed=2.0)
     result = tm.start("integration", params)
     assert result.get("videos"), result
@@ -389,7 +392,7 @@ def test_coverr_is_rotated_alongside_pexels_and_pixabay(setup, monkeypatch):
     assert [s["provenance"]["provider"] for s in scenes] == ["pexels", "pixabay", "coverr"]
     images.assert_not_called()
     assert mixed.sm.state.get_task("job")["mixed_source_counts"] == {
-        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0, "runware_image": 0, "grok_image": 0}
+        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0, "runware_image": 0, "grok_image": 0, "google_flow": 0}
 
 
 def test_coverr_can_be_the_only_configured_bank(setup, monkeypatch):
@@ -862,3 +865,38 @@ def test_finite_grok_mode_still_enforces_explicit_cap(setup):
     params.mixed_max_images=0
     with pytest.raises(mixed.MixedBudgetError):
         mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+
+
+def test_flow_waits_then_imports_and_resumes_without_paid_fallback(setup,monkeypatch):
+    import io
+    from PIL import Image
+    from uuid import uuid4
+    from app.services import google_flow
+    _,subtitles,params,model,search,images,_=setup
+    task_id=str(uuid4())
+    folder=Path(mixed.utils.task_dir(task_id))
+    params.mixed_use_google_flow=True
+    params.google_flow_mode='manual_import'
+    params.mixed_select_sources=True
+    params.mixed_max_images=0
+    original=search.side_effect
+    search.side_effect=lambda provider,method,query,*args:[] if query.endswith('2') else original(provider,method,query,*args)
+    grok=Mock(side_effect=AssertionError('No paid Grok fallback'))
+    monkeypatch.setattr(mixed.grok_image,'generate',grok)
+    with pytest.raises(mixed.MixedPending) as pending:
+        mixed.prepare(task_id,params,SCRIPT,30,str(subtitles))
+    assert pending.value.provider=='google_flow'
+    state=json.loads((folder/'mixed-scenes.json').read_text())
+    assert state['image_requests']==0 and state['scenes'][0].get('sha256')
+    out=io.BytesIO()
+    Image.new('RGB',(320,180),'blue').save(out,format='PNG')
+    google_flow.import_image(task_id,2,out.getvalue())
+    params.mixed_resume=True
+    result=mixed.prepare(task_id,params,SCRIPT,30,str(subtitles))
+    assert len(result)==3
+    state=json.loads((folder/'mixed-scenes.json').read_text())
+    assert state['scenes'][1]['provenance']['provider']=='google_flow'
+    assert state['image_requests']==0
+    model.assert_called_once()
+    images.assert_not_called()
+    grok.assert_not_called()

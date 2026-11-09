@@ -1,0 +1,70 @@
+MPT — GOOGLE FLOW AUTOMÁTICO (EXPERIMENTAL)
+
+PRIMEIRO TESTE: UMA CONTA, UMA IMAGEM
+
+1. Feche o MPT e faça backup da pasta.
+2. Extraia este ZIP na pasta do webui.bat, substituindo os arquivos.
+   config.toml, storage, perfis e chaves não fazem parte deste pacote.
+3. Instale/atualize o Google Chrome e execute PREPARAR_FLOW_WINDOWS.bat.
+   Ele instala apenas o controlador Playwright, não outro navegador.
+4. Abra webui.bat. Vá a Configurar fontes de material > Imagens IA > Google Flow.
+5. Selecione Automático pelo Chrome (experimental).
+   Perfil local: por exemplo, giliard. Não use e-mail nem caminho de pasta.
+   Projeto: cole seu link https://flow.google.com/project/SEU-ID-DO-PROJETO.
+   Modelo inicial: Nano Banana 2.1. Mantenha a confirmação de 0 créditos marcada.
+6. Clique em Abrir Chrome para fazer login no Flow.
+   O login abre no Chrome normal, sem porta de automação nesse momento.
+   Faça você mesmo o login Google e eventuais verificações. Abra o projeto.
+   Use um projeto exclusivo para o MPT, sem outras gerações em andamento.
+7. Feche as janelas DESSE PERFIL Flow para liberar o teste.
+8. Clique em Testar envio automático de 1 imagem.
+   Mantenha o Chrome visível, sem minimizar ou interagir enquanto ele trabalha.
+9. Aguarde e clique em Atualizar resultado do teste no MPT.
+   Confira a imagem: o teste pede um café vazio num dia chuvoso.
+
+Só depois do teste funcionar, use um roteiro curto no modo misto.
+Marque Pexels, Pixabay, Coverr e Google Flow. Flow tem prioridade sobre Grok/AI33
+quando selecionado, mas não muda sua configuração padrão sozinho.
+Não há fallback pago automático se o Flow falhar.
+
+O QUE FOI IMPLEMENTADO
+- Login manual em perfil Chrome local separado, sem senhas/códigos no MPT.
+- Envio de prompts, modo imagem, proporção do vídeo, x1 e modelo desejado.
+- Confirmação de 0 créditos antes de enviar, quando essa opção está ativa.
+- Identificação de um único resultado novo e download pelo botão da interface.
+- Validação PNG, associação por cena, conversão em clipe e montagem normal.
+- Uma operação Flow por vez no MPT; nenhum rodízio automático de contas.
+- Fonte Flow exclusiva, com imagem estática por padrão e opção de zoom.
+- Modo misto continua priorizando os bancos ativados/configurados.
+
+LIMITES IMPORTANTES
+O teste do navegador foi feito com uma página LOCAL SIMULADA. Não tivemos acesso
+à sua conta Google/Flow, e não afirmamos que o site real já esteja validado.
+Mudanças da interface, idioma ou disponibilidade do modelo podem exigir ajuste.
+Se não conseguir comprovar as opções ou o custo, o conector para antes do envio.
+Captcha, atividade incomum, cota ou login expirado exigem sua intervenção.
+Não limpa cookies para contornar bloqueio, não troca contas, não usa API privada.
+0 créditos na tela não significa cota ilimitada nem garantia de custo futuro.
+A validação visual dos bancos e outras APIs do MPT mantêm seus custos próprios.
+
+RECUPERAÇÃO SEM REPETIR PEDIDO
+O MPT registra a intenção antes de abrir o navegador e grava um marcador antes
+do clique de envio. Resultado recebido é reutilizado sem solicitar outra imagem.
+Falha confirmada ANTES do envio pode ser tentada novamente por ação explícita.
+Se o pedido foi enviado e o resultado ficou incerto, NÃO é reenviado.
+Confira o projeto no Chrome, baixe a imagem e use Prompts e recuperação por
+importação no painel Flow, informando o ID MPT e a cena correspondente.
+Depois retome o mesmo projeto. Para capítulo, a importação aceita
+ID-DO-PROJETO/chapters/001; a retomada continua sendo a do projeto pai/capítulos.
+
+Mantenha os arquivos flow-image.json, flow-request.* e os materiais salvos.
+Não compartilhe storage/flow_browser: ele contém perfis autenticados do Chrome.
+
+482 testes passaram na suíte selecionada, 1 ignorado. Incluem Chromium local,
+renderização real de vídeo com resposta Flow simulada, retomada, importação,
+proteção contra reenvio, configurações e regressões de Grok/legendas/fila.
+Nenhuma imagem real foi gerada no Flow durante esses testes.
+
+ROLLBACK
+Feche o MPT e restaure o backup. Preserve também uma cópia atual de storage,
+para não perder resultados obtidos depois desta atualização.

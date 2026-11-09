@@ -46,7 +46,7 @@ def load(task_id, limit, *, grok_unlimited=None):
     ):
         raise ValueError("Invalid scene checkpoint")
     params = VideoParams.model_validate(saved["params"])
-    if params.video_source not in {"mixed", "ai33_image", "grok_image", "runware_image"} or params.long_form or params.mixed_is_chapter:
+    if params.video_source not in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"} or params.long_form or params.mixed_is_chapter:
         raise ValueError(
             "This resume action requires a single-video mixed project; use chapter resume for long-form projects"
         )
@@ -58,7 +58,8 @@ def load(task_id, limit, *, grok_unlimited=None):
         params.mixed_grok_unlimited = bool(grok_unlimited)
     from app.config import config
     uses_unlimited_grok = (params.mixed_grok_unlimited and params.video_source != "ai33_image"
-                          and bool(config.ui.get("mixed_use_grok", True)))
+                          and bool(config.ui.get("mixed_use_grok", True))) or params.video_source == "google_flow" or bool(config.ui.get("mixed_use_google_flow", False))
+
     if not uses_unlimited_grok and limit < manifest["image_requests"]:
         raise ValueError("New total limit cannot be below requests already started")
     script = saved.get("script")
@@ -98,8 +99,8 @@ def load(task_id, limit, *, grok_unlimited=None):
                     "A previously generated image changed; review project before resuming"
                 )
         elif scene.get("image_request_started") and not scene.get("image_refused"):
-            provider = "grok" if scene.get("grok_job") else "runware" if scene.get("runware_job") else "ai33"
-            ledger = directory / "mixed" / f"{provider}-{scene['id']:03d}" / (provider + "-image.json")
+            provider = "google_flow" if scene.get("google_flow_job") else "grok" if scene.get("grok_job") else "runware" if scene.get("runware_job") else "ai33"
+            ledger = directory / "mixed" / f"{provider}-{scene['id']:03d}" / ("flow-image.json" if provider == "google_flow" else provider + "-image.json")
             if not scene.get(provider + "_job") or not ledger.is_file():
                 raise ValueError("A previous image request has an unknown result; review it before resuming, no automatic resubmission")
             from app.services.ai33 import AI33Client
@@ -155,6 +156,7 @@ def run(task_id, limit, *, grok_unlimited=None, subtitle_settings=None):
                 raise ValueError("O projeto não tem SRT salvo; desative legendas ou gere a transcrição antes de retomar")
         # Current source preferences affect only new images; paid jobs keep their provider.
         from app.config import config
+        params.mixed_use_google_flow = params.video_source == "google_flow" or bool(config.ui.get("mixed_use_google_flow", False))
         params.mixed_use_runware = False
         params.mixed_use_grok = bool(config.ui.get("mixed_use_grok", True))
         params.mixed_use_ai33 = bool(config.ui.get("mixed_use_ai33", False)) if config.ui.get("image_source_policy") == "grok-v1" else False

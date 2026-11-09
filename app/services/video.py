@@ -1916,7 +1916,7 @@ def generate_video(
                 text_clips.append(clip)
             # Mixed clips already provide an opaque full-size background. Avoid
             # allocating and compositing another full canvas for every frame.
-            if params.video_source in {"mixed", "ai33_image", "grok_image", "runware_image"}:
+            if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"}:
                 video_clip = CompositeVideoClip([video_clip, *text_clips], use_bgclip=True)
             else:
                 video_clip = CompositeVideoClip([video_clip, *text_clips])
