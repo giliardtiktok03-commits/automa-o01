@@ -127,7 +127,7 @@ def load(task_id, limit, *, grok_unlimited=None):
     )
 
 
-def run(task_id, limit, *, grok_unlimited=None):
+def run(task_id, limit, *, grok_unlimited=None, subtitle_settings=None):
     from app.services import task
 
     sm.state.update_task(task_id, error=None, error_key=None, error_params={}, failed_stage=None)
@@ -147,6 +147,12 @@ def run(task_id, limit, *, grok_unlimited=None):
             directory / "resume-media.json", project["media"]
         )
         params = project["params"]
+        if subtitle_settings:
+            from app.services import subtitle_style
+            params = subtitle_style.apply(params, subtitle_settings)
+            # Enabling subtitles requires an existing timeline; do not retranscribe.
+            if params.subtitle_enabled and not project["subtitle"]:
+                raise ValueError("O projeto não tem SRT salvo; desative legendas ou gere a transcrição antes de retomar")
         # Current source preferences affect only new images; paid jobs keep their provider.
         from app.config import config
         params.mixed_use_runware = False

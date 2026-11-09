@@ -148,6 +148,7 @@ class VideoParams(BaseModel):
     ai33_quality: Optional[str] = None
     ai33_max_credits: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     mixed_resume: bool = False
+    mixed_resume_subtitle_style: dict[str, Any] = Field(default_factory=dict)
     mixed_select_sources: bool = False
     mixed_use_pexels: bool = True
     mixed_use_pixabay: bool = True
@@ -200,6 +201,8 @@ class VideoParams(BaseModel):
     text_background_color: Union[bool, str] = False
     rounded_subtitle_background: bool = False
 
+    subtitle_soft_shadow: bool = False
+    subtitle_max_lines: int = Field(default=0, ge=0, le=4)
     font_size: int = Field(default=60, ge=1)
     stroke_color: Optional[str] = "#000000"
     stroke_width: float = Field(default=1.5, ge=0, allow_inf_nan=False)
@@ -229,6 +232,8 @@ class SubtitleRequest(BaseModel):
     text_fore_color: Optional[str] = "#FFFFFF"
     text_background_color: Union[bool, str] = False
     rounded_subtitle_background: bool = False
+    subtitle_soft_shadow: bool = False
+    subtitle_max_lines: int = Field(default=0, ge=0, le=4)
     font_size: int = Field(default=60, ge=1)
     stroke_color: Optional[str] = "#000000"
     stroke_width: float = Field(default=1.5, ge=0, allow_inf_nan=False)

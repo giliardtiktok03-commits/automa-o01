@@ -104,7 +104,7 @@ def test_chapter_migration_requires_original_fingerprint_and_unchanged_editorial
     from app.services import task_artifacts
     params = VideoParams(video_subject="history", video_source="mixed", mixed_image_provider="openai")
     saved = params.model_dump(mode="json")
-    for key in ("mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    for key in ("mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines"):
         saved.pop(key)
     original = {k: v for k, v in saved.items() if k not in {"mixed_resume", "mixed_grok_unlimited"}}
     references = ["audio-digest", "", ""]

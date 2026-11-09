@@ -1,0 +1,35 @@
+ESTILO DE LEGENDAS — VÍDEO RESTANTE
+
+1. Feche o MPT, faça backup e extraia este ZIP na pasta de webui.bat,
+   substituindo os arquivos. Não precisa reinstalar dependências.
+2. Abra webui.bat e vá a Configurações de Legendas.
+3. Clique em Aplicar Montserrat documentário · 60 px.
+4. Confira: Montserrat-ExtraBold.ttf, tamanho 60, branco, contorno preto 4,
+   sombra preta suave, parte inferior, até duas linhas, sem fundo sólido.
+5. Em Retomar projeto, informe o ID DO VÍDEO QUE AINDA FALTA.
+   Não use o ID do primeiro vídeo que já terminou.
+6. Deixe Aplicar o estilo atual das legendas ao retomar marcado.
+   Mantenha Grok sem limite ativado, se quiser continuar a geração sem teto.
+7. Retome o projeto. Áudio, SRT e materiais existentes são reaproveitados;
+   as legendas são aplicadas na montagem final. Cenas que ainda precisarem
+   de novas imagens podem consumir saldo normalmente.
+
+CONTORNO E SOMBRA
+Contorno preto de 4 px, dentro do intervalo solicitado de 3–5 px.
+Sombra preta com desfoque suave. Centralização horizontal e margem inferior
+padrão de 5% da altura do vídeo: aproximadamente 54 px em 1080p.
+
+ATÉ DUAS LINHAS
+Blocos longos são divididos em grupos de até duas linhas no intervalo original
+do SRT. Os tempos internos desses grupos são estimados proporcionalmente ao
+texto; não há retranscrição ou alteração do áudio/SRT salvo.
+
+Importante: a retomada utiliza o projeto salvo, e agora recebe explicitamente
+as opções atuais de legenda quando a caixa da etapa 6 está marcada.
+O modo Retomar projeto continua destinado aos projetos simples/mistos; vídeos
+em capítulos seguem o fluxo próprio de capítulos. Esta caixa não modifica
+vídeos concluídos nem tarefas que já estavam rodando com um snapshot antigo.
+
+A fonte Montserrat ExtraBold está incluída, com licença OFL no diretório fonts.
+253 testes passaram, incluindo renderização real com a fonte/sombra,
+limite de linhas, interface e retomada usando áudio/clipes existentes.

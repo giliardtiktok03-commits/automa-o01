@@ -77,3 +77,29 @@ def test_unlimited_resume_ignores_old_total_cap_but_keeps_started_count(saved_pr
     requests.assert_not_called()
     with pytest.raises(ValueError,match='below requests'):
         resume.load(ID,0,grok_unlimited=False)
+
+
+def test_resume_applies_explicit_subtitle_style_without_regenerating_audio(saved_project,monkeypatch):
+    from app.services import subtitle_style
+    directory,manifest,requests=saved_project
+    script_file=directory/'script.json'
+    saved=json.loads(script_file.read_text())
+    saved['params']['subtitle_enabled']=True
+    script_file.write_text(json.dumps(saved))
+    (directory/'subtitle.srt').write_text('1\n00:00:00,000 --> 00:00:01,000\nOriginal script.\n',encoding='utf-8')
+    monkeypatch.setattr(resume.mixed_materials,'prepare',lambda *args,**kwargs:['saved-clip.mp4'])
+    def render(task_id,params,materials,audio,subtitles,duration):
+        assert params.font_name=='Montserrat-ExtraBold.ttf' and params.font_size==60
+        assert params.stroke_width==4 and params.subtitle_soft_shadow and params.subtitle_max_lines==2
+        assert materials==['saved-clip.mp4'] and audio==str(directory/'custom-audio.mp3')
+        assert subtitles==str(directory/'subtitle.srt')
+        target=directory/'final-1.mp4'
+        target.write_bytes(b'finished')
+        return [str(target)],[],[]
+    monkeypatch.setattr(task,'generate_final_videos',render)
+    tts=Mock(side_effect=AssertionError('Narration must be reused'))
+    monkeypatch.setattr(task,'generate_audio',tts)
+    result=resume.run(ID,24,subtitle_settings=subtitle_style.DOCUMENTARY)
+    assert result['videos']
+    tts.assert_not_called()
+    requests.assert_not_called()

@@ -8827,6 +8827,27 @@ def _render_subtitle_settings(panel, params):
     with panel:
         with st.container(border=True, key="stage_subtitles"):
             _stage_heading(4, tr("Subtitle Settings"), "#047857")
+            if st.button("Aplicar Montserrat documentário · 60 px", key="subtitle_documentary_preset"):
+                from app.services.subtitle_style import DOCUMENTARY
+                for name, value in DOCUMENTARY.items():
+                    _set_runtime_config("ui", name, value)
+                for key, value in {"font_name_select": DOCUMENTARY["font_name"], "font_size_slider": 60,
+                                   "font_color_picker": "#FFFFFF", "stroke_color_picker": "#000000",
+                                   "stroke_width_slider": 4.0, "subtitle_position_select": "bottom",
+                                   "subtitle_enabled_checkbox": True}.items():
+                    st.session_state[key] = value
+                for name, value in {"font_name_select": DOCUMENTARY["font_name"], "subtitle_position_select": "bottom",
+                                    "subtitle_display_mode_select": "sentence", "subtitle_animation_select": "none"}.items():
+                    _set_stable_widget_value(name, value)
+                st.session_state["subtitle_soft_shadow"] = True
+                st.session_state["subtitle_two_lines"] = True
+                st.session_state["subtitle_background_enabled_checkbox"] = False
+                _set_runtime_config("ui", "subtitle_background_enabled", False)
+                st.success("Estilo aplicado: branco, contorno preto 4 px, sombra suave, inferior e até 2 linhas.")
+            params.subtitle_soft_shadow = st.checkbox("Sombra preta suave", value=config.ui.get("subtitle_soft_shadow", False), key="subtitle_soft_shadow")
+            params.subtitle_max_lines = 2 if st.checkbox("Preferir até duas linhas", value=config.ui.get("subtitle_max_lines", 0) == 2, key="subtitle_two_lines") else 0
+            _set_runtime_config("ui", "subtitle_soft_shadow", params.subtitle_soft_shadow)
+            _set_runtime_config("ui", "subtitle_max_lines", params.subtitle_max_lines)
             st.session_state.setdefault(
                 "subtitle_enabled_checkbox",
                 _saved_ui_bool(
@@ -9228,6 +9249,7 @@ def _render_mixed_resume():
         st.caption("Quando Grok estiver selecionado, completa as cenas sem teto de quantidade; novas imagens podem consumir saldo. Materiais salvos são reaproveitados.")
         limit = st.number_input(tr("Mixed Resume Limit"), disabled=unlimited, min_value=0, max_value=120, value=24,
                                 step=1, key="mixed_resume_limit")
+        apply_style = st.checkbox("Aplicar o estilo atual das legendas ao retomar", value=True, key="mixed_resume_apply_subtitle_style")
         check = st.button(tr("Mixed Resume Check"), key="mixed_resume_check")
         resume = st.button(tr("Mixed Resume Start"), key="mixed_resume_start", disabled=_flow_test_running())
         if check or resume:
@@ -9238,6 +9260,10 @@ def _render_mixed_resume():
                 st.info(tr("Mixed Resume Summary").format(ready=project['ready'], total=project['total'],
                                                          started=project['started'], limit='sem limite (Grok)' if unlimited and project['params'].video_source != 'ai33_image' else limit))
                 if resume:
+                    if apply_style:
+                        from app.services.subtitle_style import FIELDS
+                        ui_style = config.snapshot_config_with_pending(config.ui)
+                        project['params'].mixed_resume_subtitle_style = {key: ui_style[key] for key in FIELDS if key in ui_style}
                     task_id = webui_task.submit_generation(project['task_id'], project['params'],
                                                            capture_logs=not config.ui.get('hide_log',False))
                     _add_active_generation_task(task_id, subject=project['params'].video_subject)

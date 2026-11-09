@@ -29,7 +29,7 @@ from moviepy import (
     afx,
 )
 from moviepy.video.tools.subtitles import SubtitlesClip
-from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps, ImageFilter
 
 from app.config import config
 from app.models import const
@@ -1832,6 +1832,15 @@ def generate_video(
                 size=size,
                 text_align="center",
             )
+        if params.subtitle_soft_shadow and _clip.mask is not None:
+            # Black soft shadow, with padding to avoid clipping the blur.
+            mask = np.clip(_clip.mask.get_frame(0) * 255, 0, 255).astype("uint8")
+            alpha = Image.new("L", (_clip.w + 24, _clip.h + 24), 0)
+            alpha.paste(Image.fromarray(mask), (14, 16))
+            alpha = alpha.filter(ImageFilter.GaussianBlur(3)).point(lambda value: int(value * .55))
+            shadow = ImageClip(np.zeros((alpha.height, alpha.width, 3), dtype="uint8"))
+            shadow = shadow.with_mask(ImageClip(np.asarray(alpha, dtype=float) / 255, is_mask=True))
+            _clip = CompositeVideoClip([shadow, _clip.with_position((12, 12))], size=(alpha.width, alpha.height))
         duration = subtitle_item[0][1] - subtitle_item[0][0]
         _clip = _clip.with_start(subtitle_item[0][0])
         _clip = _clip.with_end(subtitle_item[0][1])
@@ -1891,6 +1900,9 @@ def generate_video(
             shaped_font = subtitle_shaping.video_font(
                 font_path, (text for _, text in subtitles)
             )
+            from app.services import subtitle_style
+            subtitles = subtitle_style.limit_lines(subtitles, params.subtitle_max_lines,
+                lambda text: wrap_text(text, video_width * .9, font=font_path, fontsize=params.font_size)[0])
             sub = clip_stack.enter_context(
                 SubtitlesClip(
                     subtitles=subtitles,

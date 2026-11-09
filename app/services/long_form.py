@@ -73,6 +73,11 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     payload["params"].pop("mixed_resume", None)
+    payload["params"].pop("mixed_resume_subtitle_style", None)
+    if not params.subtitle_soft_shadow:
+        payload["params"].pop("subtitle_soft_shadow", None)
+    if not params.subtitle_max_lines:
+        payload["params"].pop("subtitle_max_lines", None)
     payload["params"].pop("mixed_grok_unlimited", None)
     if params.mixed_image_provider != "grok":
         for key in ("grok_model", "mixed_use_grok"):
@@ -267,11 +272,15 @@ def _migrate_image_provider(params, references, directory, manifest):
         return False
     original = dict(saved)
     original.pop("mixed_resume", None)
+    original.pop("mixed_resume_subtitle_style", None)
     original.pop("mixed_grok_unlimited", None)
     if original.get("custom_audio_file"):
         original["custom_audio_file"] = "<external-narration>"
     candidates = [original]
     normalized = dict(original)
+    for name in ("subtitle_soft_shadow", "subtitle_max_lines"):
+        if not normalized.get(name):
+            normalized.pop(name, None)
     if not normalized.get("skills_enabled") or not normalized.get("skill_snapshot"):
         for key in ("skills_enabled", "skill_ids", "skill_snapshot"):
             normalized.pop(key, None)
