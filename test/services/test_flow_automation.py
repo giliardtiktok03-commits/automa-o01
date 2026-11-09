@@ -77,9 +77,9 @@ class Page:
 
     def get_by_role(self, role, name=None, **_):
         pattern = name.pattern if hasattr(name, "pattern") else name
-        if "Imagem" in pattern:
+        if pattern and "Imagem" in pattern:
             return Node(self, "image-mode")
-        if "Nano Banana [0-9" in pattern:
+        if pattern and "Nano Banana [0-9" in pattern:
             return Node(self, "model", flow.MODEL)
         if self.actions.count("settings") % 2:
             return Node(self,"model",flow.MODEL)
@@ -149,14 +149,14 @@ def test_real_chromium_visible_ui_single_submit_download(tmp_path):
     Image.new('RGB',(320,180),'blue').save(out,format='PNG')
     data='data:image/png;base64,'+base64.b64encode(out.getvalue()).decode()
     html='''<html><body>
-<button onclick="let x=document.getElementById('settings');x.hidden=!x.hidden">Nano Banana 2.1 x1</button>
+<button aria-label="Gatilho de configurações" onclick="let x=document.getElementById('settings');x.hidden=!x.hidden">Nano Banana 2.1 x1</button>
 <div id="settings" hidden>
 <button role="tab" aria-selected="false" onclick="this.setAttribute('aria-selected','true')">Imagem</button>
 <button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">16:9</button>
 <button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">x1</button>
-<button>🍌 Nano Banana 2.1 keyboard_arrow_down</button><p>A geração vai usar 0 créditos</p></div>
+<button aria-label="Modelo da imagem">🍌 Nano Banana 2.1 keyboard_arrow_down</button><p>A geração vai usar 0 créditos</p></div>
 <textarea></textarea>
-<button aria-label="Send prompt" onclick="submitOne()">Enviar</button><div id="results"></div>
+<button aria-label="Iniciar geração" onclick="submitOne()">Enviar</button><div id="results"></div>
 <script>
 window.submissions=0;
 function submitOne(){window.submissions++;let card=document.createElement('div');

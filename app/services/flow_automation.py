@@ -72,7 +72,7 @@ def _model_text(node):
 def _model_control(page):
     pattern=re.compile(r'Nano Banana|Imagen',re.I)
     for role in ('button','combobox'):
-        nodes=page.get_by_role(role,name=pattern)
+        nodes=page.get_by_role(role)
         matches=[]
         for i in range(nodes.count()):
             node=nodes.nth(i)
@@ -102,7 +102,7 @@ def generate(page, prompt, target, timeout=900, require_zero=True, *, aspect="16
     page.locator('textarea, [contenteditable="true"]').first.wait_for(state='visible',timeout=30000)
     _blocked(page)
     stage('abrindo_configuracoes')
-    settings = _button(page, r'Nano Banana|Imagen', 'image settings')
+    settings = _button(page, r'^(Gatilho de configurações|Settings trigger)$|Nano Banana|Imagen', 'image settings')
     settings.click(timeout=5000)
     stage('selecionando_imagem')
     mode = _image_mode(page)
@@ -132,7 +132,8 @@ def generate(page, prompt, target, timeout=900, require_zero=True, *, aspect="16
     before = set(_images(page))
     previous_alerts = set(page.locator('[role="alert"]').all_inner_texts())
     submit = _one_visible(page.locator('button[aria-label="Send prompt"], button[aria-label="Generate"], '
-                         'button[aria-label="Gerar"], button[aria-label="Enviar"], button:has-text("arrow_forward")'), 'submit')
+                         'button[aria-label="Gerar"], button[aria-label="Enviar"], button[aria-label="Iniciar geração"], '
+                         'button[aria-label="Start generation"], button:has-text("arrow_forward")'), 'submit')
     stage('enviando_prompt')
     if before_submit:
         before_submit()

@@ -1,0 +1,20 @@
+CORREÇÃO FLOW — NOMES REAIS DOS BOTÕES
+
+O diagnóstico confirmou etapa abrindo_configuracoes, submitted=false.
+A UI usa Gatilho de configurações e Iniciar geração como nomes acessíveis.
+O conector agora reconhece esses nomes. O seletor de modelo também é localizado
+pelo texto visível, mesmo quando o botão possui outro aria-label.
+
+Feche o MPT e as janelas do perfil Flow, faça backup e extraia este ZIP na pasta
+que contém webui.bat, substituindo app/services/flow_automation.py.
+Não é necessário reinstalar Playwright nem apagar/refazer o login.
+
+Reabra o MPT e teste novamente UMA imagem. O teste diagnosticado não enviou
+pedido. Mantenha a confirmação de 0 créditos marcada.
+Depois clique em Atualizar resultado do teste.
+Se parar em outra etapa, baixe o novo diagnóstico e envie para análise.
+Não repita um pedido que apareça como enviado ou resultado não confirmado.
+
+98 testes passaram na suíte direcionada, incluindo Chromium real com página
+simulada usando os nomes de botões recebidos no diagnóstico do usuário.
+A conta Google e a interface real continuam dependendo do teste local.
