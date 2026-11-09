@@ -23,6 +23,18 @@ def _button(page, pattern, label):
     return _one_visible(page.get_by_role('button', name=re.compile(pattern, re.I)), label)
 
 
+def _settings_button(page):
+    # Prefer the dedicated trigger. Gallery/media accessible names can also
+    # contain Nano Banana; never combine them with the exact trigger selector.
+    exact=page.locator('button[aria-label="Gatilho de configurações"], button[aria-label="Settings trigger"]')
+    if any(exact.nth(i).is_visible() for i in range(exact.count())):
+        return _one_visible(exact,'dedicated image settings trigger')
+    trigger=page.get_by_role('button',name=re.compile(r'^(Gatilho de configurações|Settings trigger)$',re.I))
+    if any(trigger.nth(i).is_visible() for i in range(trigger.count())):
+        return _one_visible(trigger,'dedicated image settings trigger')
+    return _button(page,r'Nano Banana|Imagen','image settings')
+
+
 def _blocked(page, previous_alerts=None):
     if urlparse(page.url).hostname != 'flow.google.com':
         raise FlowError('Flow session needs manual login; no automatic login or account change')
@@ -109,7 +121,7 @@ def generate(page, prompt, target, timeout=900, require_zero=True, *, aspect="16
     page.locator('textarea, [contenteditable="true"]').first.wait_for(state='visible',timeout=30000)
     _blocked(page)
     stage('abrindo_configuracoes')
-    settings = _button(page, r'^(Gatilho de configurações|Settings trigger)$|Nano Banana|Imagen', 'image settings')
+    settings = _settings_button(page)
     settings.click(timeout=5000)
     stage('selecionando_imagem')
     mode = _image_mode(page)

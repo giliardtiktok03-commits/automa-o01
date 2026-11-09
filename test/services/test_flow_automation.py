@@ -77,6 +77,8 @@ class Page:
 
     def get_by_role(self, role, name=None, **_):
         pattern = name.pattern if hasattr(name, "pattern") else name
+        if pattern and 'Gatilho de configurações' in pattern:
+            return Node(self,"settings","Nano Banana 2.1 x1")
         if role == "radio" and pattern and "16:9" in pattern:
             return Node(self,"16:9","16:9",visible=self.ratio)
         if role == "radio" and pattern and "x1" in pattern:
@@ -93,6 +95,8 @@ class Page:
         return Node(self, text, text, visible=self.ratio if text == "16:9" else True)
 
     def locator(self, selector):
+        if "Gatilho de configurações" in selector:
+            return Node(self,"settings","Nano Banana 2.1 x1")
         if selector == "body":
             return Node(self, "body", f"A geração vai usar {self.credits} créditos")
         if selector == "img":
@@ -154,6 +158,7 @@ def test_real_chromium_visible_ui_single_submit_download(tmp_path):
     data='data:image/png;base64,'+base64.b64encode(out.getvalue()).decode()
     html='''<html><body>
 <button aria-label="Gatilho de configurações" onclick="let x=document.getElementById('settings');x.hidden=!x.hidden">Nano Banana 2.1 x1</button>
+<button aria-label="Galeria Nano Banana 2.1">Red apple on background</button>
 <div id="settings" hidden>
 <button role="radio" aria-checked="true"><i>image</i> Imagem</button>
 <button role="radio" aria-checked="false" onclick="this.setAttribute('aria-checked','true')"><i>crop_16_9</i> <div><span>16:9</span></div></button>

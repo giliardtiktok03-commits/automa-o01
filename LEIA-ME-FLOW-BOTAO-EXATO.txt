@@ -1,0 +1,21 @@
+FLOW — BOTÃO DE CONFIGURAÇÕES SEM AMBIGUIDADE
+
+O diagnóstico do teste confirma submitted=false. A busca anterior podia misturar
+o nome do modelo em controles da galeria com o botão de configurações.
+O conector agora prioriza o aria-label EXATO Gatilho de configurações.
+Somente se ele não estiver presente usa os seletores legados.
+
+1. Feche o MPT e as janelas do perfil Flow. Faça backup.
+2. Extraia este ZIP na pasta de webui.bat, substituindo todos os arquivos.
+   O pacote reúne o controlador, tratamento de erros e painel atualizados.
+3. Reabra e faça UM teste automático, com 0 créditos marcado.
+4. Atualize o resultado. Se houver falha, envie o diagnóstico DO TESTE,
+   não o da verificação somente leitura.
+
+Não precisa reinstalar Playwright nem refazer o login.
+O diagnóstico enviado não registrou envio de prompt.
+Não repita automaticamente pedidos que apareçam como enviados/desconhecidos.
+
+102 testes passaram. O caso de navegador inclui uma galeria com referência ao
+modelo para reproduzir a ambiguidade, além dos controles conhecidos da sua UI.
+Nenhuma imagem real foi gerada no Flow nesses testes.
