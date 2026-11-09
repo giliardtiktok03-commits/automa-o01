@@ -1,0 +1,30 @@
+CORREÇÃO FLOW — MENU, CONEXÃO CHROME E DIAGNÓSTICO
+
+1. Feche o MPT e as janelas do perfil Flow. Faça backup.
+2. Extraia este ZIP na pasta que contém webui.bat, substituindo os arquivos.
+3. Reabra o MPT. Não precisa reinstalar Playwright nem apagar o perfil/login.
+4. Abra Configurar fontes de material > Google Flow e atualize o resultado.
+5. Confira Pedido enviado ao Flow:
+   - NÃO: pode iniciar um novo teste de uma imagem.
+   - SIM ou NÃO CONFIRMADO: confira o projeto Flow antes de repetir o pedido.
+6. Se o teste novo falhar, envie a mensagem detalhada ou use
+   Baixar diagnóstico do teste Flow e compartilhe o JSON para análise.
+
+O QUE MUDA
+- Abre primeiro o menu do modelo para acessar Imagem, proporção e x1.
+- Aguarda a interface dinâmica, reconhece abas/botões e textos com ícones.
+- Usa caminho absoluto do perfil e aguarda DevToolsActivePort ficar válido,
+  inclusive quando o arquivo inicialmente aparece vazio.
+- Evita que o fechamento do navegador esconda a falha original.
+- Mostra a etapa, tipo de erro e se houve intenção de envio.
+- Diagnóstico local contém inventário limitado de controles visíveis,
+  sem senhas, cookies, tokens, valores dos campos ou URLs assinadas.
+- Mantém confirmação de 0 créditos e proteção contra reenvio automático.
+
+98 testes passaram na suíte direcionada, incluindo Chromium real com painel
+simulado semelhante ao print fornecido, retomada e importação. Mais 33 testes
+verificaram conexão/perfil e interface após o ajuste final. São testes locais;
+a interface real do Flow e a conta do usuário ainda precisam ser validadas.
+
+Mantenha a opção de 0 créditos marcada. Não apague registros de pedidos pagos
+nem use limpeza de cookies para contornar verificações do Google.

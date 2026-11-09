@@ -131,3 +131,25 @@ def test_failed_controls_before_submission_can_be_retried_explicitly(tmp_path,mo
     for _ in range(2):
         with pytest.raises(flow.FlowError):flow.generate('Test scene',tmp_path,'principal',URL)
     assert launcher.call_count==2  # Neither attempt submitted a generation.
+
+
+def test_devtools_waits_for_initially_empty_port_file(tmp_path,monkeypatch):
+    port=tmp_path/'DevToolsActivePort'
+    port.write_text('')
+    chrome=Mock()
+    chrome.poll.return_value=None
+    def complete(_):port.write_text('9222\n/devtools/browser/test\n')
+    monkeypatch.setattr(flow.time,'sleep',complete)
+    assert flow._wait_devtools(chrome,port,timeout=2)=='9222'
+
+
+def test_diagnostic_records_stage_and_submission_without_exception_message(tmp_path):
+    page=Mock()
+    page.url='https://flow.google.com/project/test'
+    page.evaluate.return_value=[{'tag':'BUTTON','label':'Nano Banana 2.1 x2'}]
+    request=tmp_path/'flow-request.json'
+    flow._diagnostic(request,page,'selecionando_imagem',RuntimeError('secret-token'),False)
+    data=json.loads(request.with_suffix('.diagnostic.json').read_text())
+    assert data['stage']=='selecionando_imagem' and data['submitted'] is False
+    assert data['exception_type']=='RuntimeError'
+    assert 'secret-token' not in json.dumps(data)

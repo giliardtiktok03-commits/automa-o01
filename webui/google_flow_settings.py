@@ -56,11 +56,15 @@ def render(settings,set_config):
         result=path.with_suffix('.result.json')
         if result.exists():
             state=json.loads(result.read_text(encoding='utf-8'))
+            st.caption('Pedido enviado ao Flow: ' + ('sim — confira o projeto antes de repetir' if state.get('submitted') is True else 'não' if state.get('submitted') is False else 'não confirmado — confira o projeto'))
             if state.get('status')=='ready':
                 st.success('Imagem recebida pelo navegador. Confira se o resultado corresponde ao pedido.')
                 st.image(str(path.with_suffix('.png')))
             elif state.get('status')=='refused':st.warning('Flow recusou o pedido. O teste não foi repetido.')
             else:st.warning(str(state.get('error') or 'Teste interrompido; revise antes de outro envio.'))
+            diagnostic=path.with_suffix('.diagnostic.json')
+            if diagnostic.exists():
+                st.download_button('Baixar diagnóstico do teste Flow',data=diagnostic.read_bytes(),file_name='diagnostico-flow.json',mime='application/json',key='google_flow_diagnostic_download')
         else:st.info('Aguardando o teste existente; não foi solicitado outro automaticamente.')
     st.markdown('**Prompts e recuperação por importação**')
     st.caption('As imagens já importadas são reutilizadas. Se o navegador enviar um pedido e o resultado ficar incerto, baixe a imagem no Flow e importe aqui; o MPT não repete esse envio.')

@@ -131,6 +131,7 @@ def generate(prompt,directory,profile,project,timeout=900,require_zero=True,*,as
                 raise FlowError('Resultado Flow não confirmado após envio. Confira o projeto no Chrome e importe a imagem, sem gerar novamente.')
             # Failed before submission: explicit resume may try the controls again.
             result_file.unlink()
+            request.with_suffix('.diagnostic.json').unlink(missing_ok=True)
         elif request.exists():
             raise FlowError('Tentativa Flow existente sem resultado confirmado. Confira o Chrome; nenhum novo envio automático.')
         if not state:
@@ -171,16 +172,43 @@ def _save_image(download,target):
     finally:temporary.unlink(missing_ok=True)
 
 
+def _wait_devtools(chrome, port_file, timeout=45):
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        try:
+            lines=port_file.read_text().splitlines()
+            if lines and lines[0].isdigit() and 1024<=int(lines[0])<=65535:
+                return lines[0]
+        except (OSError,UnicodeError):
+            pass
+        if chrome.poll() not in (None,0):
+            raise FlowError('Chrome encerrou antes de disponibilizar a conexão local')
+        time.sleep(.25)
+    raise FlowError('Chrome não disponibilizou a conexão local. Feche todas as janelas deste perfil e tente novamente.')
+
+
+def _diagnostic(request_file,page,stage,exc,submitted):
+    data={'stage':stage,'exception_type':type(exc).__name__,'submitted':submitted}
+    try:
+        if page and urlparse(page.url).hostname=='flow.google.com':
+            data['controls']=page.evaluate("""() => Array.from(document.querySelectorAll('button,[role=tab],[role=combobox],textarea,[contenteditable=true]')).filter(el=>el.getClientRects().length).slice(0,80).map(el=>({tag:el.tagName,role:el.getAttribute('role'),label:(el.getAttribute('aria-label')||el.innerText||el.getAttribute('placeholder')||'').slice(0,120),selected:el.getAttribute('aria-selected')||el.getAttribute('aria-pressed')||el.getAttribute('data-state')})).filter(x=>!/@|https?:|account|conta do google/i.test(x.label))""")
+    except Exception:
+        pass
+    task_artifacts._write_json_atomic(request_file.with_suffix('.diagnostic.json'),data)
+
+
 def _browser(request_file):
     result_file=request_file.with_suffix('.result.json')
     marker=request_file.with_suffix('.submitted.json')
     chrome=None
+    page=None
+    stage='preparando_perfil'
     try:
         data=json.loads(request_file.read_text(encoding='utf-8'))
         validate(data['profile'],data['project'])
         profiles=_root()/'profiles'
         profiles.mkdir(exist_ok=True)
-        profile=profiles/data['profile']
+        profile=(profiles/data['profile']).resolve()
         profile.mkdir(exist_ok=True)
         # One Flow operation on this MPT installation at a time; never kill other Chrome instances.
         with FileLock(str(_root()/'machine.lock'),timeout=0),FileLock(str(profiles/(data['profile']+'.lock')),timeout=0):
@@ -195,39 +223,49 @@ def _browser(request_file):
             port_file=profile/'DevToolsActivePort'
             port_file.unlink(missing_ok=True)
             chrome=subprocess.Popen(command[:-1]+['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1',data['project']])
-            deadline=time.monotonic()+45
-            while not port_file.exists():
-                if chrome.poll() is not None or time.monotonic()>deadline:
-                    raise FlowError('Não foi possível conectar ao Chrome. Feche a janela de login deste perfil e tente novamente.')
-                time.sleep(.25)
-            port_text=port_file.read_text().splitlines()[0]
-            if not port_text.isdigit() or not 1024<=int(port_text)<=65535:raise FlowError('Porta local Chrome inválida')
+            stage='aguardando_porta_chrome'
+            port_text=_wait_devtools(chrome,port_file)
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
+                stage='conectando_chrome'
                 browser=p.chromium.connect_over_cdp('http://127.0.0.1:'+port_text,timeout=30000)
                 try:
+                    stage='abrindo_projeto'
+                    if not browser.contexts:raise FlowError('Chrome conectou sem contexto disponível; feche o perfil e tente novamente')
                     context=browser.contexts[0]
-                    page=next((page for page in context.pages if urlparse(page.url).hostname=='flow.google.com'),None)
-                    if page is None:page=context.new_page()
-                    page.goto(data['project'],wait_until='domcontentloaded',timeout=60000)
+                    page=next((item for item in context.pages if urlparse(item.url).hostname=='flow.google.com'),None)
+                    if page is None:page=context.pages[0] if context.pages else context.new_page()
+                    if page.url.rstrip('/')!=data['project'].rstrip('/'):
+                        page.goto(data['project'],wait_until='domcontentloaded',timeout=60000)
                     from app.services import flow_automation
                     def mark():
                         task_artifacts._write_json_atomic(marker,{'submitted':True})
+                    def report(value):
+                        nonlocal stage
+                        stage=value
                     flow_automation.generate(page,data['prompt'],request_file.with_suffix('.png'),timeout=data.get('timeout',900),
-                        require_zero=data.get('require_zero',True),aspect=data.get('aspect','16:9'),model_name=data.get('model','Nano Banana 2.1'),before_submit=mark)
+                        require_zero=data.get('require_zero',True),aspect=data.get('aspect','16:9'),model_name=data.get('model','Nano Banana 2.1'),before_submit=mark,on_stage=report)
                     task_artifacts._write_json_atomic(result_file,{'status':'ready','submitted':True})
+                except Exception as exc:
+                    _diagnostic(request_file,page,stage,exc,marker.exists())
+                    raise
                 finally:
                     try:browser.new_browser_cdp_session().send('Browser.close')
                     except Exception:pass
-                    browser.close()
+                    try:browser.close()
+                    except Exception:pass
     except Timeout:
         task_artifacts._write_json_atomic(result_file,{'status':'failed','submitted':marker.exists(),'error':'Este perfil ou navegador Flow está em uso. Feche a janela de login antes de gerar.'})
     except FlowRefusal:
         task_artifacts._write_json_atomic(result_file,{'status':'refused','submitted':marker.exists()})
     except FlowError as exc:
-        task_artifacts._write_json_atomic(result_file,{'status':'failed','submitted':marker.exists(),'error':str(exc)})
-    except Exception:
-        task_artifacts._write_json_atomic(result_file,{'status':'failed','submitted':marker.exists(),'error':'Chrome fechou ou a interface mudou. Confira o projeto; sem reenvio automático.'})
+        if not request_file.with_suffix('.diagnostic.json').exists():
+            _diagnostic(request_file,page,stage,exc,marker.exists())
+        task_artifacts._write_json_atomic(result_file,{'status':'failed','stage':stage,'submitted':marker.exists(),'error':f'{stage}: {exc}'})
+    except Exception as exc:
+        if not request_file.with_suffix('.diagnostic.json').exists():
+            _diagnostic(request_file,page,stage,exc,marker.exists())
+        task_artifacts._write_json_atomic(result_file,{'status':'failed','stage':stage,'submitted':marker.exists(),'error':f'Flow parou em {stage} ({type(exc).__name__}). Diagnóstico local disponível; nenhum reenvio automático.'})
     finally:
         if chrome is not None:
             try:

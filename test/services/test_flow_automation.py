@@ -10,6 +10,11 @@ class Node:
         self.page, self.kind, self.text, self.visible = page, kind, text, visible
         self.selected = False
 
+    @property
+    def first(self):return self
+
+    def wait_for(self,**_):pass
+
     def count(self):
         return int(self.visible)
 
@@ -76,6 +81,8 @@ class Page:
             return Node(self, "image-mode")
         if "Nano Banana [0-9" in pattern:
             return Node(self, "model", flow.MODEL)
+        if self.actions.count("settings") % 2:
+            return Node(self,"model",flow.MODEL)
         return Node(self, "settings", "Nano Banana 2.1 x1")
 
     def get_by_text(self, text, **_):
@@ -110,7 +117,7 @@ def test_configures_and_submits_once_then_downloads_only_new_result(tmp_path):
     page = Page()
     target = tmp_path / "result.png"
     flow.generate(page, "Historical scene", target, timeout=1)
-    assert page.actions[:4] == ["image-mode", "settings", "16:9", "x1"]
+    assert page.actions[:4] == ["settings", "image-mode", "16:9", "x1"]
     assert page.prompt == "Historical scene" and page.submissions == 1
     assert page.actions[-1] == "download"
     with Image.open(target) as image:
@@ -142,12 +149,12 @@ def test_real_chromium_visible_ui_single_submit_download(tmp_path):
     Image.new('RGB',(320,180),'blue').save(out,format='PNG')
     data='data:image/png;base64,'+base64.b64encode(out.getvalue()).decode()
     html='''<html><body>
-<button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Imagem</button>
 <button onclick="let x=document.getElementById('settings');x.hidden=!x.hidden">Nano Banana 2.1 x1</button>
 <div id="settings" hidden>
+<button role="tab" aria-selected="false" onclick="this.setAttribute('aria-selected','true')">Imagem</button>
 <button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">16:9</button>
 <button aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">x1</button>
-<button>Nano Banana 2.1</button><p>A geração vai usar 0 créditos</p></div>
+<button>🍌 Nano Banana 2.1 keyboard_arrow_down</button><p>A geração vai usar 0 créditos</p></div>
 <textarea></textarea>
 <button aria-label="Send prompt" onclick="submitOne()">Enviar</button><div id="results"></div>
 <script>
