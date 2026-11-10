@@ -193,7 +193,7 @@ card.appendChild(button);document.getElementById('results').appendChild(card);}
         finally:browser.close()
 
 
-@pytest.mark.parametrize("sibling_title", [False, True, "deep", "zero-size-title", "flow-download-label"])
+@pytest.mark.parametrize("sibling_title", [False, True, "deep", "zero-size-title", "flow-download-label", "resolution-submenu"])
 def test_recover_existing_card_menu_without_submitting(tmp_path, sibling_title):
     import base64, io, shutil
     from playwright.sync_api import sync_playwright
@@ -214,6 +214,9 @@ def test_recover_existing_card_menu_without_submitting(tmp_path, sibling_title):
 </body></html>'''.replace('DATA', data).replace('OLD', data+'#old')
     if sibling_title:
         html = html.replace('<button aria-label="Empty cafe on rainy morning"><img src="' + data + '"></button>', '<img src="' + data + '"><button><span>Empty cafe on rainy morning</span><i>edit</i></button>')
+    if sibling_title == 'resolution-submenu':
+        html = html.replace('onclick="downloadImage()">Baixar', 'onclick="document.getElementById(\'sizes\').hidden=false">download Fazer o download')
+        html = html.replace('<script>window.submissions=0;', '<div role="menu" id="sizes" hidden><button role="menuitem" onclick="downloadImage()">1K\nTamanho original</button><button role="menuitem" onclick="window.enhancements++">2K Aprimorada</button><button role="menuitem" onclick="window.enhancements++">4K Aprimorada</button></div><script>window.enhancements=0;window.submissions=0;')
     if sibling_title == 'flow-download-label':
         html = html.replace('>Baixar</button>', '><span>download</span>\n<span>Fazer o download</span></button>')
     if sibling_title == 'zero-size-title':
@@ -229,6 +232,8 @@ def test_recover_existing_card_menu_without_submitting(tmp_path, sibling_title):
             target = tmp_path / 'existing.png'
             flow.recover(page, 'Empty cafe on rainy morning', target)
             assert page.evaluate('window.submissions') == 0
+            if sibling_title == 'resolution-submenu':
+                assert page.evaluate('window.enhancements') == 0
             assert page.locator('textarea').input_value() == ''
             with pytest.raises(flow.FlowError, match='Não localizei'):
                 flow._existing_image(page, 'Nonexistent title', timeout=0)

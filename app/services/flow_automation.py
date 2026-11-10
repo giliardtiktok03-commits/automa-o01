@@ -122,7 +122,21 @@ def _download_control(page, scope, target):
     for role in ('menuitem','button','link'):
         nodes=_visible(scope.get_by_role(role,name=pattern))
         if len(nodes)==1:
-            with page.expect_download(timeout=60000) as event:nodes[0].click(timeout=5000)
+            with page.expect_download(timeout=60000) as event:
+                nodes[0].click(timeout=5000)
+                # Flow may open a resolution submenu instead of starting a file.
+                # Only the original asset is allowed; never choose enhancement.
+                original = page.get_by_role('menuitem', name=re.compile(
+                    r'^(?:1K\s+)?(?:Tamanho original|Original size)(?:\s+1K)?$', re.I))
+                try:
+                    original.first.wait_for(state='visible', timeout=2000)
+                except Exception:
+                    pass  # Older UI starts the download directly.
+                options = _visible(original)
+                if len(options) > 1:
+                    raise FlowError('Mais de uma opção de tamanho original; nenhum aprimoramento foi solicitado')
+                if options:
+                    options[0].click(timeout=5000)
             _save_image(event.value,target)
             return True
     return False

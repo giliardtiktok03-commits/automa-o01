@@ -14,3 +14,5 @@ Nova revisao: busca do cartao em ate 24 camadas e por aria-label direto; diagnos
 Reconhecimento revisado: parte da imagem visivel e confere rotulos exatos dentro do mesmo cartao. Nao depende da visibilidade do botao do titulo. Titulos duplicados interrompem, mesmo quando as imagens possuem a mesma URL.
 
 Menu de download: aceita o rotulo real download / Fazer o download, incluindo o artigo o e o icone textual. Nao solicita nova geracao.
+
+DOWNLOAD 1K: quando o Flow abrir o submenu de resolucao, seleciona 1K / Tamanho original. Nao seleciona 2K ou 4K Aprimorada. Mantem recuperacao sem novo prompt.
