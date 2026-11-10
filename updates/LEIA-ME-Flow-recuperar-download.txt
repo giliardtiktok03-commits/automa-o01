@@ -8,3 +8,5 @@ Correcao de reconhecimento por src estavel e download pelo menu Mais opcoes do c
 Testes usam interface sintetica no Chromium; a interface real do Flow precisa ser validada no computador do usuario.
 
 Atualizacao: aguarda ate 30 segundos pela galeria e reconhece titulo separado da imagem, com icones no botao. Titulos ausentes ou ambiguos interrompem a recuperacao sem gerar novamente.
+
+Nova revisao: busca do cartao em ate 24 camadas e por aria-label direto; diagnostico registra estrutura dos cartoes e titulo solicitado, sem URLs de imagens ou dados de sessao.

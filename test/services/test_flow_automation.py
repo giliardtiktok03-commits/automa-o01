@@ -193,7 +193,7 @@ card.appendChild(button);document.getElementById('results').appendChild(card);}
         finally:browser.close()
 
 
-@pytest.mark.parametrize("sibling_title", [False, True])
+@pytest.mark.parametrize("sibling_title", [False, True, "deep"])
 def test_recover_existing_card_menu_without_submitting(tmp_path, sibling_title):
     import base64, io, shutil
     from playwright.sync_api import sync_playwright
@@ -214,6 +214,8 @@ def test_recover_existing_card_menu_without_submitting(tmp_path, sibling_title):
 </body></html>'''.replace('DATA', data).replace('OLD', data+'#old')
     if sibling_title:
         html = html.replace('<button aria-label="Empty cafe on rainy morning"><img src="' + data + '"></button>', '<img src="' + data + '"><button><span>Empty cafe on rainy morning</span><i>edit</i></button>')
+    if sibling_title == 'deep':
+        html = html.replace('<span>Empty cafe on rainy morning</span>', '<div>' * 12 + '<span>Empty cafe on rainy morning</span>' + '</div>' * 12)
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=chromium, headless=True)
         try:

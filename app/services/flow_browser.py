@@ -229,6 +229,11 @@ def _diagnostic(request_file,page,stage,exc,submitted):
         if page and urlparse(page.url).hostname=='flow.google.com':
             path=urlparse(page.url).path
             if re.fullmatch(r'/project/[0-9a-fA-F-]{36}/?',path):data['project_id']=path.strip('/').split('/')[-1]
+            if stage=='localizando_imagem_existente':
+                request_data=json.loads(request_file.read_text(encoding='utf-8'))
+                title=str(request_data.get('asset_title',''))[:200]
+                if not re.search(r'@|https?://',title):data['requested_asset_title']=title
+                data['image_ancestors']=page.evaluate("""() => Array.from(document.querySelectorAll('img')).filter(el=>el.getClientRects().length && el.naturalWidth>=128).slice(0,12).map(img=>{let result=[],el=img.parentElement;for(let i=0;el && el!==document.body && i<24;i++,el=el.parentElement){result.push({tag:el.tagName,images:el.querySelectorAll('img').length,buttons:Array.from(el.querySelectorAll('button')).slice(0,10).map(b=>(b.getAttribute('aria-label')||b.innerText||'').slice(0,120)).filter(t=>!/@|https?:|account|conta do google/i.test(t))});}return result})""")
             body=page.locator('body').inner_text(timeout=3000)
             keywords=re.compile(r'erro|error|failed|não foi possível|something went wrong|try again|tentar de novo|quota|limite|blocked|atividade incomum|unusual',re.I)
             data['visible_messages']=[line.strip()[:300] for line in body.splitlines() if keywords.search(line) and not re.search(r'@|https?://',line)][:12]

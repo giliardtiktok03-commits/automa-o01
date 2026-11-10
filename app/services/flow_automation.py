@@ -148,7 +148,7 @@ def _download_result(page,image,target,on_stage=None):
         return
     # Current Flow gallery puts Download in the new card's More options menu.
     scope=image
-    for _ in range(9):
+    for _ in range(24):
         scope=scope.locator('xpath=..')
         more=_visible(scope.get_by_role('button',name=re.compile(r'^(Mais opções|More options)$',re.I)))
         reuse=_visible(scope.get_by_role('button',name=re.compile(r'^(Reutilizar comando|Reuse prompt|Reuse command)$',re.I)))
@@ -172,16 +172,19 @@ def _existing_image(page, title, timeout=30):
     while True:
         candidates = []
         for locator in (page.get_by_role('button', name=pattern),
-                        page.get_by_text(pattern, exact=True)):
+                        page.get_by_text(pattern, exact=True),
+                        page.locator('button[aria-label=' + json.dumps(title) + ']')):
             for node in _visible(locator):
                 scope = node
-                for _ in range(7):
+                for _ in range(24):
                     images = [image for image in _visible(scope.locator('img'))
                               if image.evaluate('(el) => el.complete && el.naturalWidth >= 128 && el.naturalHeight >= 128')]
                     if images:
                         # Never ascend through a container holding several assets.
                         if len(images) == 1:
                             candidates.append(images[0])
+                        break
+                    if scope.evaluate('(el) => el === document.body || el === document.documentElement'):
                         break
                     scope = scope.locator('xpath=..')
         unique = {}
