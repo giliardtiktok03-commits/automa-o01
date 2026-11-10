@@ -193,7 +193,8 @@ card.appendChild(button);document.getElementById('results').appendChild(card);}
         finally:browser.close()
 
 
-def test_recover_existing_card_menu_without_submitting(tmp_path):
+@pytest.mark.parametrize("sibling_title", [False, True])
+def test_recover_existing_card_menu_without_submitting(tmp_path, sibling_title):
     import base64, io, shutil
     from playwright.sync_api import sync_playwright
     chromium = shutil.which('chromium')
@@ -211,6 +212,8 @@ def test_recover_existing_card_menu_without_submitting(tmp_path):
 <div role="menu" id="menu" hidden><button role="menuitem" onclick="downloadImage()">Baixar</button></div>
 <script>window.submissions=0;function downloadImage(){let a=document.createElement('a');a.href='DATA';a.download='existing.png';a.click()}</script>
 </body></html>'''.replace('DATA', data).replace('OLD', data+'#old')
+    if sibling_title:
+        html = html.replace('<button aria-label="Empty cafe on rainy morning"><img src="' + data + '"></button>', '<img src="' + data + '"><button><span>Empty cafe on rainy morning</span><i>edit</i></button>')
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=chromium, headless=True)
         try:
@@ -221,6 +224,20 @@ def test_recover_existing_card_menu_without_submitting(tmp_path):
             flow.recover(page, 'Empty cafe on rainy morning', target)
             assert page.evaluate('window.submissions') == 0
             assert page.locator('textarea').input_value() == ''
+            with pytest.raises(flow.FlowError, match='Não localizei'):
+                flow._existing_image(page, 'Nonexistent title', timeout=0)
+            page.evaluate("""() => {
+                const card = document.createElement('div');
+                const img = document.createElement('img');
+                img.src = document.querySelector('img').src;
+                const title = document.createElement('button');
+                title.textContent = 'Empty cafe on rainy morning';
+                card.append(img, title); document.body.append(card);
+            }""")
+            page.wait_for_function('Array.from(document.images).every(i => i.complete)')
+            with pytest.raises(flow.FlowError, match='Mais de uma imagem'):
+                flow._existing_image(page, 'Empty cafe on rainy morning', timeout=0)
+            assert page.evaluate('window.submissions') == 0
             with Image.open(target) as image:
                 assert image.size == (320, 180)
                 assert image.getpixel((0, 0)) == (0, 128, 0)

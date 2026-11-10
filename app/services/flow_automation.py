@@ -164,15 +164,48 @@ def _download_result(page,image,target,on_stage=None):
     raise FlowError('A imagem foi encontrada, mas seus controles de download não foram confirmados. Recupere a imagem existente, sem gerar outra.')
 
 
+def _existing_image(page, title, timeout=30):
+    # Flow can render the title and the image as siblings, and include icons in
+    # the accessible button name. Match exact normalized labels/text instead.
+    pattern = re.compile(r'^\s*' + r'\s+'.join(re.escape(word) for word in title.split()) + r'\s*$', re.I)
+    deadline = time.monotonic() + timeout
+    while True:
+        candidates = []
+        for locator in (page.get_by_role('button', name=pattern),
+                        page.get_by_text(pattern, exact=True)):
+            for node in _visible(locator):
+                scope = node
+                for _ in range(7):
+                    images = [image for image in _visible(scope.locator('img'))
+                              if image.evaluate('(el) => el.complete && el.naturalWidth >= 128 && el.naturalHeight >= 128')]
+                    if images:
+                        # Never ascend through a container holding several assets.
+                        if len(images) == 1:
+                            candidates.append(images[0])
+                        break
+                    scope = scope.locator('xpath=..')
+        unique = {}
+        for image in candidates:
+            src = image.get_attribute('src')
+            if src:
+                unique[src] = image
+        if len(unique) == 1:
+            return next(iter(unique.values()))
+        if len(unique) > 1:
+            raise FlowError('Mais de uma imagem corresponde ao título informado; confira o título no Flow. Nenhum novo pedido foi enviado.')
+        if time.monotonic() >= deadline:
+            raise FlowError('Não localizei um cartão com imagem única para esse título. Confira o título no projeto Flow; nenhum novo pedido foi enviado.')
+        page.wait_for_timeout(250)
+
+
 def recover(page,title,target,*,on_stage=None):
+    title = str(title or '').strip()
     if not title or len(title)>200:raise FlowError('Informe o título exato da imagem já gerada')
     if on_stage:on_stage('localizando_imagem_existente')
     page.wait_for_load_state('domcontentloaded',timeout=60000)
     _blocked(page)
-    button=_one_visible(page.get_by_role('button',name=title,exact=True),'existing image title')
-    images=_visible(button.locator('img'))
-    if len(images)!=1:raise FlowError('O cartão indicado não contém uma única imagem visível; não houve nova geração')
-    _download_result(page,images[0],target,on_stage=on_stage)
+    image = _existing_image(page, title)
+    _download_result(page,image,target,on_stage=on_stage)
 
 
 def generate(page, prompt, target, timeout=900, require_zero=True, *, aspect="16:9", model_name=MODEL, before_submit=None, on_stage=None):
