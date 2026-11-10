@@ -12,3 +12,5 @@ Atualizacao: aguarda ate 30 segundos pela galeria e reconhece titulo separado da
 Nova revisao: busca do cartao em ate 24 camadas e por aria-label direto; diagnostico registra estrutura dos cartoes e titulo solicitado, sem URLs de imagens ou dados de sessao.
 
 Reconhecimento revisado: parte da imagem visivel e confere rotulos exatos dentro do mesmo cartao. Nao depende da visibilidade do botao do titulo. Titulos duplicados interrompem, mesmo quando as imagens possuem a mesma URL.
+
+Menu de download: aceita o rotulo real download / Fazer o download, incluindo o artigo o e o icone textual. Nao solicita nova geracao.

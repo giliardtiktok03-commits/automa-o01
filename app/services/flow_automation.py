@@ -118,7 +118,7 @@ def _visible(locator):
 
 
 def _download_control(page, scope, target):
-    pattern=re.compile(r'^(?:download\s+)?(?:Baixar|Download|Fazer download)(?: (?:imagem|image))?$',re.I)
+    pattern=re.compile(r'^(?:download\s+)?(?:Baixar|Download|Fazer\s+(?:o\s+)?download)(?:\s+(?:imagem|image))?$',re.I)
     for role in ('menuitem','button','link'):
         nodes=_visible(scope.get_by_role(role,name=pattern))
         if len(nodes)==1:
