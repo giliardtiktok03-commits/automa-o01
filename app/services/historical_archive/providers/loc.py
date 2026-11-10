@@ -23,11 +23,15 @@ class LOCProvider:
         result=[]
         for summary in data.get('results',[])[:limit]:
             source=upgrade_url(summary.get('id') or summary.get('url') or '')
-            if not source.startswith(('https://www.loc.gov/item/','https://www.loc.gov/pictures/item/','https://www.loc.gov/resource/')):continue
+            if not source.startswith(('https://www.loc.gov/item/','https://www.loc.gov/pictures/item/','https://www.loc.gov/resource/')):
+                self.transport.record('loc_json','record_filter','skipped',reason='Resultado é coleção/página ou URL não suportada, não um registro de material')
+                continue
             detail=self.metadata_service.record(source)
             record=detail.get('item') or summary
             kind=media(record.get('original_format') or summary.get('original_format') or record.get('format'))
-            if kind not in media_types:continue
+            if kind not in media_types:
+                self.transport.record('loc_json','record_filter','skipped',media_type=kind,reason='Tipo de material não está habilitado')
+                continue
             files=[]
             resources=detail.get('resources',[])
             if isinstance(detail.get('resource'),dict):resources=resources+[detail['resource']]
@@ -54,7 +58,9 @@ class LOCProvider:
                           'authenticity':'archive_record_not_ai','loc_services':{'metadata':{'status':'available','format':'json'},
                           'images':{'status':'not_available'},'text':{'status':'not_available'}}})
             # Pixel/OCR retrieval never grants rights. Uncertain items still skip automatically.
-            if assess(candidate)[0]=='rights_cleared':
+            rights_status,rights_reason=assess(candidate)
+            self.transport.record('loc_json','candidate_rights',rights_status,record=source,classification=rights_status,reason=rights_reason)
+            if rights_status=='rights_cleared':
                 if kind in {'photograph','document','map'}:
                     try:
                         image=self.image_service.prepare(detail)
@@ -63,14 +69,22 @@ class LOCProvider:
                             candidate.metadata['original_download_url']=candidate.download_url
                             candidate.download_url=image['image_url']
                             candidate.metadata['width']=image['output_width']
+                            if self.image_service.settings.loc_diagnostic_probe:
+                                image['download_probe']=self.image_service.probe_image(image['image_url'])
                     except Exception as exc:
+                        self.transport.record('loc_image','image_info','failed',reason=str(exc) if isinstance(exc,ArchiveError) else 'Falha ao consultar/preparar IIIF')
                         candidate.metadata['loc_services']['images']={'status':'unavailable','error':str(exc) if isinstance(exc,ArchiveError) else 'IIIF indisponível'}
                 if kind in {'document','map'}:
                     ocr=self.text_service.extract(detail)
                     candidate.metadata['loc_services']['text']=ocr
                     if ocr['text']:candidate.description+='\nOCR (source data): '+ocr['text'][:4000]
+                else:
+                    self.transport.record('loc_text','ocr_extraction','not_available',reason='Registro não é documento/mapa com extração OCR aplicável')
             else:
                 candidate.metadata['loc_services']['images']['status']='skipped_uncertain_rights'
                 candidate.metadata['loc_services']['text']['status']='skipped_uncertain_rights'
+                self.transport.record('loc_image','image_info','skipped',reason='Direitos incertos/restritos: imagem não recuperada')
+                self.transport.record('loc_text','ocr_extraction','skipped',reason='Direitos incertos/restritos: OCR não recuperado')
+            if not candidate.download_url:self.transport.record('loc_image','image_availability','not_available',reason='Registro sem URL utilizável de imagem/arquivo original')
             result.append(candidate)
         return result

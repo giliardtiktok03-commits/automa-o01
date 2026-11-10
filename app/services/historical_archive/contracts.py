@@ -27,6 +27,7 @@ class ArchiveSettings(BaseModel):
     loc_block_cooldown_seconds: float = Field(default=300, ge=60, le=3600)
     loc_image_max_dimension: int = Field(default=2048, ge=256, le=4096)
     loc_extract_ocr: bool = True
+    loc_diagnostic_probe: bool = False
     loc_ocr_max_pages: int = Field(default=1, ge=1, le=5)
     loc_ocr_max_chars: int = Field(default=60000, ge=1024, le=200000)
     nara_interval_seconds: float = Field(default=2, ge=.2, le=60)

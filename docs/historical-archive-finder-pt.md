@@ -37,8 +37,7 @@ material nem se habilita um gerador pago por conta própria.
    A falta dessa chave é informada e não bloqueia LOC/Commons.
 6. Faça um vídeo curto e confira as origens e os créditos antes de produzir em escala.
 
-O modo **Somente pesquisa** salva candidatos/metadados e mantém o fluxo visual
-existente: não baixa nem insere arquivos históricos. A interface permite pesquisar
+O modo **Somente pesquisa** executa uma tarefa independente e salva candidatos e metadados, sem gerar roteiro, áudio, legendas ou vídeo. A interface permite pesquisar
 um projeto salvo em segundo plano, cancelar essa pesquisa, consultar prévias e
 exportar os dados, sem exigir essas ações para produzir um vídeo automaticamente.
 
@@ -237,3 +236,18 @@ limites acima implementam a solicitação recebida; não foram revalidados por u
 real ao site. Os testes usam fixtures, incluindo limites por minuto, 429/403/503,
 Retry-After, cache, OCR, redimensionamento IIIF e ausência de autenticação. A validação
 com registros reais que disponibilizem imagem IIIF e OCR continua pendente na rede local.
+
+
+## Testar as três APIs sem vídeo
+
+Em Configurações do Vídeo → Historical Archive Finder, ative o módulo e use
+**Testar as 3 APIs LOC — sem vídeo**. Não precisa informar ID de projeto nem enviar
+áudio. Informe a consulta e clique em **Atualizar diagnóstico LOC** para acompanhar.
+Baixe o relatório JSON ou Markdown. O último diagnóstico continua acessível após reiniciar.
+
+O teste consulta metadados JSON, verifica IIIF e decodifica uma prévia pequena em
+memória, e extrai OCR quando o registro disponibiliza texto. Não usa Pexels, Pixabay,
+Coverr ou geradores de IA. Imagens com direitos desconhecidos não são baixadas nem
+aprovadas. A ausência de IIIF/OCR é registrada como indisponível ou não testado,
+nunca como aprovação das três APIs. Uma consulta apenas fotográfica pode não ter OCR.
+O teste usa consultas novas, respeitando quotas e bloqueios persistentes.

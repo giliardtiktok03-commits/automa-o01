@@ -7,7 +7,8 @@ from PIL import Image
 from app.utils import utils
 from app.utils.atomic_files import write_bytes_atomic
 from .contracts import ArchiveError
-from .network import safe_url
+from .network import safe_url,loc_bucket
+from .diagnostics import safe_request
 
 
 def checksum(path):
@@ -24,6 +25,7 @@ def local(root,relative):
 def download(candidate,folder,transport):
     transport.check()
     safe_url(candidate.download_url)
+    transport.record(loc_bucket(candidate.provider,candidate.download_url),'image_download','started',request=safe_request(candidate.download_url))
     raw=transport.get(candidate.provider,candidate.download_url,max_bytes=transport.settings.max_file_mb*1024*1024)
     transport.check()
     folder=Path(folder)
@@ -55,5 +57,6 @@ def download(candidate,folder,transport):
         digest=hashlib.sha256(content).hexdigest()
         target=folder/(digest+extension)
         if not target.exists():write_bytes_atomic(target,content)
+        transport.record(loc_bucket(candidate.provider,candidate.download_url),'image_download','passed',bytes=len(content),sha256=digest,reason='Arquivo recebido, validado e salvo')
         return target,digest
     finally:temporary.unlink(missing_ok=True)

@@ -2174,6 +2174,15 @@ def _render_generation_task_snapshot(task_id, task):
         st.caption(tr("Mixed Source Counts").format(**display_counts))
         if counts.get("ai33_image"):
             st.caption(f"Imagens AI33.Pro utilizadas: {counts['ai33_image']}")
+    if task.get('historical_research_only'):
+        st.success('Pesquisa histórica concluída — nenhum vídeo, áudio ou imagem IA foi gerado.')
+        st.json(task.get('api_results',{}))
+        from app.services.historical_archive import HistoricalArchiveService
+        folder=HistoricalArchiveService(task_id).folder
+        for filename in ('diagnostic-report.json','diagnostic-report.md'):
+            report=folder/filename
+            if report.is_file():st.download_button('Baixar '+filename,data=report.read_bytes(),file_name=filename,key='research_report_'+task_id+filename)
+        return
     if task.get("chapter_count"):
         st.caption(tr("Chapter Progress").format(
             current=task.get("current_chapter", 0), total=task["chapter_count"],
@@ -9319,6 +9328,17 @@ def _render_generation_controls(
     据此跳过页面末尾的重复请求。主脚本必须及时结束，定时 Fragment 才能持续
     刷新进度和任务日志。
     """
+    from app.services.historical_archive import research_mode as archive_research
+    if archive_research.requested(params):
+        st.info('Historical Research Only: pesquisa/diagnóstico sem gerar roteiro, áudio, legendas ou vídeo e sem usar bancos/geradores IA.')
+        if st.button('Executar pesquisa histórica sem gerar vídeo',key='haf_research_run',disabled=not (params.video_subject or params.video_script)):
+            research_id=str(uuid4())
+            task_id=webui_task.submit_generation(research_id,params.model_copy(update={'video_source':'historical_research'}),capture_logs=True)
+            _add_active_generation_task(task_id,subject=params.video_subject or 'Pesquisa histórica')
+            st.session_state['current_generation_task_id']=task_id
+            st.query_params['generation_task']=task_id
+            return True
+        return False
     restore_upload_requirements = st.session_state.get(
         "task_restore_upload_requirements", {}
     )

@@ -23,7 +23,7 @@ from app.services.ai33 import provider as ai33_provider
 from app.services.ai33 import AI33Error, AI33Client, AI33PendingError
 from app.utils import utils
 from app.utils.subtitle_reader import moviepy_subtitles
-from app.services.historical_archive import enabled as archives_enabled, HistoricalArchiveService, ArchivePending
+from app.services.historical_archive import enabled as archives_enabled, HistoricalArchiveService, ArchivePending, ArchiveError
 from app.services.historical_archive import pipeline as archive_pipeline
 
 FPS = 30
@@ -555,6 +555,14 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
         available = providers(params=params)
         stock_turn = 0
         archive_service = HistoricalArchiveService(task_id) if archives_enabled() else None
+        if archive_service is not None:
+            archive_service.report('pipeline','fallback_configuration','configured',
+                stock_sources={name:{'selected':bool(getattr(params,'mixed_use_'+name)), 'configured':name in providers(params=params)} for name in ('pexels','pixabay','coverr')},
+                selected_image_provider=params.mixed_image_provider,
+                image_choices={'deepinfra':{'selected':params.mixed_use_deepinfra,'key_configured':bool(deepinfra_image.api_key())},
+                               'grok':{'selected':params.mixed_use_grok,'key_configured':bool(grok_image.api_key())},
+                               'ai33':{'selected':params.mixed_use_ai33,'key_configured':bool(config.app.get('ai33_api_key'))}},
+                image_limit=params.mixed_max_images)
         for scene in manifest["scenes"]:
             generation_progress.stage("mixed_scene")
             sm.state.update_task(task_id, progress=40 + 10 * (scene["id"] - 1) / len(manifest["scenes"]),
@@ -576,15 +584,24 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     source, provenance = archive_service.select(scene, params.video_terms)
                     if source:
                         source = archive_pipeline.visual_source(source, scene, params, archive_service)
+                        archive_service.report('pipeline','material_delivery','passed',scene_id=scene['id'],archive_provider=provenance.get('archive_provider'),reason='Arquivo histórico validado entregue ao renderizador')
                 except ArchivePending as exc:
                     raise MixedPending(exc, scene['id'], task_id, 'historical_archive') from exc
-            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or grok_unlimited(params)) and not scene.get("image_file") and not scene.get("image_request_started"):
+                except (ArchiveError,material.OpenAIImagePaidResultError) as exc:
+                    archive_service.report('pipeline','material_delivery','failed',scene_id=scene['id'],reason='Arquivo histórico não pôde ser preparado: '+str(exc)[:300])
+                    source,provenance=None,None
+            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or grok_unlimited(params) or archive_service is not None) and not scene.get("image_file") and not scene.get("image_request_started"):
                 history = records or params.mixed_previous_sources
                 scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
             if source is None and params.mixed_image_provider == "none" and not scene.get("image_file") and not scene.get("ai33_job") and not scene.get("runware_job") and not scene.get("grok_job") and not scene.get("google_flow_job") and not scene.get("deepinfra_job"):
+                if archive_service is not None:
+                    reason=archive_service.explain(scene['id'])
+                    fallback='bancos habilitados: '+(', '.join(available) or 'nenhum')+'; gerador de imagens selecionado: nenhum'
+                    archive_service.report('pipeline','material_delivery','failed',scene_id=scene['id'],reason=reason,fallback=fallback)
+                    raise MixedError(f"Cena {scene['id']}: nenhum material histórico/banco aprovado. Motivo histórico: {reason}. Fallback: {fallback}. Consulte historical_archive/diagnostic-report.json")
                 raise MixedError("No approved stock material and image generators are disabled or unconfigured",
                                  key="mixed.no_images")
             if source is None:

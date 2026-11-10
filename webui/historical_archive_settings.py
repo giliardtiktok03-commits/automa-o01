@@ -26,7 +26,7 @@ def render(set_config):
         st.checkbox('Europeana — fase pendente',value=False,disabled=True,key='haf_europeana_pending')
         st.checkbox('Internet Archive — fase pendente',value=False,disabled=True,key='haf_ia_pending')
         modes={'historical_plus_stock':'Automático: acervos → bancos → IA habilitada',
-               'historical_research_only':'Somente pesquisa (sem inserir no vídeo)'}
+               'historical_research_only':'Somente pesquisa (sem gerar vídeo)'}
         mode=st.selectbox('Modo de pesquisa histórica',list(modes),index=list(modes).index(cfg.mode),format_func=modes.get,key='haf_mode',disabled=not active)
         save('mode',mode)
         for name,label in [('photographs','Fotografias históricas'),('documents','Documentos e registros desclassificados'),('maps','Mapas e diagramas'),('footage','Filmagens de arquivo'),('auto_download_rights_cleared','Baixar automaticamente somente itens com direitos liberados'),('preserve_aspect','Preservar a proporção original'),('show_credits','Mostrar relatório de fontes e créditos'),('llm_queries','Usar modelo central para elaborar consultas em inglês (pode ter custo)')]:
@@ -62,6 +62,30 @@ def render(set_config):
         if st.session_state.get('haf_health'):st.json(st.session_state.haf_health)
         st.button('Salvar configurações históricas',key='haf_save')
         st.caption('Configurações são persistidas pelo MPT. Desligar impede novas consultas/downloads, sem apagar arquivos anteriores.')
+        st.markdown('**Teste independente das 3 APIs LOC — sem gerar vídeo**')
+        st.caption('Não precisa de roteiro pronto, áudio, legendas, Pexels ou gerador IA. Prévia pequena IIIF é validada em memória somente com direitos claros; OCR depende de estar disponível no registro.')
+        probe_query=st.text_input('Consulta para testar JSON/YAML, IIIF e OCR',value='Dust Bowl Farm Security Administration',key='haf_probe_query')
+        if st.button('Testar as 3 APIs LOC — sem vídeo',key='haf_probe_start',disabled=not active or not probe_query.strip()):
+            from app.services.historical_archive import research_mode
+            try:st.session_state.haf_probe_id=research_mode.submit_loc(probe_query)
+            except ValueError as exc:st.warning(str(exc))
+        from app.services.historical_archive import research_mode
+        probe_id=st.session_state.get('haf_probe_id') or research_mode.latest_probe()
+        if probe_id:
+            from app.services.historical_archive import research_mode
+            st.caption('ID do diagnóstico: '+probe_id+' · '+research_mode.status(probe_id))
+            st.button('Atualizar diagnóstico LOC',key='haf_probe_refresh')
+            probe_service=HistoricalArchiveService(probe_id)
+            report=probe_service.diagnostic().read()
+            rows=[]
+            for name,label in [('loc_json','JSON/YAML'),('loc_image','IIIF Imagens'),('loc_text','Texto/OCR')]:
+                result=report['services'][name]
+                labels={'passed':'Passou','failed':'Falhou','blocked':'Bloqueado','not_tested':'Não testado'}
+                rows.append({'API':label,'Resultado':labels.get(result['status'],result['status']),'HTTP':', '.join(map(str,result.get('http_statuses',[]))) or 'Sem resposta registrada','Pedidos':result.get('requests',0),'Detalhe':result.get('reason','')})
+            st.table(rows)
+            for name in ('diagnostic-report.json','diagnostic-report.md'):
+                path=probe_service.folder/name
+                if path.is_file():st.download_button('Baixar '+name,data=path.read_bytes(),file_name=name,key='haf_probe_'+name)
         st.markdown('**Resultados e fontes por projeto**')
         task_id=st.text_input('ID do projeto para consultar a pesquisa histórica',key='haf_task_id').strip()
         if not task_id:return
@@ -130,7 +154,7 @@ def render(set_config):
                             else:st.warning('Arquivo não baixado; confira os direitos, limites e erros no manifesto.')
                             st.rerun()
             if cfg.show_credits:
-                for name in ('sources_and_credits.md','sources_and_credits.json','manifest.json','search_log.json'):
+                for name in ('diagnostic-report.json','diagnostic-report.md','sources_and_credits.md','sources_and_credits.json','manifest.json','search_log.json'):
                     path=folder/name
                     if path.is_file():st.download_button('Baixar '+name,data=path.read_bytes(),file_name=name,key='haf_export_'+name)
             context=task_dir/'historical-archive-resume.json'

@@ -974,3 +974,37 @@ def test_archive_without_cleared_assets_uses_stock_then_ai_without_approval(setu
     assert data['image_requests']==provider.call_count
     assert all(scene['provenance']['illustration'] for scene in data['scenes'])
     assert all(scene['provenance']['authenticity']=='illustrative_reconstruction' for scene in data['scenes'])
+
+
+def test_archive_failure_still_uses_configured_stock_for_image_planned_scene(setup,monkeypatch):
+    folder,subtitles,params,model,search,images,_=setup
+    from app.services.historical_archive import settings
+    monkeypatch.setattr(settings,'mapping',lambda:{'historical_archive_enabled':True})
+    params.mixed_select_sources=False
+    params.mixed_image_provider='none'
+    choices=json.loads(model.return_value)
+    for row in choices:row.update(source='image',context='current',period='today')
+    model.return_value=json.dumps(choices)
+    service=Mock();service.active.return_value=True;service.select.return_value=(None,None)
+    monkeypatch.setattr(mixed,'HistoricalArchiveService',lambda *args:service)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert search.called
+    images.assert_not_called()
+    data=json.loads((folder/'mixed-scenes.json').read_text())
+    assert all(s['provenance']['provider'] in {'pexels','pixabay','coverr'} for s in data['scenes'])
+
+
+def test_archive_no_material_failure_explains_reason_and_disabled_fallback(setup,monkeypatch):
+    folder,subtitles,params,_,_,_,_=setup
+    from app.services.historical_archive import settings
+    monkeypatch.setattr(settings,'mapping',lambda:{'historical_archive_enabled':True})
+    params.mixed_use_pexels=params.mixed_use_pixabay=params.mixed_use_coverr=False
+    params.mixed_use_ai33=params.mixed_use_grok=params.mixed_use_deepinfra=False
+    params.mixed_image_provider='none'
+    service=Mock();service.active.return_value=True;service.select.return_value=(None,None)
+    service.explain.return_value='LOC HTTP 200; zero candidatos com direitos claros'
+    monkeypatch.setattr(mixed,'HistoricalArchiveService',lambda *args:service)
+    with pytest.raises(mixed.MixedError,match='zero candidatos com direitos claros') as exc:
+        mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert 'gerador de imagens selecionado: nenhum' in str(exc.value)
+    assert 'diagnostic-report.json' in str(exc.value)

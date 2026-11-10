@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 import requests
 from app.utils.atomic_files import write_bytes_atomic
 from .contracts import ArchiveError, ArchiveDisabled
+from .diagnostics import safe_request
+from loguru import logger
 
 _LOCKS={}
 _GUARD=threading.Lock()
@@ -45,10 +47,15 @@ def loc_bucket(provider,url):
 
 
 class Transport:
-    def __init__(self,cache,settings,active):
+    def __init__(self,cache,settings,active,observer=None):
         self.cache=Path(cache)
         self.settings=settings
         self.active=active
+        self.observer=observer
+
+    def record(self,service,stage,status,**fields):
+        if self.observer:self.observer(service,stage,status,**fields)
+        else:logger.info('Archive API: service={} stage={} status={} details={}',service,stage,status,json.dumps(fields,ensure_ascii=False))
 
     def check(self):
         if not self.active():raise ArchiveDisabled('Pesquisa histórica desativada ou cancelada')
@@ -119,7 +126,10 @@ class Transport:
         bucket=loc_bucket(provider,url)
         with _GUARD:lock=_LOCKS.setdefault(bucket,threading.Lock())
         with lock:
-            self._check_cooldown(bucket)
+            try:self._check_cooldown(bucket)
+            except ArchiveError:
+                self.record(bucket,'cooldown','blocked',reason='Espera persistente por bloqueio anterior; nenhuma requisição enviada')
+                raise
             if not bucket.startswith('loc_'):self.pause(max(0,_NEXT.get(bucket,0)-time.monotonic()))
             for attempt in range(self.settings.max_retries+1):
                 self.check()
@@ -136,22 +146,30 @@ class Transport:
                 if not bucket.startswith('loc_'):
                     interval=max(self.settings.request_interval_seconds,getattr(self.settings,provider+'_interval_seconds',0))
                     _NEXT[bucket]=time.monotonic()+interval
+                self.record(bucket,'request','started',method='GET',request=safe_request(url,params))
+                started=time.monotonic()
                 try:
                     with requests.get(url,params=params,headers={'User-Agent':self.settings.user_agent,**(headers or {})},timeout=(5,self.settings.request_timeout_seconds),stream=True,allow_redirects=False) as response:
+                        self.record(bucket,'http_response','received',http_status=response.status_code,elapsed_seconds=round(time.monotonic()-started,3))
                         if response.status_code==429 or (bucket.startswith('loc_') and response.status_code==403) or (response.status_code==503 and response.headers.get('Retry-After')):
                             self._record_cooldown(bucket,response)
+                            self.record(bucket,'response_block','blocked',http_status=response.status_code,reason='Bloqueio/rate limit; Retry-After respeitado')
                             raise ArchiveError('Rate limit/bloqueio temporário; Retry-After preservado, sem insistência nem troca de serviço LOC')
                         if response.status_code in (500,502,503,504) and attempt<self.settings.max_retries:
                             self.pause(2**attempt+random.random())
                             continue
-                        if response.status_code!=200:raise ArchiveError(f'Provider HTTP {response.status_code}; sem redirecionamento ou contorno')
+                        if response.status_code!=200:
+                            self.record(bucket,'http_failure','failed',http_status=response.status_code,reason='HTTP não bem-sucedido')
+                            raise ArchiveError(f'Provider HTTP {response.status_code}; sem redirecionamento ou contorno')
                         chunks,size=[],0
                         for chunk in response.iter_content(65536):
                             self.check();size+=len(chunk)
                             if size>max_bytes:raise ArchiveError('Resposta/arquivo excede o limite configurado')
                             chunks.append(chunk)
                         return b''.join(chunks)
-                except requests.RequestException:
+                except requests.RequestException as exc:
+                    self.record(bucket,'transport_error','failed',http_status=None,error_type=type(exc).__name__,reason='Falha de transporte/proxy; nenhuma resposta HTTP da API confirmada')
+                    if isinstance(exc,requests.exceptions.ProxyError):raise ArchiveError('Acesso bloqueado/falha no proxy; nenhuma resposta da API confirmada') from None
                     if attempt>=self.settings.max_retries:raise ArchiveError('Provider indisponível ou timeout') from None
                     self.pause(2**attempt+random.random())
         raise ArchiveError('Provider indisponível')
@@ -161,6 +179,7 @@ class Transport:
         key=hashlib.sha256(json.dumps([provider,url,params],sort_keys=True).encode()).hexdigest()
         target=self.cache/(key+'.json')
         if target.exists() and time.time()-target.stat().st_mtime<self.settings.cache_ttl_hours*3600:
+            self.record(loc_bucket(provider,url),'cache_hit','cached',request=safe_request(url,params))
             return json.loads(target.read_text())
         data=json.loads(self.get(provider,url,params=params,headers=headers))
         self.check()
@@ -175,6 +194,7 @@ class Transport:
         key=hashlib.sha256(json.dumps([provider,url],sort_keys=True).encode()).hexdigest()
         path=self.cache/(key+'.bin')
         if path.exists() and path.stat().st_size<=max_bytes and time.time()-path.stat().st_mtime<self.settings.cache_ttl_hours*3600:
+            self.record(loc_bucket(provider,url),'cache_hit','cached',request=safe_request(url))
             return path.read_bytes()
         data=self.get(provider,url,max_bytes=max_bytes)
         self.check()

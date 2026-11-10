@@ -2090,6 +2090,12 @@ def start(
     ``allow_server_file_input`` 只供本机 CLI 使用。HTTP API 和 WebUI 必须保持
     默认值，让自定义音频始终受当前任务目录约束。
     """
+    from app.services.historical_archive import research_mode
+    if getattr(params,'video_source','')=='historical_research' or (stop_at in {'video','materials'} and research_mode.requested(params)):
+        try:
+            with generation_progress.task_scope(task_id):return research_mode.run(task_id,params)
+        except Exception as exc:
+            return _mark_task_failed(task_id,'historical_research',str(exc))
     from app.services import channel_skill_runtime
     # Resume will load its own saved context; active queued jobs use their snapshot.
     try:

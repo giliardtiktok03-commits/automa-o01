@@ -2,6 +2,8 @@
 import json
 import math
 import re
+import io
+from PIL import Image
 from urllib.parse import urlparse,urlunparse,unquote
 from xml.etree import ElementTree
 from html.parser import HTMLParser
@@ -33,13 +35,26 @@ class LOCMetadataService:
     """JSON representation of the public JSON/YAML API; no authentication."""
     def __init__(self,transport):self.transport=transport
     def search(self,query,limit):
-        return self.transport.json('loc_json','https://www.loc.gov/search/',params={'fo':'json','q':query,'c':limit})
+        try:
+            data=self.transport.json('loc_json','https://www.loc.gov/search/',params={'fo':'json','q':query,'c':limit})
+            if not isinstance(data,dict) or not isinstance(data.get('results'),list):
+                raise ArchiveError('JSON/YAML respondeu sem a lista results; formato inesperado')
+            self.transport.record('loc_json','search_results','passed',count=len(data['results']),reason='Pesquisa válida' if data['results'] else 'Pesquisa válida, mas nenhum registro encontrado')
+            return data
+        except Exception as exc:
+            self.transport.record('loc_json','metadata_search','failed',reason=str(exc) if isinstance(exc,ArchiveError) else 'JSON inválido ou falha de transporte')
+            raise
     def record(self,url):
         safe_url(url)
         parsed=urlparse(url)
         if parsed.hostname!='www.loc.gov' or not parsed.path.startswith(('/item/','/pictures/item/','/resource/')):
             raise ArchiveError('Registro fora da API pública LOC')
-        return self.transport.json('loc_json',url,params={'fo':'json'})
+        data=self.transport.json('loc_json',url,params={'fo':'json'})
+        if not isinstance(data,dict) or not any(key in data for key in ('item','resource','resources','page')):
+            self.transport.record('loc_json','record_metadata','failed',reason='Resposta sem metadados de registro reconhecíveis')
+            raise ArchiveError('Metadados LOC sem item/resource; resposta não pode virar material')
+        self.transport.record('loc_json','record_metadata','passed',reason='Metadados de registro recebidos')
+        return data
 
 
 class LOCImageService:
@@ -58,7 +73,9 @@ class LOCImageService:
 
     def prepare(self,value):
         base=self.discover(value)
-        if not base:return {'status':'not_available'}
+        if not base:
+            self.transport.record('loc_image','image_info','not_available',reason='Registro não divulga um link IIIF')
+            return {'status':'not_available'}
         info_url=base+'/info.json'
         info=self.transport.json('loc_image',info_url)
         width,height=info.get('width'),info.get('height')
@@ -91,8 +108,22 @@ class LOCImageService:
             best=max(sizes,key=lambda s:s['width']*s['height'])
             target_width,target_height=best['width'],best['height']
             size=f"{best['width']},{best['height']}"
+        self.transport.record('loc_image','image_info','passed',width=width,height=height,output_width=target_width,reason='info.json válido; imagem IIIF disponível')
         return {'status':'available','info_url':info_url,'image_url':base+'/full/'+size+'/0/default.jpg',
                 'width':width,'height':height,'output_width':target_width,'output_height':target_height,'region':'full','rotation':0,'max_dimension':maximum,'info':info}
+
+    def probe_image(self,image_url):
+        try:
+            content=self.transport.get('loc_image',image_url,max_bytes=2*1024*1024)
+            with Image.open(io.BytesIO(content)) as image:
+                if image.width*image.height>4_000_000:raise ArchiveError('Prévia IIIF excede limite do diagnóstico')
+                image.load()
+                size=image.size
+            self.transport.record('loc_image','image_download','passed',width=size[0],height=size[1],reason='Prévia IIIF recebida e decodificada em memória; sem montagem de vídeo')
+            return {'status':'passed','width':size[0],'height':size[1]}
+        except Exception as exc:
+            self.transport.record('loc_image','image_download','failed',reason=str(exc) if isinstance(exc,ArchiveError) else 'Falha ao receber/decodificar prévia IIIF')
+            return {'status':'failed','reason':'Prévia IIIF não recebida/validada'}
 
 
 class _HOCR(HTMLParser):
@@ -158,15 +189,22 @@ class LOCTextService:
 
     def extract(self,value):
         links=self.discover(value)
-        if not self.settings.loc_extract_ocr:return {'status':'disabled','pages':[],'text':''}
-        if not links:return {'status':'not_available','pages':[],'text':''}
+        if not self.settings.loc_extract_ocr:
+            self.transport.record('loc_text','ocr_extraction','skipped',reason='Extração OCR desabilitada na configuração')
+            return {'status':'disabled','pages':[],'text':''}
+        if not links:
+            self.transport.record('loc_text','ocr_extraction','not_available',reason='Registro não disponibiliza link de texto/OCR reconhecido')
+            return {'status':'not_available','pages':[],'text':''}
         pages=[];errors=[]
         for url in links[:self.settings.loc_ocr_max_pages]:
             try:
                 raw=self.transport.cached_bytes('loc_text',safe_url(url),max_bytes=2*1024*1024)
                 page=parse_ocr(raw,self.settings.loc_ocr_max_chars)
                 pages.append({'source_url':url,**page})
+                self.transport.record('loc_text','ocr_extraction','passed',format=page['format'],characters=len(page['text']),truncated=page['truncated'],reason='Texto OCR extraído')
             except Exception as exc:
-                errors.append(str(exc) if isinstance(exc,ArchiveError) else 'OCR indisponível ou formato não reconhecido')
+                reason=str(exc) if isinstance(exc,ArchiveError) else 'OCR indisponível ou formato não reconhecido'
+                errors.append(reason)
+                self.transport.record('loc_text','ocr_extraction','failed',reason=reason)
         return {'status':'available' if pages else 'not_available','pages':pages,
                 'text':'\n\n'.join(p['text'] for p in pages),'errors':errors}

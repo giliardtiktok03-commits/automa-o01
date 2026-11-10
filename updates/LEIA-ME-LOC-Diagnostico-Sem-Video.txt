@@ -1,0 +1,8 @@
+Feche o MPT, faça backup e extraia este pacote na raiz da instalação.
+Reabra webui.bat.
+Configurações do Vídeo > Historical Archive Finder > ativar módulo.
+Use "Testar as 3 APIs LOC — sem vídeo", informe a consulta e atualize o diagnóstico.
+Não requer projeto, áudio, Pexels, Pixabay ou IA. Não gera vídeo.
+IIIF e OCR dependem dos recursos e direitos do registro encontrado.
+Relatório por serviço: passou, falhou, bloqueado ou não testado.
+Detalhes: docs/loc-material-failure-diagnostic-pt.md
