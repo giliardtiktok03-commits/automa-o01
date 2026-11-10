@@ -10,3 +10,5 @@ Testes usam interface sintetica no Chromium; a interface real do Flow precisa se
 Atualizacao: aguarda ate 30 segundos pela galeria e reconhece titulo separado da imagem, com icones no botao. Titulos ausentes ou ambiguos interrompem a recuperacao sem gerar novamente.
 
 Nova revisao: busca do cartao em ate 24 camadas e por aria-label direto; diagnostico registra estrutura dos cartoes e titulo solicitado, sem URLs de imagens ou dados de sessao.
+
+Reconhecimento revisado: parte da imagem visivel e confere rotulos exatos dentro do mesmo cartao. Nao depende da visibilidade do botao do titulo. Titulos duplicados interrompem, mesmo quando as imagens possuem a mesma URL.

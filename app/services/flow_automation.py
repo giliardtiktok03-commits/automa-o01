@@ -165,36 +165,31 @@ def _download_result(page,image,target,on_stage=None):
 
 
 def _existing_image(page, title, timeout=30):
-    # Flow can render the title and the image as siblings, and include icons in
-    # the accessible button name. Match exact normalized labels/text instead.
-    pattern = re.compile(r'^\s*' + r'\s+'.join(re.escape(word) for word in title.split()) + r'\s*$', re.I)
+    # Identify from the visible image outward. Flow title controls may have
+    # zero-size boxes even while their labels are present in the DOM.
     deadline = time.monotonic() + timeout
     while True:
-        candidates = []
-        for locator in (page.get_by_role('button', name=pattern),
-                        page.get_by_text(pattern, exact=True),
-                        page.locator('button[aria-label=' + json.dumps(title) + ']')):
-            for node in _visible(locator):
-                scope = node
-                for _ in range(24):
-                    images = [image for image in _visible(scope.locator('img'))
-                              if image.evaluate('(el) => el.complete && el.naturalWidth >= 128 && el.naturalHeight >= 128')]
-                    if images:
-                        # Never ascend through a container holding several assets.
-                        if len(images) == 1:
-                            candidates.append(images[0])
-                        break
-                    if scope.evaluate('(el) => el === document.body || el === document.documentElement'):
-                        break
-                    scope = scope.locator('xpath=..')
-        unique = {}
-        for image in candidates:
-            src = image.get_attribute('src')
-            if src:
-                unique[src] = image
-        if len(unique) == 1:
-            return next(iter(unique.values()))
-        if len(unique) > 1:
+        matches = page.locator('img').evaluate_all(r"""(images, title) => {
+            const norm = value => (value || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+            const wanted = norm(title);
+            const visible = el => {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+            };
+            return images.flatMap((img, index) => {
+                if (!visible(img) || !img.complete || img.naturalWidth < 128 || img.naturalHeight < 128) return [];
+                let scope = img.parentElement;
+                for (let depth=0; scope && scope!==document.body && depth<24; depth++, scope=scope.parentElement) {
+                    if (scope.querySelectorAll('img').length !== 1) break;
+                    const labels = Array.from(scope.querySelectorAll('button,[role=button],button span,[role=button] span'));
+                    if (labels.some(el => [el.getAttribute('aria-label'),el.innerText,el.textContent].some(value => norm(value)===wanted))) return [index];
+                }
+                return [];
+            });
+        }""", title)
+        if len(matches) == 1:
+            return page.locator('img').nth(matches[0])
+        if len(matches) > 1:
             raise FlowError('Mais de uma imagem corresponde ao título informado; confira o título no Flow. Nenhum novo pedido foi enviado.')
         if time.monotonic() >= deadline:
             raise FlowError('Não localizei um cartão com imagem única para esse título. Confira o título no projeto Flow; nenhum novo pedido foi enviado.')
