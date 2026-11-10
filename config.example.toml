@@ -40,7 +40,16 @@ historical_archive_max_downloads_per_video = 30
 historical_archive_request_timeout_seconds = 20
 historical_archive_cache_ttl_hours = 24
 historical_archive_request_interval_seconds = 2
-historical_archive_loc_interval_seconds = 2
+# LOC: public services, no key/authentication.
+historical_archive_loc_interval_seconds = 3
+historical_archive_loc_json_rpm = 20
+historical_archive_loc_image_rpm = 150
+historical_archive_loc_text_rpm = 150
+historical_archive_loc_block_cooldown_seconds = 300
+historical_archive_loc_image_max_dimension = 2048
+historical_archive_loc_extract_ocr = true
+historical_archive_loc_ocr_max_pages = 1
+historical_archive_loc_ocr_max_chars = 60000
 historical_archive_nara_interval_seconds = 2
 historical_archive_wikimedia_interval_seconds = 2
 historical_archive_nara_monthly_limit = 1000

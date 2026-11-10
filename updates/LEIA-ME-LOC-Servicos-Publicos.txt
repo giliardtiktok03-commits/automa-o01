@@ -1,0 +1,38 @@
+LOC — TRES SERVICOS PUBLICOS — MPT
+Este pacote substitui o conector LOC antigo; nao cria uma segunda fonte LOC.
+Contem o Historical Archive Finder completo para instalar diretamente, inclusive
+se voce ainda nao instalou o ZIP anterior desse modulo.
+
+INSTALAR
+Feche o MPT, faca backup e extraia o ZIP na raiz da instalacao. Abra webui.bat.
+Nao substitui config.toml, storage ou .venv; nao instala novas dependencias.
+
+ONDE ENCONTRAR
+Configuracoes do Video > Historical Archive Finder.
+A opcao Library of Congress agora utiliza JSON/YAML + IIIF + OCR.
+Mantem o toggle e suas preferencias existentes; o modulo inicia OFF em instalacoes novas.
+Nao ha campo de chave ou autenticacao LOC. NARA e Wikimedia permanecem preservados.
+
+SERVICOS
+JSON/YAML: pesquisa e metadados, usando JSON; teto de 20 pedidos/minuto.
+IIIF Image Services: info.json e imagem dimensionada; teto de 150 pedidos/minuto.
+Text Services: OCR textual/ALTO/hOCR/JSON divulgado pelo registro; teto de 150 pedidos/minuto.
+Os tetos podem ser reduzidos, mas nao aumentados acima desses valores.
+Tentativas repetidas contam. Respostas em cache nao consomem um novo pedido.
+
+BLOQUEIOS
+429/403 e 503 com Retry-After registram espera persistente.
+Durante esse periodo, nenhum dos tres servicos LOC e usado para tentar contornar o bloqueio.
+Retries de outros erros temporarios sao limitados e respeitam as quotas.
+
+AUTOMATICO
+Sem aprovacao manual. Direitos incertos/restritos continuam ignorados.
+Sem arquivo adequado, segue para bancos e IA ja habilitados, com os limites existentes.
+OCR depende de o registro disponibiliza-lo e dos direitos estarem claros.
+O texto vai para historical_archive/scene_XXX/candidates/*.ocr.txt; nao altera a voz/legendas.
+
+TESTES
+422 testes e 20 subtestes passaram. 3 testes reais opcionais ficaram pulados.
+Validacao real de IIIF/OCR na rede do usuario continua pendente; o acesso direto
+as paginas LOC foi bloqueado no ambiente de desenvolvimento.
+Veja docs/historical-archive-finder-pt.md e docs/historical-archive-implementation-report.md.

@@ -20,7 +20,7 @@ def render(set_config):
         save('enabled',active)
         st.caption('Search historical photographs, documents, maps and archival footage for your video scenes.')
         st.info('Ativado — pesquisa por cena' if active else 'Desativado — nenhuma consulta aos acervos')
-        for name,label in [('loc','Library of Congress'),('nara','National Archives (NARA)'),('wikimedia','Wikimedia Commons')]:
+        for name,label in [('loc','Library of Congress · JSON/YAML + IIIF + OCR'),('nara','National Archives (NARA)'),('wikimedia','Wikimedia Commons')]:
             value=st.checkbox(label,value=getattr(cfg,name+'_enabled'),key='haf_'+name,disabled=not active)
             save(name+'_enabled',value)
         st.checkbox('Europeana — fase pendente',value=False,disabled=True,key='haf_europeana_pending')
@@ -40,8 +40,14 @@ def render(set_config):
         for name,label in [('request_timeout_seconds','Timeout das consultas (s)'),('request_interval_seconds','Intervalo mínimo entre pedidos por fonte (s)'),('cache_ttl_hours','Validade do cache (horas)')]:
             low,high=(2.,60.) if name=='request_timeout_seconds' else (.2,60.) if name=='request_interval_seconds' else (0.,720.)
             save(name,st.number_input(label,min_value=low,max_value=high,value=float(getattr(cfg,name)),key='haf_'+name,disabled=not active))
-        for name,label in [('loc','LOC'),('nara','NARA'),('wikimedia','Commons')]:
+        for name,label in [('nara','NARA'),('wikimedia','Commons')]:
             save(name+'_interval_seconds',st.number_input('Intervalo mínimo '+label+' (s)',min_value=.2,max_value=60.,value=float(getattr(cfg,name+'_interval_seconds')),key='haf_interval_'+name,disabled=not active))
+        st.caption('LOC pública: sem chave. Limites máximos: JSON/YAML 20/min; IIIF Imagens 150/min; Texto/OCR 150/min. Você pode reduzir esses valores.')
+        for name,label,maximum in [('loc_json_rpm','LOC JSON/YAML — pedidos por minuto',20),('loc_image_rpm','LOC IIIF Imagens — pedidos por minuto',150),('loc_text_rpm','LOC Texto/OCR — pedidos por minuto',150)]:
+            save(name,st.number_input(label,min_value=1,max_value=maximum,value=getattr(cfg,name),key='haf_'+name,disabled=not active))
+        save('loc_image_max_dimension',st.number_input('LOC IIIF — maior dimensão da imagem (px)',min_value=256,max_value=4096,value=cfg.loc_image_max_dimension,key='haf_loc_dimension',disabled=not active))
+        save('loc_extract_ocr',st.checkbox('LOC — extrair OCR quando disponível e com direitos claros',value=cfg.loc_extract_ocr,key='haf_loc_ocr',disabled=not active))
+        save('loc_ocr_max_pages',st.number_input('LOC — máximo de páginas/arquivos OCR por registro',min_value=1,max_value=5,value=cfg.loc_ocr_max_pages,key='haf_loc_ocr_pages',disabled=not active))
         save('nara_monthly_limit',st.number_input('Teto mensal local de pedidos NARA',min_value=1,max_value=100000,value=cfg.nara_monthly_limit,key='haf_nara_monthly',disabled=not active))
         save('user_agent',st.text_input('Identificação da aplicação / contato (User-Agent)',value=cfg.user_agent,key='haf_user_agent',disabled=not active))
         save('min_score',st.slider('Pontuação editorial mínima para inserção automática',0.,100.,float(cfg.min_score),key='haf_score',disabled=not active))
@@ -104,6 +110,12 @@ def render(set_config):
                                   'Pontuação':item['score'],'Motivo':item['rights_reason'],'Classificação':item['score_explanation']})
                         try:st.link_button('Abrir fonte',safe_url(candidate['source_url']))
                         except ValueError:st.caption('URL da fonte não validada; revise o registro original.')
+                        if candidate['provider']=='loc':
+                            services=candidate['metadata'].get('loc_services',{})
+                            st.caption('LOC · '+ ' · '.join(name+': '+str(value.get('status','')) for name,value in services.items()))
+                            if item.get('ocr_file'):
+                                ocr_path=local(folder,item['ocr_file'])
+                                if ocr_path.is_file():st.download_button('Baixar texto OCR da LOC',data=ocr_path.read_bytes(),file_name=ocr_path.name,key=prefix+'_ocr')
                         if item.get('downloaded_file'):
                             path=local(folder,item['downloaded_file'])
                             if path.is_file() and path.suffix=='.png':st.image(str(path))

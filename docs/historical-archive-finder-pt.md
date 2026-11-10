@@ -48,9 +48,17 @@ Não há rede, criação de buscas ou geração de consultas do módulo quando O
 
 ## Fontes e contratos
 
-- **LOC**: `GET https://www.loc.gov/search/?fo=json&q=...&c=...`;
-  detalhes pelo URL `/item/.../` devolvido pelo registro, com `fo=json`.
-  Pesquisa e detalhes guardam os campos originais, recursos, data e direitos.
+- **LOC (conector substituído pelos três serviços públicos)**:
+  1. JSON/YAML API: pesquisa e metadados, usando a representação JSON (`fo=json`).
+  2. IIIF Image Services: consulta `info.json` e solicita imagem JPEG dimensionada,
+     respeitando dimensões/capacidades anunciadas, sem ampliação ou recorte automático.
+  3. Text Services: lê OCR divulgado pelos registros (texto, ALTO XML, hOCR ou JSON
+     de palavras/coordenadas) e salva o texto por cena. Não inventa endpoints nem
+     gera OCR inexistente; não instala Tesseract ou usa uma IA paga para isso.
+  A opção continua única no painel. **Nenhuma chave ou autenticação LOC** é solicitada.
+  O módulo `providers/loc_services.py` contém os três clientes; `loc.py` os coordena.
+  Imagens/textos só são recuperados automaticamente com direitos claros. NARA/Commons
+  e o fallback permanecem preservados.
 - **NARA**: `GET https://catalog.archives.gov/api/v2/records/search?q=...`;
   cabeçalho `x-api-key`. Normaliza registros/digital objects e mantém as restrições
   originais. “Unrestricted” isoladamente não é tratado como domínio público.
@@ -147,7 +155,8 @@ checksum evita inserir o mesmo arquivo repetidamente em cenas distintas.
 
 Defaults locais conservadores, editáveis; não são alegações de limites oficiais:
 5 candidatos/cena; 30 downloads únicos/vídeo; 50 MB/arquivo; 20 s/pedido; cache 24 h;
-intervalo mínimo de 2 s global e por provider; até 1 retry de erro temporário com
+intervalo mínimo de 2 s para NARA/Commons; LOC com tetos separados de 20/min para
+JSON/YAML, 150/min para IIIF Imagens e 150/min para Texto/OCR; até 1 retry de erro temporário com
 backoff/jitter; teto local de 1000 pedidos NARA/mês.
 
 O cache usa provider/URL/consulta/filtros, sem chaves no identificador. Há
@@ -192,3 +201,39 @@ retomada de capítulos existente.
 Para desativar, basta desligar o toggle: novos pedidos param e os arquivos ficam.
 Para rollback de código, mantenha o módulo OFF e restaure os arquivos do backup;
 não apague material ou manifestos de projetos em andamento.
+
+
+## Revisão LOC — três serviços públicos
+
+Os tetos solicitados (20/150/150 por minuto) são impostos pelo backend e podem apenas
+ser reduzidos na configuração. Janela móvel de 60 segundos, espaçamento e registros
+persistidos coordenam threads/processos desta instalação; tentativas repetidas também
+contam. Cache não consome novo pedido. Outras aplicações/instalações no mesmo IP não
+são contadas por este armazenamento local.
+
+429 e 403 da LOC gravam cooldown persistente, respeitando `Retry-After` em segundos
+ou data HTTP. 503 com `Retry-After` também interrompe sem insistir. Uma espera longa
+não é encurtada por outra resposta simultânea. Durante o bloqueio, não se alterna
+entre JSON/Imagem/Texto para tentar contorná-lo. Sem prazo informado, usa-se o cooldown
+local configurado (300 s por padrão), que não é uma promessa de prazo de liberação.
+Outros erros temporários têm retry limitado e backoff/jitter, sempre dentro da quota.
+
+OCR depende do conteúdo disponibilizado pelo registro. A primeira página/arquivo é
+o padrão; até cinco podem ser configurados. Cada texto é limitado (60000 caracteres
+por arquivo por padrão), com indicação de truncamento, formato e fonte. O arquivo
+fica em `scene_XXX/candidates/<id>.ocr.txt`. Não altera a narração, o roteiro ou as
+legendas e não comprova precisão histórica. URLs sem OCR e formatos não reconhecidos
+são registrados como indisponíveis, sem bloquear as fontes restantes.
+
+Referências oficiais consultadas pelo repositório `LibraryOfCongress/data-exploration`,
+commit `087065cd1e89bad45c06095933850bb96c3e77b3`:
+- `loc.gov IIIF API/IIIF.ipynb`: `info.json`, formatos, dimensões e processamento IIIF.
+- `loc.gov JSON API/LOC.gov JSON API.ipynb`: API de metadados.
+- `loc.gov JSON API/Chronicling_America/ChronAm-download_results.ipynb`: URLs de recursos
+  e arquivos XML de OCR publicados pelo registro.
+
+O acesso direto às páginas oficiais continua bloqueado pelo proxy do ambiente. Os
+limites acima implementam a solicitação recebida; não foram revalidados por uma chamada
+real ao site. Os testes usam fixtures, incluindo limites por minuto, 429/403/503,
+Retry-After, cache, OCR, redimensionamento IIIF e ausência de autenticação. A validação
+com registros reais que disponibilizem imagem IIIF e OCR continua pendente na rede local.

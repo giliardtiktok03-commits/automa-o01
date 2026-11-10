@@ -68,3 +68,27 @@ Arquivos de teste executados: `test_historical_archive.py`, `test_mixed_material
 Os testes reais podem ser habilitados explicitamente com `MPT_ARCHIVE_LIVE_TESTS=1`
 e, para NARA, `NARA_API_KEY`; eles fazem consultas, sem downloads de originais ou
 chamadas de geração paga. Não foram executados nesta entrega.
+
+
+## Substituição do conector LOC por serviços públicos
+
+Mantida uma única fonte `loc`, com três clientes públicos em
+`app/services/historical_archive/providers/loc_services.py`: `LOCMetadataService`,
+`LOCImageService` e `LOCTextService`. `providers/loc.py` foi substituído para coordená-los.
+Não foi criado campo de chave LOC. A chave NARA existente não sofreu alteração.
+
+Outros arquivos desta revisão: `contracts.py` (limites/preferências), `network.py`
+(quotas persistentes/cooldown), `service.py` (OCR por cena e deduplicação entre versões
+redimensionadas do mesmo registro), `webui/historical_archive_settings.py`,
+`config.example.toml`, documentação e testes. Foi adicionado
+`test/services/test_loc_public_services.py`.
+
+**Validação desta revisão:** 422 testes passaram, 20 subtestes passaram e 3 testes reais
+opcionais ficaram pulados. Inclui os tetos 20/150/150/min, contagem de retries,
+coordenação entre clientes, bloqueio de todos os serviços LOC durante cooldown,
+Retry-After em data HTTP, OCR e segurança XML, direitos, IIIF e regressão do MPT.
+A compilação Python e `git diff --check` passaram.
+
+Pendência mantida: teste real dos serviços na rede do usuário, especialmente registros
+com OCR; não há garantia de OCR para todo documento digitalizado. O acesso direto à
+LOC foi bloqueado no ambiente e isso não foi contornado.

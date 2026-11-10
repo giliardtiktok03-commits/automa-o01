@@ -128,6 +128,14 @@ class HistoricalArchiveService:
                 return item['rights_status']=='rights_cleared' and item['score']>=settings.min_score and relevance.get('event',0)>=.15 and not relevance.get('conflicting_context')
             entry['candidates'].sort(key=lambda c:(eligible(c),c['score']),reverse=True)
             entry['candidates']=entry['candidates'][:settings.candidates_per_scene]
+            if self.active():
+                for item in entry['candidates']:
+                    ocr=item['candidate']['metadata'].get('loc_services',{}).get('text',{})
+                    if ocr.get('text'):
+                        target=folder/key/'candidates'/(item['id']+'.ocr.txt')
+                        target.parent.mkdir(parents=True,exist_ok=True)
+                        write_bytes_atomic(target,ocr['text'].encode('utf-8'))
+                        item['ocr_file']=str(target.relative_to(folder))
             entry['status']='completed'
             manifest.save(folder,data)
             self.status('Search completed',historical_archive_candidates=len(entry['candidates']),
@@ -146,7 +154,9 @@ class HistoricalArchiveService:
             data=manifest.read(self.folder)
             entry=data['scenes'][key]
             used_elsewhere={c.get('sha256') for scene_key,s in data['scenes'].items() if scene_key!=key for c in s.get('candidates',[]) if c.get('used')}
+            used_records={(c['candidate']['provider'],c['candidate']['record_id']) for scene_key,s in data['scenes'].items() if scene_key!=key for c in s.get('candidates',[]) if c.get('used')}
             for item in entry['candidates']:
+                if (item['candidate']['provider'],item['candidate']['record_id']) in used_records:continue
                 if candidate_id and item['id']!=candidate_id:continue
                 if item.get('sha256') in used_elsewhere or item['state']=='failed':continue
                 explicit=use_saved and candidate_id==item['id'] and item['rights_status']=='rights_cleared' and item['state']!='rejected'

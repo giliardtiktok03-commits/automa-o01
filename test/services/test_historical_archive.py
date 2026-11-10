@@ -221,6 +221,7 @@ def test_network_cache_off_gate_and_retry_after(tmp_path,monkeypatch):
     active=[True]
     transport=Transport(tmp_path,ArchiveSettings(enabled=True),lambda:active[0])
     transport.pause=Mock()
+    transport._loc_slot=Mock()
     response=Mock(status_code=200,headers={})
     response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=None)
     response.iter_content.return_value=[b'{"results":[]}']
@@ -338,6 +339,7 @@ def test_transient_backoff_bounded_and_no_redirects(tmp_path,monkeypatch):
     monkeypatch.setattr(network,'_NEXT',{})
     transport=Transport(tmp_path,ArchiveSettings(enabled=True,max_retries=1),lambda:True)
     transport.pause=Mock()
+    transport._loc_slot=Mock()
     def response(code):
         r=Mock(status_code=code,headers={});r.__enter__=Mock(return_value=r);r.__exit__=Mock(return_value=None);r.iter_content.return_value=[b'{}'];return r
     with patch.object(network.requests,'get',side_effect=[response(503),response(200)]) as get:
@@ -369,6 +371,7 @@ def test_nara_local_monthly_budget_does_not_expose_key(tmp_path,monkeypatch):
     monkeypatch.setattr(network,'_NEXT',{})
     transport=Transport(tmp_path,ArchiveSettings(enabled=True,nara_monthly_limit=1),lambda:True)
     transport.pause=Mock()
+    transport._loc_slot=Mock()
     response=Mock(status_code=200,headers={});response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=None)
     response.iter_content.return_value=[b'{}']
     with patch.object(network.requests,'get',return_value=response) as get:
@@ -513,3 +516,21 @@ def test_uncertain_high_score_does_not_crowd_out_a_cleared_match(setup):
     assert len(result['candidates'])==1
     assert result['candidates'][0]['candidate']['provider']=='wikimedia'
     assert service.select(SCENE)[0]
+
+
+def test_loc_ocr_is_organized_with_scene_and_does_not_change_narration(setup):
+    service,_,provider,_,_=setup
+    provider.search.return_value=[candidate(metadata={'loc_services':{'text':{'status':'available','text':'Scanned document OCR text','pages':[]}}})]
+    entry=service.search_scene(SCENE)
+    item=entry['candidates'][0]
+    assert item['ocr_file'].startswith('scene_001/candidates/')
+    assert (service.folder/item['ocr_file']).read_text()=='Scanned document OCR text'
+    assert entry['text']==SCENE['text']
+
+
+def test_same_record_resized_by_iiif_is_not_repeated_in_another_scene(setup):
+    service,_,provider,_,transport=setup
+    path,provenance=service.select(SCENE);service.mark_used(provenance)
+    provider.search.return_value=[candidate(download_url='https://tile.loc.gov/image-services/iiif/record/full/1024,/0/default.jpg')]
+    assert service.select({**SCENE,'id':2})==(None,None)
+    transport.get.assert_called_once()
