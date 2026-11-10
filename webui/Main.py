@@ -2155,10 +2155,18 @@ def _render_generation_task_snapshot(task_id, task):
         st.caption(tr("Flow Used").format(count=task["mixed_source_counts"]["flow_browser"]))
     if (task.get("mixed_source_counts") or {}).get("editorial_card"):
         st.warning(tr("Mixed Editorial Cards").format(count=task["mixed_source_counts"]["editorial_card"]))
+    if task.get('historical_archive_status'):
+        st.caption('Historical Archive Finder: '+str(task['historical_archive_status']))
+        if task.get('historical_archive_candidates'):
+            st.caption(f"Candidatos históricos: {task['historical_archive_candidates']} · Liberados automaticamente: {task.get('historical_archive_approved',0)}")
+        if task.get('historical_archive_skipped_rights'):
+            st.caption(f"Ignorados por direitos incertos/restritos: {task['historical_archive_skipped_rights']}")
     if isinstance(task.get("mixed_source_counts"), Mapping):
         counts = task["mixed_source_counts"]
         display_counts = {name: counts.get(name, 0) for name in ("pexels", "pixabay", "coverr", "openai_image")}
         display_counts["openai_image"] += counts.get("deepinfra_image", 0) + counts.get("google_flow", 0) + counts.get("ai33_image", 0) + counts.get("grok_image", 0) + counts.get("runware_image", 0)
+        if counts.get("historical_archive"):
+            st.caption(f"Cenas com arquivos históricos: {counts['historical_archive']}")
         if counts.get("deepinfra_image"):
             st.caption(f"Imagens DeepInfra utilizadas: {counts['deepinfra_image']}")
         if counts.get("grok_image"):
@@ -6159,6 +6167,8 @@ def _render_video_settings(panel, params):
     with panel:
         with st.container(border=True, key="stage_video"):
             _stage_heading(2, tr("Video Settings"), "#0369a1")
+            from webui.historical_archive_settings import render as render_archive_settings
+            render_archive_settings(_set_runtime_config)
             video_concat_modes = [
                 (tr("Sequential"), "sequential"),
                 (tr("Random"), "random"),

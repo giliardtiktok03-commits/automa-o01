@@ -926,3 +926,51 @@ def test_deepinfra_keeps_stock_first_and_audits_image_budget(setup, monkeypatch)
     count=provider.call_count
     mixed.prepare('job',params,SCRIPT,30,str(subtitles))
     assert provider.call_count==count
+
+
+def test_archives_are_tried_before_stock_and_credits_only_after_render(setup,monkeypatch):
+    folder,subtitles,params,_,search,_,_=setup
+    from app.services.historical_archive import settings
+    monkeypatch.setattr(settings,'mapping',lambda:{'historical_archive_enabled':True})
+    service=Mock();service.active.return_value=True
+    service.settings.return_value=__import__('app.services.historical_archive.contracts',fromlist=['ArchiveSettings']).ArchiveSettings(enabled=True)
+    archive=folder/'archival.mp4';archive.write_bytes(b'archival-video')
+    def choose(scene,terms):
+        if scene['id']==1:return str(archive),{'provider':'historical_archive','source_identity':'archive:1','source_digest':'archive:1','source_end':1,'illustration':False}
+        return None,None
+    service.select.side_effect=choose
+    monkeypatch.setattr(mixed,'HistoricalArchiveService',lambda *a:service)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    manifest=json.loads((folder/'mixed-scenes.json').read_text())
+    assert manifest['scenes'][0]['provenance']['provider']=='historical_archive'
+    assert all(call.args[2]!='coffee scene 1' for call in search.call_args_list)
+    assert service.mark_used.call_count==3
+
+
+def test_archive_without_cleared_assets_uses_stock_then_ai_without_approval(setup,monkeypatch):
+    folder,subtitles,params,_,search,_,_=setup
+    from app.services.historical_archive import settings
+    monkeypatch.setattr(settings,'mapping',lambda:{'historical_archive_enabled':True})
+    params.mixed_select_sources=True
+    params.mixed_use_deepinfra=True
+    mixed.config.app['deepinfra_api_key']='test-key'
+    events=[]
+    service=Mock();service.active.return_value=True
+    service.select.side_effect=lambda *args:(events.append('archive') or (None,None))
+    monkeypatch.setattr(mixed,'HistoricalArchiveService',lambda *args:service)
+    search.side_effect=lambda *args:(events.append('stock') or [])
+    def generate(params,prompt,directory,*,before_submit=None,**kwargs):
+        events.append('ai')
+        assert 'restricted-reference-image' not in prompt
+        before_submit()
+        Path(directory).mkdir(parents=True,exist_ok=True)
+        target=Path(directory)/'image.png';target.write_bytes(prompt.encode())
+        return target,{'model':'stabilityai/sdxl-turbo'}
+    provider=Mock(side_effect=generate)
+    monkeypatch.setattr(mixed.deepinfra_image,'generate',provider)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert events[0]=='archive' and events.index('stock')<events.index('ai')
+    data=json.loads((folder/'mixed-scenes.json').read_text())
+    assert data['image_requests']==provider.call_count
+    assert all(scene['provenance']['illustration'] for scene in data['scenes'])
+    assert all(scene['provenance']['authenticity']=='illustrative_reconstruction' for scene in data['scenes'])

@@ -756,7 +756,20 @@ def get_video_materials(
     codex_image_context: codex_image.CodexImageContext | None = None,
     mixed_script: str = "",
     mixed_subtitle: str = "",
+    _archive_bypass: bool = False,
 ):
+    from app.services.historical_archive import enabled as archives_enabled, ArchivePending
+    archive_mixed = {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}
+    if not _archive_bypass and params.video_source not in archive_mixed and archives_enabled():
+        from app.services.historical_archive.pipeline import prepare_legacy
+        from app.services.mixed_materials import MixedPending
+        try:
+            return prepare_legacy(task_id,params,mixed_script or params.video_script or params.video_subject,
+                audio_duration,mixed_subtitle,video_terms,lambda: get_video_materials(task_id,params,video_terms,
+                    audio_duration,loomloom_video_request,jalapeno_video_endpoint,codex_image_context,
+                    mixed_script,mixed_subtitle,_archive_bypass=True))
+        except ArchivePending as exc:
+            raise MixedPending(exc,exc.scene_id,task_id,'historical_archive') from exc
     if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
         from app.services import mixed_materials
 
@@ -1102,7 +1115,7 @@ def generate_final_videos(
         # 每条视频占 50% 进度中的一份，合成与最终编码各占一半。片段处理是
         # 合成里最耗时的部分，逐段推进这一半的进度。
         combine_share = 50 / params.video_count / 2
-        if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
+        if getattr(params,"historical_archive_prepared",False) or params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
             from app.services import mixed_materials
 
             mixed_materials.join(downloaded_videos, combined_video_path)
@@ -1916,15 +1929,19 @@ def _run_pipeline(
 
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=40)
 
+    from app.services.historical_archive import enabled as archives_enabled
     generation_progress.stage("materials")
     # 5. Get video materials
+    if archives_enabled():
+        from app.services.historical_archive.pipeline import save_resume_context
+        save_resume_context(task_id,params,video_script,video_terms,audio_file,subtitle_path,audio_duration)
     downloaded_videos = get_video_materials(
         task_id,
         params,
         video_terms,
         audio_duration,
         **({"mixed_script": video_script, "mixed_subtitle": subtitle_path}
-           if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"} else {}),
+           if archives_enabled() or params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"} else {}),
         loomloom_video_request=loomloom_video_request,
         **({"codex_image_context": codex_image_context}
            if codex_image_context is not None else {}),
@@ -2084,6 +2101,9 @@ def start(
             from app.services import mixed_materials
             task_artifacts.patch_script_data(task_id, provider_pending=None)
             sm.state.patch_task(task_id, pending_provider=None, pending_remote_id=None, pending_scene=None, pending_message=None)
+            if getattr(params,"historical_archive_resume",False):
+                from app.services.historical_archive.pipeline import resume
+                return resume(task_id)
             if getattr(params, "mixed_resume", False):
                 from app.services import mixed_resume
                 return mixed_resume.run(task_id, params.mixed_max_images, grok_unlimited=params.mixed_grok_unlimited, subtitle_settings=params.mixed_resume_subtitle_style)

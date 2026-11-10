@@ -141,41 +141,45 @@ def test_stages_have_distinct_numbered_colors(headless_task_app):
     assert not app.button(key="generate_video_button").disabled
 
 
-def test_flow_profile_controls_open_manual_login_without_password_field(headless_task_app, monkeypatch):
+def test_flow_profile_controls_open_manual_login_without_password_field(headless_task_app, monkeypatch, tmp_path):
     from app.services import flow_browser
     from unittest.mock import Mock
-    app, _ = headless_task_app
-    for key in ('mixed_image_provider','flow_profile','flow_project_url'):
-        monkeypatch.setitem(config.ui, key, config.ui.get(key, ''))
-    language = app.session_state['ui_language']
-    app.session_state[f'video_source_select_{language}'] = 'mixed'
-    app.run()
+    script="""
+import streamlit as st
+from webui.google_flow_settings import render
+if 'test_settings' not in st.session_state:st.session_state.test_settings={}
+def save(section,key,value):st.session_state.test_settings[key]=value
+render(dict(st.session_state.test_settings),save)
+"""
+    app=AppTest.from_string(script).run()
+    app.text_input(key='google_flow_profile_input').set_value(' giliard ')
+    url='https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
+    app.text_input(key='google_flow_project_input').set_value(url).run()
+    connect=Mock(return_value=tmp_path/'login.result.json')
+    monkeypatch.setattr(flow_browser,'connect',connect)
+    app.button(key='google_flow_connect').click().run()
     assert not app.exception
-    app.text_input(key='flow_profile').set_value(' giliard ')
-    url = 'https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'
-    app.text_input(key='flow_project_url').set_value(url)
-    connect = Mock()
-    monkeypatch.setattr(flow_browser, 'connect', connect)
-    app.button(key='flow_connect').click().run()
-    assert not app.exception
-    connect.assert_called_once_with('giliard', url)
-    assert config.ui['flow_profile'] == 'giliard'
+    connect.assert_called_once_with('giliard',url)
+    assert not any(item.proto.type==1 for item in app.text_input)
 
 
-def test_mixed_sources_all_start_checked(headless_task_app, monkeypatch):
-    app, _ = headless_task_app
-    for source in ('pexels','pixabay','coverr','openai','flow'):
+def test_mixed_sources_preserve_stock_defaults_and_optional_providers(headless_task_app, monkeypatch):
+    app,_=headless_task_app
+    for source in ('pexels','pixabay','coverr','grok'):
         monkeypatch.setitem(config.ui,'mixed_use_'+source,True)
+    for source in ('deepinfra','google_flow','ai33'):
+        monkeypatch.setitem(config.ui,'mixed_use_'+source,False)
     language=app.session_state['ui_language']
     app.session_state[f'video_source_select_{language}']='mixed'
     app.run()
     assert not app.exception
-    for source in ('pexels','pixabay','coverr','openai','flow'):
-        assert app.checkbox(key='mixed_use_'+source).value is True
-    app.checkbox(key='mixed_use_flow').uncheck().run()
+    for source in ('pexels','pixabay','coverr','grok'):
+        assert app.checkbox(key='mixed_use_'+source).value
+    for source in ('deepinfra','google_flow','ai33'):
+        assert not app.checkbox(key='mixed_use_'+source).value
+    app.checkbox(key='mixed_use_deepinfra').check().run()
     assert not app.exception
-    assert not app.checkbox(key='mixed_use_flow').value
-    assert all(item.key!='flow_connect' for item in app.button)
+    assert app.checkbox(key='mixed_use_deepinfra').value
 
 
 def test_saved_project_check_uses_original_id_and_total_budget(headless_task_app, monkeypatch):
@@ -189,8 +193,9 @@ def test_saved_project_check_uses_original_id_and_total_budget(headless_task_app
     load=Mock(return_value=project)
     monkeypatch.setattr(mixed_resume,'load',load)
     app.text_input(key='mixed_resume_id').set_value(task_id)
+    app.checkbox(key='mixed_resume_grok_unlimited').uncheck().run()
     app.number_input(key='mixed_resume_limit').set_value(24)
     app.button(key='mixed_resume_check').click().run()
     assert not app.exception
-    load.assert_called_once_with(task_id,24)
+    load.assert_called_once_with(task_id,24,grok_unlimited=False)
     assert any('21/60' in item.value and '12' in item.value and '24' in item.value for item in app.info)

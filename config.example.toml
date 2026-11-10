@@ -24,6 +24,34 @@ listen_port = 8080
 log_requests = false
 
 [app]
+# Historical Archive Finder: OFF by default; keys are local or NARA_API_KEY.
+historical_archive_enabled = false
+historical_archive_mode = "historical_plus_stock"
+historical_archive_loc_enabled = true
+historical_archive_nara_enabled = true
+historical_archive_wikimedia_enabled = true
+historical_archive_auto_download_rights_cleared = true
+historical_archive_photographs = true
+historical_archive_documents = true
+historical_archive_maps = true
+historical_archive_footage = false
+historical_archive_candidates_per_scene = 5
+historical_archive_max_downloads_per_video = 30
+historical_archive_request_timeout_seconds = 20
+historical_archive_cache_ttl_hours = 24
+historical_archive_request_interval_seconds = 2
+historical_archive_loc_interval_seconds = 2
+historical_archive_nara_interval_seconds = 2
+historical_archive_wikimedia_interval_seconds = 2
+historical_archive_nara_monthly_limit = 1000
+historical_archive_max_retries = 1
+historical_archive_max_file_mb = 50
+historical_archive_language = "en"
+historical_archive_preferred_period = ""
+historical_archive_preserve_aspect = true
+historical_archive_show_credits = true
+historical_archive_llm_queries = false
+historical_archive_nara_api_key = ""
 # Synthetic images: AI33.Pro only. Configure these in Material Sources > AI Image.
 # Do not commit config.toml or copy its credentials into projects.
 # Imagens Grok via SDK oficial xAI; chave separada do ChatGPT.

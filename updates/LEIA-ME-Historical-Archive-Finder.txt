@@ -1,0 +1,34 @@
+HISTORICAL ARCHIVE FINDER — MONEYPRINTERTURBO
+Feche o MPT, faca backup e extraia o ZIP na raiz da instalacao. Reabra webui.bat.
+Nao substitui config.toml, storage ou .venv. Nao ha dependencias novas obrigatorias.
+
+ONDE ATIVAR
+Configuracoes do Video > Historical Archive Finder > Ativar pesquisa em arquivos historicos.
+Inicia DESATIVADO. Quando OFF, nao consulta acervos nem cria pesquisas historicas.
+
+AUTOMATICO, SEM APROVACAO MANUAL
+1. Pesquisa LOC, NARA e Wikimedia Commons por cena.
+2. Usa somente itens com direitos claros e contexto suficiente.
+3. Ignora direitos incertos/restritos, sem filas de aprovacao.
+4. Sem arquivo adequado, usa os bancos ja habilitados e depois a IA ja habilitada.
+5. A IA recebe a narracao, nao a imagem descartada como referencia de copia.
+6. Reconstrucoes ilustrativas ficam identificadas nos registros de origem.
+
+Mantenha seus bancos e DeepInfra marcados conforme desejar. O modulo nao habilita
+novos geradores pagos nem remove os limites de imagens existentes.
+NARA exige chave local ou NARA_API_KEY. Sem chave, LOC/Commons continuam.
+Europeana/Internet Archive aparecem como fase pendente, desabilitados.
+
+Acompanhe o ID do projeto no painel e exporte sources_and_credits.md/JSON.
+Somente materiais efetivamente usados nas cenas renderizadas entram nos creditos.
+Desligar preserva os arquivos existentes e impede novas consultas/downloads.
+
+VALIDACAO
+390 testes + 20 subtestes passaram. 3 testes reais opcionais foram pulados.
+Houve renderizacao FFmpeg real de clipes horizontais/verticais e montagem.
+As consultas de API foram simuladas: rede real e chave NARA precisam de validacao
+no seu computador. Europeana/Internet Archive, OCR e PDF sem previa/conversor
+continuam pendentes ou limitados, conforme a documentacao.
+
+Leia docs/historical-archive-finder-pt.md e o relatorio
+ docs/historical-archive-implementation-report.md para arquivos, testes e rollback.

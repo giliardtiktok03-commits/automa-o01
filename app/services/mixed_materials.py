@@ -23,6 +23,8 @@ from app.services.ai33 import provider as ai33_provider
 from app.services.ai33 import AI33Error, AI33Client, AI33PendingError
 from app.utils import utils
 from app.utils.subtitle_reader import moviepy_subtitles
+from app.services.historical_archive import enabled as archives_enabled, HistoricalArchiveService, ArchivePending
+from app.services.historical_archive import pipeline as archive_pipeline
 
 FPS = 30
 _HISTORICAL = re.compile(
@@ -112,7 +114,7 @@ def validate(params, settings=None, *, external_audio=False):
         try: google_flow.freeze(params, settings)
         except google_flow.FlowError as exc: raise MixedError(str(exc)) from exc
     image_enabled = grok_unlimited(params) or params.mixed_max_images > 0
-    if not providers(settings, params) and (params.mixed_image_provider == "none" or not image_enabled):
+    if not archives_enabled() and not providers(settings, params) and (params.mixed_image_provider == "none" or not image_enabled):
         raise MixedError("Select and configure at least one material source", key="mixed.no_sources")
     if image_enabled and params.mixed_image_provider == "deepinfra":
         try: deepinfra_image.freeze(params, settings)
@@ -540,7 +542,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
         pending_images = 0 if params.mixed_select_sources else sum(s["source"] == "image" and not s.get("image_file")
                              and not s.get("image_request_started")
                              for s in manifest["scenes"])
-        if not grok_unlimited(params) and manifest["image_requests"] + pending_images > params.mixed_max_images:
+        if not archives_enabled() and not grok_unlimited(params) and manifest["image_requests"] + pending_images > params.mixed_max_images:
             raise MixedBudgetError(manifest["image_requests"] + pending_images,
                                    params.mixed_max_images, manifest["image_requests"])
         output_paths, records, used = [], [], {}
@@ -552,6 +554,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
             remember(record)
         available = providers(params=params)
         stock_turn = 0
+        archive_service = HistoricalArchiveService(task_id) if archives_enabled() else None
         for scene in manifest["scenes"]:
             generation_progress.stage("mixed_scene")
             sm.state.update_task(task_id, progress=40 + 10 * (scene["id"] - 1) / len(manifest["scenes"]),
@@ -568,7 +571,14 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 _context_card(scene, params, scene_dir)
                 _save(manifest_file, manifest)
             source, provenance = None, None
-            if available and (scene["source"] == "stock" or params.mixed_select_sources or grok_unlimited(params)) and not scene.get("image_file") and not scene.get("image_request_started"):
+            if archive_service is not None and archive_service.active() and not scene.get("image_request_started"):
+                try:
+                    source, provenance = archive_service.select(scene, params.video_terms)
+                    if source:
+                        source = archive_pipeline.visual_source(source, scene, params, archive_service)
+                except ArchivePending as exc:
+                    raise MixedPending(exc, scene['id'], task_id, 'historical_archive') from exc
+            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or grok_unlimited(params)) and not scene.get("image_file") and not scene.get("image_request_started"):
                 history = records or params.mixed_previous_sources
                 scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
@@ -697,9 +707,14 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     raise material.OpenAIImagePaidResultError("Generated image could not be rendered; the paid image was retained")
                 provenance = {"provider": "editorial_card" if scene.get("image_refused") else scene.get("image_provider", "flow_browser" if scene.get("flow_image_received") else "openai_image"), "illustration": True, "local_file": output.name,
                               "source_digest": digest, "source_identity": digest, "source_end": 1}
-            render(source, output, scene["end_frame"] - scene["start_frame"], params,
+            if archive_service is not None and provenance.get('illustration'):
+                provenance['authenticity']='editorial_card' if scene.get('image_refused') else 'illustrative_reconstruction'
+                provenance['archive_fallback']=True
+            render_settings = archive_pipeline.render_params(params,archive_service) if provenance.get('provider')=='historical_archive' else params
+            render(source, output, scene["end_frame"] - scene["start_frame"], render_settings,
                    start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,
                    source_start=provenance.get("source_start", 0))
+            if archive_service is not None: archive_service.mark_used(provenance)
             scene["sha256"] = _hash(output)
             scene["provenance"] = {**provenance, "scene_id": scene["id"],
                                    "start": scene["start_frame"] / FPS, "end": scene["end_frame"] / FPS}
@@ -707,7 +722,8 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
             output_paths.append(str(output))
             records.append(scene["provenance"])
         counts = {provider: sum(record["provider"] == provider for record in records)
-                  for provider in ("pexels", "pixabay", "coverr", "deepinfra_image", "google_flow", "grok_image", "runware_image", "ai33_image", "openai_image")}
+                  for provider in ("historical_archive", "pexels", "pixabay", "coverr", "deepinfra_image", "google_flow", "grok_image", "runware_image", "ai33_image", "openai_image")}
+        if not counts.get("historical_archive"):counts.pop("historical_archive",None)
         cards = sum(record["provider"] == "editorial_card" for record in records)
         if cards:
             counts["editorial_card"] = cards
