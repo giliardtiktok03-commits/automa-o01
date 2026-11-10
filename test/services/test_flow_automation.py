@@ -150,7 +150,8 @@ def test_logged_out_browser_stops_without_submitting(tmp_path):
     assert page.submissions == 0
 
 
-def test_real_chromium_visible_ui_single_submit_download(tmp_path):
+@pytest.mark.parametrize("delayed_controls", [False, True])
+def test_real_chromium_visible_ui_single_submit_download(tmp_path, delayed_controls):
     import base64,io,shutil
     from playwright.sync_api import sync_playwright
     chromium=shutil.which('chromium')
@@ -176,6 +177,18 @@ let button=document.createElement('button');button.setAttribute('aria-label','Do
 button.onclick=()=>{let link=document.createElement('a');link.href=DATA;link.download='image.png';link.click()};
 card.appendChild(button);document.getElementById('results').appendChild(card);}
 </script></body></html>'''.replace('DATA',repr(data))
+    if delayed_controls:
+        html=html.replace("card.appendChild(button);document.getElementById('results').appendChild(card);", """
+        document.getElementById('results').appendChild(card);
+        setTimeout(()=>{
+          for(let i=0;i<2;i++){let reuse=document.createElement('button');reuse.setAttribute('aria-label','Reutilizar comando');card.appendChild(reuse)}
+          let more=document.createElement('button');more.setAttribute('aria-label','Mais opções');card.appendChild(more);
+          more.onclick=()=>{let menu=document.createElement('div');menu.setAttribute('role','menu');
+            let dl=document.createElement('button');dl.setAttribute('role','menuitem');dl.textContent='download Fazer o download';menu.appendChild(dl);document.body.appendChild(menu);
+            dl.onclick=()=>{let size=document.createElement('button');size.setAttribute('role','menuitem');size.textContent='1K Tamanho original';size.onclick=button.onclick;menu.appendChild(size)};
+          };
+        },700);
+        """)
     with sync_playwright() as p:
         # Synthetic HTML only; no Google account or external website is accessed.
         browser=p.chromium.launch(executable_path=chromium,headless=True)

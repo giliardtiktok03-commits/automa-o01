@@ -229,7 +229,7 @@ def _diagnostic(request_file,page,stage,exc,submitted):
         if page and urlparse(page.url).hostname=='flow.google.com':
             path=urlparse(page.url).path
             if re.fullmatch(r'/project/[0-9a-fA-F-]{36}/?',path):data['project_id']=path.strip('/').split('/')[-1]
-            if stage=='localizando_imagem_existente':
+            if stage in ('localizando_imagem_existente','localizando_imagem_gerada','aguardando_controles_da_imagem'):
                 request_data=json.loads(request_file.read_text(encoding='utf-8'))
                 title=str(request_data.get('asset_title',''))[:200]
                 if not re.search(r'@|https?://',title):data['requested_asset_title']=title

@@ -160,21 +160,27 @@ def _download_result(page,image,target,on_stage=None):
         with page.expect_download(timeout=60000) as event:download.click(timeout=5000)
         _save_image(event.value,target)
         return
-    # Current Flow gallery puts Download in the new card's More options menu.
-    scope=image
-    for _ in range(24):
-        scope=scope.locator('xpath=..')
-        more=_visible(scope.get_by_role('button',name=re.compile(r'^(Mais opções|More options)$',re.I)))
-        reuse=_visible(scope.get_by_role('button',name=re.compile(r'^(Reutilizar comando|Reuse prompt|Reuse command)$',re.I)))
-        if len(more)==1 and len(reuse)==1:
-            stage('abrindo_menu_da_imagem')
-            more[0].click(timeout=5000)
-            page.get_by_role('menu').first.wait_for(state='visible',timeout=5000)
-            menus=_visible(page.get_by_role('menu'))
-            if len(menus)!=1:raise FlowError('Menu de download ambíguo; imagem gerada preservada no Flow')
-            stage('baixando_imagem')
-            if _download_control(page,menus[0],target):return
-            raise FlowError('Não encontrei download original no menu da imagem; nenhuma nova geração foi feita')
+    # Image pixels can be ready before the card actions finish rendering.
+    # Scope to one image, not an exact number of transient reuse controls.
+    stage('aguardando_controles_da_imagem')
+    deadline=time.monotonic()+30
+    while time.monotonic()<deadline:
+        scope=image
+        for _ in range(24):
+            scope=scope.locator('xpath=..')
+            if scope.locator('img').count()!=1:
+                break
+            more=_visible(scope.get_by_role('button',name=re.compile(r'^(Mais opções|More options)$',re.I)))
+            if len(more)==1:
+                stage('abrindo_menu_da_imagem')
+                more[0].click(timeout=5000)
+                page.get_by_role('menu').first.wait_for(state='visible',timeout=5000)
+                menus=_visible(page.get_by_role('menu'))
+                if len(menus)!=1:raise FlowError('Menu de download ambíguo; imagem gerada preservada no Flow')
+                stage('baixando_imagem')
+                if _download_control(page,menus[0],target):return
+                raise FlowError('Não encontrei download original no menu da imagem; nenhuma nova geração foi feita')
+        page.wait_for_timeout(250)
     raise FlowError('A imagem foi encontrada, mas seus controles de download não foram confirmados. Recupere a imagem existente, sem gerar outra.')
 
 

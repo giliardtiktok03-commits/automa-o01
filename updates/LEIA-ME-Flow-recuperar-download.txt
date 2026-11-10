@@ -16,3 +16,5 @@ Reconhecimento revisado: parte da imagem visivel e confere rotulos exatos dentro
 Menu de download: aceita o rotulo real download / Fazer o download, incluindo o artigo o e o icone textual. Nao solicita nova geracao.
 
 DOWNLOAD 1K: quando o Flow abrir o submenu de resolucao, seleciona 1K / Tamanho original. Nao seleciona 2K ou 4K Aprimorada. Mantem recuperacao sem novo prompt.
+
+GERACAO AUTOMATICA: aguarda ate 30 segundos pelos controles do cartao com uma unica imagem; nao depende da contagem de botoes Reutilizar comando. Mantem download 1K original e um unico envio.
