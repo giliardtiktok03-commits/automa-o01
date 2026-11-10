@@ -138,6 +138,7 @@ class VideoParams(BaseModel):
     mixed_timeline_offset: float = Field(default=0, ge=0, le=1800, allow_inf_nan=False)
     mixed_image_provider: Literal["deepinfra", "google_flow", "grok", "runware", "ai33", "openai", "flow_browser", "openai_flow", "none"] = "grok"
     mixed_use_deepinfra: bool = False
+    deepinfra_model: Optional[Literal["stabilityai/sdxl-turbo", "black-forest-labs/FLUX-1-schnell"]] = None
     deepinfra_steps: Optional[int] = Field(default=None, ge=1, le=4)
     mixed_use_ai33: bool = False
     mixed_use_runware: bool = False

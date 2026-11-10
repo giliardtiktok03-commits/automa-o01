@@ -1,15 +1,19 @@
-DEEPINFRA / SDXL TURBO — MPT
-Feche o MPT e faca backup. Extraia este ZIP na raiz da instalacao e abra webui.bat.
-Nao substitui config.toml, storage ou .venv. Nenhuma dependencia nova e necessaria.
-Configurar fontes de material > Imagens IA > DeepInfra / SDXL Turbo.
-Cadastre sua chave apenas localmente. Modelo fixo: stabilityai/sdxl-turbo. Comece com 1 passo.
-O botao Gerar 1 imagem de teste DeepInfra (cobrado) faz UM pedido que pode consumir saldo.
-Preco, disponibilidade e licenca comercial precisam ser confirmados no provedor.
-No modo misto mantenha Pexels, Pixabay e Coverr; ative DeepInfra para novas imagens.
-DeepInfra fica desmarcada por padrao e tem prioridade sobre outros geradores quando marcada.
-Nao troca de gerador em falhas. Respeita o limite de imagens do video; nao usa Grok ilimitado.
-Tambem existe uma fonte exclusiva DeepInfra para gerar imagens em todas as cenas.
-Horizontal: 1024x576; vertical: 576x1024; quadrada: 512x512.
-Reaproveita arquivos e respostas salvas; nao repete pedidos incertos automaticamente.
-Testes locais simulam a API. Nao foi feita geracao paga nem validada a latencia real.
-Leia docs/deepinfra-mpt-pt.md para contrato, limitacoes, fontes e rollback.
+DEEPINFRA — FLUX.1 SCHNELL
+
+Feche o MPT, faça backup, extraia na raiz e reabra webui.bat.
+Não substitui config.toml real, storage ou .venv. Não instala dependências.
+
+Configurar fontes de material > Imagens IA > DeepInfra — FLUX.1 Schnell.
+Selecione o modelo e configure a chave ou as variáveis de ambiente:
+DEEPINFRA_API_KEY
+DEEPINFRA_IMAGE_MODEL=black-forest-labs/FLUX-1-schnell
+
+Clique Testar DeepInfra para uma única geração com visualização/download.
+Para cenas, selecione a fonte DeepInfra ou marque DeepInfra no modo misto.
+Para thumbnail, ative Ativar geração de thumbnails DeepInfra e gere pelo painel.
+Thumbnails: PNG 1280x720, recorte proporcional, sem esticar.
+Gerações podem consumir saldo. Não há reenvio automático em falhas.
+
+437 testes passaram. O teste real foi ignorado por ausência de credenciais
+neste ambiente. O serviço real precisa ser conferido com sua chave.
+Arquitetura, contrato, arquivos e rollback: docs/deepinfra-mpt-pt.md

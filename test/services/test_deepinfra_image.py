@@ -13,7 +13,7 @@ from app.services import deepinfra_image as api
 
 @pytest.fixture
 def setup(monkeypatch):
-    monkeypatch.setattr(api.config, 'app', {'deepinfra_api_key': 'secret-test-key'})
+    monkeypatch.setattr(api.config, 'app', {'deepinfra_api_key': 'secret-test-key', 'deepinfra_image_model': api.MODEL})
     out = io.BytesIO()
     Image.new('RGB', (256, 256), 'blue').save(out, format='PNG')
     payload = {'images':['data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()],

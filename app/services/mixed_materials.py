@@ -502,7 +502,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
             signature.update(image_model=params.grok_model, image_size=None, image_quality=None, image_credit_cap=None)
             signature["selected_sources"]["grok"] = True
         if params.mixed_image_provider == "deepinfra":
-            signature.update(image_model=deepinfra_image.MODEL, image_size=None, image_quality=None,
+            signature.update(image_model=params.deepinfra_model, image_size=None, image_quality=None,
                              image_credit_cap=None, image_steps=params.deepinfra_steps)
             signature["selected_sources"]["deepinfra"] = True
         if params.mixed_image_provider == "google_flow":
@@ -620,9 +620,11 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     job_params = params.model_copy(deep=True)
                     if scene.get("image_settings"):
                         for key, value in scene["image_settings"].items():
-                            if key in {"ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "deepinfra_steps", "runware_model", "runware_steps", "runware_size", "grok_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"}:
+                            if key in {"ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "deepinfra_steps", "deepinfra_model", "runware_model", "runware_steps", "runware_size", "grok_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"}:
                                 setattr(job_params, key, value)
-                    elif resuming_ai33:
+                    if resuming_deepinfra and "deepinfra_model" not in (scene.get("image_settings") or {}):
+                        job_params.deepinfra_model = deepinfra_image.MODEL
+                    if not scene.get("image_settings") and resuming_ai33:
                         # Old paid jobs retain the original frozen specification.
                         candidates = list(reversed(manifest.get("continuation_history", []))) + [manifest.get("original_signature", {}), manifest["signature"]]
                         previous = next((item for item in candidates if item.get("image_provider") == "ai33"), {})
@@ -650,7 +652,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                             manifest["image_requests"] += 1
                             scene["image_request_started"] = True
                             scene[provider + "_job"] = f"{provider}-{scene['id']:03d}"
-                            fields = ("deepinfra_steps",) if provider == "deepinfra" else ("ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits") if provider == "ai33" else ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero") if provider == "google_flow" else ("grok_model",) if provider == "grok" else ("runware_model", "runware_steps", "runware_size")
+                            fields = ("deepinfra_steps", "deepinfra_model") if provider == "deepinfra" else ("ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits") if provider == "ai33" else ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero") if provider == "google_flow" else ("grok_model",) if provider == "grok" else ("runware_model", "runware_steps", "runware_size")
                             scene["image_settings"] = {key: getattr(job_params, key) for key in fields}
                             _save(manifest_file, manifest)
                         if provider == "google_flow":

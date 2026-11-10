@@ -65,6 +65,8 @@ historical_archive_nara_api_key = ""
 # Do not commit config.toml or copy its credentials into projects.
 # Imagens Grok via SDK oficial xAI; chave separada do ChatGPT.
 deepinfra_api_key = ""
+deepinfra_image_model = "" # DEEPINFRA_IMAGE_MODEL or default black-forest-labs/FLUX-1-schnell
+deepinfra_thumbnails_enabled = false
 deepinfra_steps = 1
 deepinfra_timeout_seconds = 180
 grok_image_api_key = ""

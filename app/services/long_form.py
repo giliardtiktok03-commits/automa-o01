@@ -75,6 +75,8 @@ def _fingerprint(params, references):
     payload["params"].pop("historical_archive_resume", None)
     payload["params"].pop("historical_archive_prepared", None)
     payload["params"].pop("mixed_resume", None)
+    if not params.mixed_use_deepinfra or params.deepinfra_model is None:
+        payload["params"].pop("deepinfra_model", None)
     if not params.mixed_use_deepinfra:
         payload["params"].pop("mixed_use_deepinfra", None)
         payload["params"].pop("deepinfra_steps", None)
@@ -295,6 +297,8 @@ def _migrate_image_provider(params, references, directory, manifest):
     with_archive_flags={**original,**{key:saved[key] for key in ("historical_archive_resume","historical_archive_prepared") if key in saved}}
     candidates.append(with_archive_flags)
     normalized = dict(original)
+    if not normalized.get("mixed_use_deepinfra") or normalized.get("deepinfra_model") is None:
+        normalized.pop("deepinfra_model", None)
     if not normalized.get("mixed_use_deepinfra"):
         normalized.pop("mixed_use_deepinfra", None)
         normalized.pop("deepinfra_steps", None)
@@ -321,7 +325,7 @@ def _migrate_image_provider(params, references, directory, manifest):
         return False
     before = VideoParams.model_validate(saved).model_dump(mode="json")
     after = params.model_dump(mode="json")
-    for key in ("mixed_use_deepinfra", "deepinfra_steps", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero", "mixed_resume", "mixed_use_google_flow", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    for key in ("mixed_use_deepinfra", "deepinfra_steps", "deepinfra_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero", "mixed_resume", "mixed_use_google_flow", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
         before.pop(key, None)
         after.pop(key, None)
     if before != after:

@@ -199,7 +199,7 @@ def test_real_render_and_concat_preserve_scene_order_and_duration(tmp_path, monk
         assert clip.get_frame(2.0)[0, 0, 2] > 200
 
 
-@pytest.mark.parametrize("source", ["mixed", "ai33_image", "grok_image", "google_flow"])
+@pytest.mark.parametrize("source", ["mixed", "ai33_image", "grok_image", "google_flow", "deepinfra_image"])
 def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch, source):
     from moviepy import VideoFileClip
     from app.services import task as tm
@@ -214,7 +214,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch,
     monkeypatch.setattr(mixed.sm, "state", MemoryState())
     monkeypatch.setattr(VideoAspect, "to_resolution", lambda self: (160, 90))
     monkeypatch.setattr(mixed.config, "app", {"pexels_api_keys": ["test"], "pixabay_api_keys": ["test"],
-                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test", "ai33_api_key": "test-ai33", "ai33_image_model": "test", "grok_image_api_key": "test-grok"})
+                                             "openai_image_base_url": "https://images.example.test/v1", "openai_image_model": "test", "ai33_api_key": "test-ai33", "ai33_image_model": "test", "grok_image_api_key": "test-grok", "deepinfra_api_key":"test-deepinfra"})
     clips = {}
     for provider, color in (("pexels", "red"), ("openai_image", "blue"), ("pixabay", "green")):
         target = tmp_path / (provider + ".mp4")
@@ -253,9 +253,10 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch,
     def generate_flow(params, prompt, folder, scene_id, job_folder, *, before_submit=None):
         return generate_ai33(params, prompt, job_folder, before_submit=before_submit)
     monkeypatch.setattr(mixed.google_flow, "generate", generate_flow)
+    monkeypatch.setattr(mixed.deepinfra_image, "generate", generate_runware)
     def render_image(image, *args, **kwargs):
         index = int(Path(image).read_text()) - 1
-        return clips[("pexels", "openai_image", "pixabay")[index]] if source in {"ai33_image", "grok_image", "google_flow"} else clips["openai_image"]
+        return clips[("pexels", "openai_image", "pixabay")[index]] if source in {"ai33_image", "grok_image", "google_flow", "deepinfra_image"} else clips["openai_image"]
     monkeypatch.setattr(mixed.material, "_render_openai_image_video", render_image)
     monkeypatch.setattr(tm, "generate_audio", lambda *args, **kwargs: (str(audio), 6, None))
     monkeypatch.setattr(tm, "generate_subtitle", lambda *args, **kwargs: str(subtitles))

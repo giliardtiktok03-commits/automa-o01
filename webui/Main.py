@@ -3497,7 +3497,7 @@ def _material_provider_labels():
         "jalapeno": tr("Jalapeno Cloud AI Video"),
         "wavespeed": tr("WaveSpeed AI Video"),
         "muapi": tr("MuAPI AI Video"),
-        "deepinfra_image": "DeepInfra · SDXL Turbo",
+        "deepinfra_image": "DeepInfra — FLUX.1 Schnell",
         "google_flow": "Google Flow · Imagens no navegador",
         "grok_image": "Grok · Imagens IA",
         "ai33_image": "AI33.Pro · Imagens IA",
@@ -6201,7 +6201,7 @@ def _render_video_settings(panel, params):
                 "metaso_minimax": tr("Metaso MiniMax H3"),
                 "muapi": tr("MuAPI AI Video"),
                 "loomloom": tr("Shengsuan Cloud AI Video"),
-                "deepinfra_image": "DeepInfra · SDXL Turbo",
+                "deepinfra_image": "DeepInfra — FLUX.1 Schnell",
                 "google_flow": "Google Flow · Imagens no navegador",
                 "grok_image": "Grok · Imagens IA",
                 "ai33_image": "AI33.Pro · Imagens IA",
@@ -6236,7 +6236,7 @@ def _render_video_settings(panel, params):
                 st.write(tr("Mixed Sources"))
                 for source in ("pexels", "pixabay", "coverr", "deepinfra", "grok", "google_flow", "ai33"):
                     key = "mixed_use_" + source
-                    labels = {"deepinfra": "DeepInfra · SDXL Turbo", "pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "grok": "Grok · Imagens IA", "google_flow": "Google Flow · Imagens no navegador", "ai33": "AI33.Pro · Imagens IA (opcional)"}
+                    labels = {"deepinfra": "DeepInfra — FLUX.1 Schnell", "pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "grok": "Grok · Imagens IA", "google_flow": "Google Flow · Imagens no navegador", "ai33": "AI33.Pro · Imagens IA (opcional)"}
                     if config.ui.get("image_source_policy") != "grok-v1" and source == "grok":
                         st.session_state[key] = True
                         _set_runtime_config("ui", key, True)
@@ -6247,7 +6247,7 @@ def _render_video_settings(panel, params):
                     setattr(params, key, value)
                     _set_runtime_config("ui", key, value)
                 if params.mixed_use_deepinfra:
-                    st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois SDXL Turbo. Respeita o limite de imagens abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
+                    st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois o modelo DeepInfra configurado. Respeita o limite de imagens abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
                 elif params.mixed_use_google_flow:
                     st.info("Flow selecionado: bancos primeiro; envia os prompts ao Chrome conforme o modo configurado. Grok/AI33 não são acionados automaticamente em falhas. Configure e teste uma imagem em Fontes de material → Google Flow.")
                 _set_runtime_config("ui", "image_source_policy", "grok-v1")
