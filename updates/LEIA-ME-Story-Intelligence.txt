@@ -7,13 +7,19 @@ O pacote preserva storage, config.toml real e .venv; não instala dependências.
 Beyond the Archives — Editorial Director (primeira, se for a principal).
 Abra Beyond the Archives · Story Intelligence.
 Preencha Topic or Working Title e clique Analyze Story · Analisar tema.
-O modo local não usa API. Opcionalmente ative o modelo central de texto.
+O padrão é GPT pela OpenAI quando configurada no MPT.
+Sem configuração ou por escolha explícita, há análise local simplificada.
+Se a API falhar, use o botão de análise local; nenhum reenvio é automático.
 Não gera imagens, áudio ou vídeo durante a análise.
 
 O inventário inicial contém os 3 temas publicados informados pelo proprietário.
-Revise memória, estrutura, beats e fontes; salve ou exporte o blueprint.
+Revise potencial narrativo, conflitos, progressão, desfecho, afirmações e fontes.
+Fatos, alegações, inferências e lacunas são separados no Narrative Blueprint.
+Salve, edite ou exporte o plano antes de aprovar manualmente.
 Sem evidência suficiente, o estado é pesquisa necessária.
 Aprovar para roteiro exige revisão explícita e o mesmo tema no campo Tema do vídeo.
-Nenhuma voz ou provedor é trocado automaticamente.
+A voz aprovada e os provedores globais/de mídia são preservados.
+A análise GPT usa uma cópia das configurações OpenAI existentes.
+129 testes passaram. O teste real foi ignorado aqui por falta de chave/modelo.
 
 Guia, arquivos e testes: docs/story-intelligence-pt.md

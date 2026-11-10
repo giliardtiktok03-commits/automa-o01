@@ -36,6 +36,27 @@ class Beat(Record):
     source_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
+class EvidenceQuote(Record):
+    source_id: str = Field(min_length=1, max_length=80)
+    excerpt: str = Field(min_length=1, max_length=2000)
+
+
+class EditorialClaim(Record):
+    statement: str = Field(min_length=1, max_length=1500)
+    classification: Literal['documented_fact', 'allegation', 'inference', 'research_gap']
+    source_ids: list[str] = Field(default_factory=list, max_length=20)
+    evidence_quotes: list[EvidenceQuote] = Field(default_factory=list, max_length=10)
+    caveat: str = Field(default='', max_length=1500)
+    material: bool = True
+
+
+class CentralConflict(Record):
+    tension: str = Field(min_length=1, max_length=1500)
+    stakes: str = Field(min_length=1, max_length=1000)
+    source_ids: list[str] = Field(default_factory=list, max_length=20)
+    uncertainty: str = Field(min_length=1, max_length=1500)
+
+
 class EpisodeBlueprint(Record):
     project: Literal['Beyond the Archives'] = 'Beyond the Archives'
     module_version: Literal['story_intelligence_v1'] = 'story_intelligence_v1'
@@ -68,3 +89,13 @@ class EpisodeBlueprint(Record):
     approved_for_script: bool = False
     memory_digest: str = ''
     analysis_method: Literal['local_provisional', 'central_model'] = 'local_provisional'
+    analysis_revision: int = Field(default=1, ge=1, le=2)
+    analysis_provider: str = Field(default='', max_length=80)
+    analysis_model: str = Field(default='', max_length=160)
+    fallback_reason: Literal['', 'not_configured', 'selected_local', 'api_unavailable', 'invalid_response', 'duplicate_blocked'] = ''
+    narrative_potential: str = Field(default='', max_length=3000)
+    central_conflicts: list[CentralConflict] = Field(default_factory=list, max_length=9)
+    progression_strategy: str = Field(default='', max_length=2500)
+    ending_strategy: str = Field(default='', max_length=2000)
+    pacing_strategy: str = Field(default='', max_length=2000)
+    claim_register: list[EditorialClaim] = Field(default_factory=list, max_length=40)

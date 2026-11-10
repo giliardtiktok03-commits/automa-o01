@@ -10,25 +10,52 @@ def render(params):
     if not params.skills_enabled or story.SKILL_ID not in params.skill_ids:
         return
     with st.expander('Beyond the Archives · Story Intelligence', expanded=True):
-        st.caption('Planejamento editorial independente. Não inicia áudio, imagens ou vídeo. A análise com o modelo central usa a API de texto configurada.')
+        st.caption('Direção editorial pelo GPT via OpenAI. Memória, duplicatas e validação permanecem locais. Analisar não inicia roteiro, áudio, imagens ou vídeo.')
+        settings = config.snapshot_config_with_pending(config.app)
+        settings['_channel_skill_snapshot'] = [item.model_dump() for item in params.skill_snapshot]
+        status = story.model_status(settings)
         topic = st.text_input('Topic or Working Title', key='bta_topic')
         angle_text = st.text_input('Ângulo distinto ou pergunta específica (opcional)', key='bta_distinct_angle')
         duration = st.number_input('Duração alvo (minutos)', min_value=1, max_value=180, value=20, key='bta_duration')
-        use_model = st.checkbox('Usar modelo central para aprofundar a análise', value=False, key='bta_use_model')
+        mode = st.selectbox('Modo da análise editorial', ['Automático · GPT pela OpenAI', 'Análise local simplificada'], key='bta_analysis_mode_v2')
+        use_model = None if mode.startswith('Automático') else False
+        if use_model is False:
+            st.info('Análise local simplificada selecionada: usa regras iniciais, sem avaliação editorial pelo GPT.')
+        elif status['configured']:
+            st.caption('GPT configurado: ' + status['model'] + ' · OpenAI. Uma solicitação de texto por análise; pode haver custo.')
+        else:
+            st.info('OpenAI não configurada: será usada análise local simplificada. Configure a chave e o modelo em Configurar modelo de IA para a direção editorial GPT.')
         source_text = st.text_area('Fontes e trechos fornecidos — JSON (opcional)', value='[]', height=100, key='bta_sources', help='Lista com id, title, url, excerpt e interpretation (documented, disputed, hypothesis ou unknown). URLs não são acessadas automaticamente.')
+        def store_result(bp):
+            st.session_state['bta_blueprint'] = bp.model_dump()
+            st.session_state.pop('bta_approved', None)
+            st.session_state.pop('bta_episode_id', None)
+            st.session_state.pop('bta_model_failure', None)
+            st.session_state['bta_revision_key'] = st.session_state.get('bta_revision_key', 0) + 1
+
         if st.button('Analyze Story · Analisar tema', key='bta_analyze', disabled=not topic.strip()):
+            st.session_state.pop('bta_approved', None)
+            st.session_state.pop('bta_blueprint', None)
+            st.session_state.pop('bta_model_failure', None)
             try:
-                settings = config.snapshot_config_with_pending(config.app)
-                settings['_channel_skill_snapshot'] = [item.model_dump() for item in params.skill_snapshot]
-                with st.spinner('Analisando proposta editorial…'):
-                    bp = story.analyze(topic, duration=int(duration), sources=json.loads(source_text), distinct_angle=angle_text, use_model=use_model, app_config=settings)
-                st.session_state['bta_blueprint'] = bp.model_dump()
-                st.session_state.pop('bta_approved', None)
-                st.session_state.pop('bta_episode_id', None)
-                st.session_state['bta_revision_key'] = st.session_state.get('bta_revision_key', 0) + 1
+                request = dict(topic=topic, duration=int(duration), sources=json.loads(source_text), distinct_angle=angle_text)
+                try:
+                    with st.spinner('GPT preparando Narrative Blueprint…' if use_model is not False and status['configured'] else 'Preparando análise local simplificada…'):
+                        bp = story.analyze(**request, use_model=use_model, app_config=settings)
+                    store_result(bp)
+                except story.StoryModelUnavailable as exc:
+                    st.session_state['bta_model_failure'] = {'reason': exc.reason, 'request': request}
             except (ValueError, TypeError, OSError) as exc:
                 st.error(str(exc))
-        tabs = st.tabs(['Channel Memory', 'Narrative Strategy', 'Research & Evidence', 'Episode Blueprint'])
+        failed = st.session_state.get('bta_model_failure')
+        if failed:
+            st.warning('A análise GPT não foi concluída (' + failed['reason'] + '). Nenhum roteiro ou vídeo foi iniciado. Você pode tentar a API novamente ou usar a análise simplificada abaixo.')
+            if st.button('Executar análise local simplificada', key='bta_local_fallback'):
+                try:
+                    store_result(story.analyze(**failed['request'], use_model=False, fallback_reason=failed['reason'], app_config=settings))
+                except (ValueError, TypeError, OSError) as exc:
+                    st.error(str(exc))
+        tabs = st.tabs(['Channel Memory', 'Narrative Strategy', 'Research & Evidence', 'Narrative Blueprint'])
         with tabs[0]:
             inventory = story.memory()
             st.dataframe([{'ID': r['id'], 'Título': r['title'], 'Status': r['status']} for r in inventory['videos']], hide_index=True)
@@ -65,20 +92,36 @@ def render(params):
             st.info('Informe um tema e clique em Analyze Story para começar.')
             return
         bp = EpisodeBlueprint.model_validate(data)
+        if bp.analysis_method == 'central_model':
+            st.success('Narrative Blueprint · GPT / OpenAI · ' + (bp.analysis_model or 'modelo não registrado no plano antigo'))
+        elif bp.fallback_reason == 'duplicate_blocked':
+            st.warning('Duplicata detectada localmente. O GPT não foi chamado para esta proposta.')
+        else:
+            st.warning('ANÁLISE LOCAL SIMPLIFICADA — sem direção editorial GPT. Motivo: ' + (bp.fallback_reason or 'plano local anterior'))
         with tabs[0]:
             st.info(bp.editorial_memory_check.status + ': ' + bp.editorial_memory_check.explanation)
             st.write('Episódios relacionados: ' + ', '.join(bp.editorial_memory_check.matched_video_ids))
         with tabs[1]:
+            st.write('Potencial narrativo: ' + (bp.narrative_potential or 'Não avaliado no plano antigo.'))
             st.write('Motor dominante: **' + bp.primary_story_engine + '**')
             st.write(bp.reason_for_structure)
             st.write(bp.alternative_engines_note)
             st.write('Pergunta central: ' + bp.core_question)
             st.write('Promessa: ' + bp.title_promise)
             st.write('Abertura: ' + bp.opening_hook_strategy)
+            st.write('Progressão: ' + bp.progression_strategy)
+            st.write('Desfecho: ' + bp.ending_strategy)
+            st.write('Ritmo: ' + bp.pacing_strategy)
+            for conflict in bp.central_conflicts:
+                st.write('Conflito: ' + conflict.tension)
+                st.caption('Consequências: ' + conflict.stakes + ' · Ressalva: ' + conflict.uncertainty)
             st.caption('Revise motor, pergunta e beats no JSON da aba Episode Blueprint.')
         with tabs[2]:
             st.write('Fontes fornecidas: ' + str(len(bp.source_register)))
             st.json([row.model_dump() for row in bp.source_register])
+            if bp.claim_register:
+                labels = {'documented_fact': 'Fato documentado (suporte citado; revisão pendente)', 'allegation': 'Alegação atribuída', 'inference': 'Inferência', 'research_gap': 'Lacuna de pesquisa'}
+                st.dataframe([{'Classificação': labels[row.classification], 'Afirmação': row.statement, 'Fontes': ', '.join(row.source_ids), 'Ressalva': row.caveat, 'Central': row.material} for row in bp.claim_register], hide_index=True)
             for text in bp.research_questions + bp.risk_flags + bp.revision_notes:
                 st.write('• ' + text)
             st.warning('O módulo não busca nem autentica fontes. Revisão humana confirma se os trechos sustentam as afirmações e se há versões conflitantes.')

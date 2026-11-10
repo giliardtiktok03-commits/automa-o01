@@ -5,7 +5,8 @@ roteiro. Ele permite instalar e selecionar instruções editoriais de arquivos
 `SKILL.md`, mantendo múltiplas skills e uma cópia das versões usadas por projeto.
 
 **A biblioteca inclui agora Beyond the Archives — Editorial Director**, instalada
-sem ativação automática. A análise e os blueprints ficam no mesmo bloco de Skills.
+sem ativação automática. A análise principal usa GPT pela OpenAI quando configurada; a análise local é
+identificada como simplificada. Os blueprints ficam no mesmo bloco de Skills.
 Consulte [Story Intelligence](story-intelligence-pt.md) para testar sem gerar mídia.
 
 ## Identidade do canal e decisões de cada vídeo

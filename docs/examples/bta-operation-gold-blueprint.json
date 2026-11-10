@@ -95,5 +95,15 @@
   "distinct_angle_reviewed": false,
   "approved_for_script": false,
   "memory_digest": "a5f087ca2f4b8257e27fcaa36781984bd39fb3f516b25e9117bb2fb6227536b9",
-  "analysis_method": "local_provisional"
+  "analysis_method": "local_provisional",
+  "analysis_revision": 2,
+  "analysis_provider": "",
+  "analysis_model": "",
+  "fallback_reason": "selected_local",
+  "narrative_potential": "Análise local simplificada: o potencial documental ainda precisa ser avaliado pelo GPT ou por revisão editorial.",
+  "central_conflicts": [],
+  "progression_strategy": "Provisional research tasks only; develop a topic-specific causal progression after reviewing evidence.",
+  "ending_strategy": "Answer the documented central question and identify remaining uncertainty; no conclusion established yet.",
+  "pacing_strategy": "Adjust duration to available evidence; do not fill a 20-minute target with repetition.",
+  "claim_register": []
 }

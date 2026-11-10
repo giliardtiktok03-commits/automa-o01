@@ -1,4 +1,4 @@
-# Beyond the Archives — Story Intelligence v1
+# Beyond the Archives — Story Intelligence · direção editorial GPT
 
 Instalado dentro de **00 · Configurações de Skills**, na primeira coluna do MPT.
 A skill incluída é **Beyond the Archives — Editorial Director**. Ela é instalada
@@ -17,13 +17,36 @@ existentes. Não acrescenta dependências ou migrações de banco.
    Blueprint. Edite o JSON do blueprint para ajustar motor, pergunta, beats,
    fontes e ressalvas. Valide e salve revisões na biblioteca editorial.
 
-O teste local inicial não usa API. Ele verifica títulos e aliases do inventário,
-propõe um motor provisório e tarefas de pesquisa sem inventar fatos. Para uma
-análise textual específica pelo modelo configurado no MPT, marque **Usar modelo
-central para aprofundar a análise** antes de analisar. Isso usa a API de texto
-configurada e pode ter custo. O modelo não ganha acesso automático à internet;
-fontes e trechos precisam ser fornecidos. Este módulo não busca arquivos nem
-baixa imagens. Nenhuma dessas ações inicia task.py, áudio ou vídeo.
+A análise principal agora é **GPT pela OpenAI**, selecionada automaticamente quando
+há chave e modelo OpenAI disponíveis. Ela usa a integração LLM existente do MPT,
+incluindo o modelo e a Base URL OpenAI configurados. A escolha é feita em uma cópia
+por solicitação; não muda o provedor global usado pelos outros módulos. OPENAI_API_KEY
+também pode fornecer a chave localmente. Nenhuma credencial entra no blueprint.
+
+O GPT recebe tema/recorte, duração, regras editoriais da skill, inventário completo
+disponível e fontes/trechos fornecidos. Não recebe a escolha de motor ou os beats
+genéricos do sistema local como resposta sugerida: deve avaliar o potencial,
+selecionar a forma documental, justificar alternativas, identificar conflitos,
+progressão causal, ritmo, desfecho e necessidades de pesquisa.
+
+Em **Modo da análise editorial**, o padrão é **Automático · GPT pela OpenAI**.
+**Análise local simplificada** permite optar pelas regras iniciais sem uma chamada
+remota. Sem configuração OpenAI, o modo automático usa essa análise simplificada
+e mostra o motivo. Se uma solicitação GPT falhar ou retornar um contrato inválido,
+a interface oferece **Executar análise local simplificada**. Isso exige uma ação
+explícita e não envia outra requisição à API. O relatório nunca identifica resultado
+local como análise GPT.
+
+Cada análise GPT envia uma solicitação pelo adaptador existente, com timeout de
+120 segundos e sem retry automático. Pode haver custo de texto. O modelo não
+ganha acesso automático à internet; fontes e trechos precisam ser fornecidos.
+Este módulo não busca arquivos nem baixa imagens. Nem a análise nem sua aprovação
+iniciam automaticamente roteiro completo, task.py, áudio ou vídeo.
+
+O painel continua usando as abas Channel Memory, Narrative Strategy,
+Research & Evidence e **Narrative Blueprint**. Esta última permite editar o plano,
+validar, aprovar, salvar revisões e exportar. O formato EpisodeBlueprint e o nome
+legacy episode-blueprint.json são preservados para compatibilidade.
 
 ## Memória editorial
 
@@ -35,7 +58,7 @@ Published/scheduled/in_production participam da prevenção de duplicatas; plann
 produz alerta; archived não é tratado como vídeo novo em produção.
 
 A comparação local usa títulos, assuntos e aliases, com justificativas explícitas.
-Não é uma busca semântica exaustiva. O modelo opcional pode aprofundar diferenças,
+Não é uma busca semântica exaustiva. O GPT pode aprofundar diferenças,
 mas não anula duplicatas detectadas. Para recortes novos sobre entidades já
 abordadas, descreva um evento/pergunta concretamente distintos e revise essa
 justificativa. Um título idêntico a um publicado continua bloqueado.
@@ -70,6 +93,19 @@ revisão. Verified significa revisado com base nas fontes fornecidas; não signi
 validação independente pelo MPT. Hipóteses e fontes desconhecidas não liberam o
 roteiro. Fontes em disputa preservam ressalva de atribuição e versões concorrentes.
 O modelo não pode acrescentar fontes ao registro nem aprovar o próprio trabalho.
+
+O Narrative Blueprint contém narrative_potential, central_conflicts,
+progression_strategy, ending_strategy e pacing_strategy. O registro claim_register
+separa documented_fact, allegation, inference e research_gap. Alegações precisam
+de atribuição; inferências devem apresentar a evidência e sua ressalva.
+
+Fatos documentados precisam citar IDs realmente fornecidos e evidence_quotes com
+excertos presentes nas fontes. Referências inexistentes ou citações incompatíveis
+são descartadas e a afirmação passa a lacuna de pesquisa. Essa verificação textual
+não autentica o documento nem prova que o modelo interpretou o trecho corretamente;
+a revisão humana continua obrigatória. Alterações de fontes propostas pelo modelo
+não substituem o registro original. Lacunas centrais bloqueiam a aprovação; dúvidas
+não centrais podem permanecer explicitamente sinalizadas.
 
 Sem suporte para afirmações centrais, o estado é research_required. Duplicatas ou
 recortes ainda indefinidos ficam needs_revision. O botão **Validar revisão
@@ -108,7 +144,7 @@ Novos:
 - webui/story_intelligence.py: painel integrado às Skills.
 - resource/channel-skills/beyond-the-archives/: SKILL.md, inventário inicial e
   especificação fornecida pelo usuário.
-- test/services/test_story_intelligence.py: aceitação e integração.
+- test/services/test_story_intelligence.py e test/services/test_story_intelligence_gpt.py: aceitação, integração simulada e teste real opt-in.
 
 Alterados: webui/channel_skills.py, webui/Main.py,
 app/services/channel_skill_runtime.py, app/services/llm.py,
@@ -128,14 +164,14 @@ concluída. Nenhuma chamada paga ou teste com evidência histórica real foi exe
 ## Executar testes de desenvolvimento
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q test/services/test_story_intelligence.py test/services/test_channel_skills.py test/services/test_long_form.py
+.\.venv\Scripts\python.exe -m pytest -q test/services/test_story_intelligence.py test/services/test_story_intelligence_gpt.py test/services/test_channel_skills.py test/services/test_long_form.py
 ```
 
 Os testes de UI usam Streamlit AppTest. O teste do modelo central substitui a
 chamada remota por respostas controladas para verificar o contrato, as fontes e
 a rejeição de aprovações inventadas; não comprova qualidade factual de um modelo real.
 
-## Resultado da validação desta entrega
+## Validação da versão anterior (instalação inicial)
 
 - 509 testes passaram, 3 foram ignorados e 20 subtestes passaram na regressão de
   skills, roteiro, capítulos, arquivos históricos, montagem e provedores atuais.
@@ -147,3 +183,37 @@ a rejeição de aprovações inventadas; não comprova qualidade factual de um m
   21 casos repetidos na checagem final.
 - As nove distribuições ZIP foram verificadas quanto à integridade e presença dos
   módulos novos. Nenhuma inclui storage, .venv ou config.toml real.
+
+
+## Validação desta revisão GPT
+
+- 129 testes passaram e 1 foi ignorado. Foram mantidos os testes existentes de
+  Story Intelligence, Skills, capítulos e roteiro, com a configuração isolada para
+  impedir chamadas pagas acidentais nos casos locais.
+- A integração simulada passa pelo adaptador OpenAI real do MPT, substituindo só
+  o cliente SDK remoto: verifica o modelo, regras, memória, fontes, escolha própria
+  de motor, timeout, ausência de retries e ausência de geração de mídia.
+- Há testes de alegações/inferências/fatos/lacunas, descarte de citações inválidas,
+  aprovação manual, persistência antiga e fallback explícito pela interface.
+- O teste real foi selecionado nesta entrega, mas ignorado porque não há chave/modelo
+  OpenAI configurados neste ambiente. Nenhuma requisição real OpenAI foi enviada;
+  respostas simuladas não comprovam qualidade factual de um modelo real.
+
+Para executar o teste real na instalação com OpenAI configurada:
+
+```powershell
+$env:MPT_STORY_LIVE_TESTS = "1"
+.\.venv\Scripts\python.exe -m pytest -q -rs test/services/test_story_intelligence_gpt.py::test_live_openai_director_when_configured
+```
+
+Esse teste envia uma solicitação de planejamento, com duração alvo de cinco minutos,
+sem fontes fornecidas: exige indicação de lacunas e não permite aprovação automática.
+Pode ter custo de texto. O flag é opt-in para evitar despesas em regressões comuns;
+sem configuração válida, o resultado é skipped, não passed.
+
+Nesta revisão foram modificados app/models/story_intelligence.py,
+app/services/story_intelligence.py e webui/story_intelligence.py. Foram acrescentados
+os testes GPT e atualizados teste local, documentação e pacotes. Não houve alteração
+de dependências, configuração real, provedores de mídia ou do formato persistente
+obrigatório: novos campos são opcionais ao carregar planos antigos. analysis_revision=2
+identifica os novos planos; versões anteriores e snapshots já enviados continuam legíveis.

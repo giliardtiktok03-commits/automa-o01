@@ -11,6 +11,8 @@ from app.services import channel_skills as library, channel_skill_runtime as run
 @pytest.fixture(autouse=True)
 def local(tmp_path, monkeypatch):
     monkeypatch.setattr(library, '_root', lambda: tmp_path)
+    monkeypatch.setitem(config.app, 'openai_api_key', '')
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
     story.install()
     return tmp_path
 
