@@ -85,3 +85,9 @@ def metadata_value(params, key, max_length):
                 if isinstance(value, str) and value.strip() and len(value) <= max_length:
                     return value.strip()
     return ""
+
+
+def require_script_ready(topic, snapshots=None):
+    from app.services import story_intelligence
+    values = _current.get() if snapshots is None else snapshots
+    story_intelligence.require_script_ready(topic, validate(values))

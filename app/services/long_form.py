@@ -135,6 +135,8 @@ def _plan(params):
     if params.video_script.strip():
         return [{"title": f"Chapter {i}", "script": text}
                 for i, text in enumerate(_split_script(params.video_script, count), 1)]
+    from app.services import channel_skill_runtime
+    channel_skill_runtime.require_script_ready(params.video_subject, params.skill_snapshot)
     prompt = (
         f"Plan a coherent video about {params.video_subject!r}. "
         f"Language: {params.video_language or 'same as the topic'}. "
@@ -221,6 +223,7 @@ def _script(params, chapters, index):
     )
     script = llm.generate_script(
         video_subject=requirements,
+        editorial_subject=params.video_subject,
         language=params.video_language,
         paragraph_number=min(10, max(1, round(minutes * 2))),
         video_script_prompt=params.video_script_prompt,

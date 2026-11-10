@@ -1,0 +1,99 @@
+{
+  "project": "Beyond the Archives",
+  "module_version": "story_intelligence_v1",
+  "editorial_id": "",
+  "distinct_angle": "",
+  "input_topic": "Operation Gold: The Spy Tunnel Beneath Berlin",
+  "title_working": "Operation Gold: The Spy Tunnel Beneath Berlin",
+  "subject": "Operation Gold",
+  "temporal_window": "unknown",
+  "geography": "unknown",
+  "editorial_memory_check": {
+    "status": "new",
+    "matched_video_ids": [],
+    "explanation": "Nenhum evento ou promessa coincidente foi identificado no inventário disponível. A verificação local por aliases é provisória."
+  },
+  "primary_story_engine": "covert_mission",
+  "secondary_story_engine": null,
+  "reason_for_structure": "A proposta sugere um objetivo operacional, execução e obstáculos; confirmar esses elementos nas fontes.",
+  "alternative_engines_note": "Other engines require a different causal premise; revise after researching the actual events.",
+  "core_question": "What do reliable records establish about Operation Gold: The Spy Tunnel Beneath Berlin, its constraints and consequences?",
+  "title_promise": "Explain the central question using identifiable evidence and retain material uncertainty.",
+  "target_duration_minutes": 20,
+  "target_word_count_range": [
+    2600,
+    2900
+  ],
+  "opening_hook_strategy": "Open on a source-supported dilemma or consequence. Do not invent an eyewitness scene.",
+  "narrative_beats": [
+    {
+      "new_information": "Establish the documented starting conditions",
+      "why_it_matters": "Identify the circumstances that made the central question relevant",
+      "open_question": "What changed those circumstances?",
+      "evidence_needed": "Research task only: identify a specific source, relevant excerpt and competing evidence before narrating a historical claim.",
+      "confidence": "needs_research",
+      "source_ids": []
+    },
+    {
+      "new_information": "Identify the stated objective and participants from records",
+      "why_it_matters": "Separate documented goals from inferred motivations",
+      "open_question": "Which constraints shaped their options?",
+      "evidence_needed": "Research task only: identify a specific source, relevant excerpt and competing evidence before narrating a historical claim.",
+      "confidence": "needs_research",
+      "source_ids": []
+    },
+    {
+      "new_information": "Trace the first consequential decision",
+      "why_it_matters": "Connect the decision to the next operational constraint",
+      "open_question": "How did the participants respond?",
+      "evidence_needed": "Research task only: identify a specific source, relevant excerpt and competing evidence before narrating a historical claim.",
+      "confidence": "needs_research",
+      "source_ids": []
+    },
+    {
+      "new_information": "Compare evidence about the central obstacle and response",
+      "why_it_matters": "Explain why the obstacle altered the available choices",
+      "open_question": "What outcome do the records support?",
+      "evidence_needed": "Research task only: identify a specific source, relevant excerpt and competing evidence before narrating a historical claim.",
+      "confidence": "needs_research",
+      "source_ids": []
+    },
+    {
+      "new_information": "Establish the documented outcome and remaining uncertainties",
+      "why_it_matters": "Answer the title promise and identify historical consequences",
+      "open_question": "What remains unresolved in the surviving record?",
+      "evidence_needed": "Research task only: identify a specific source, relevant excerpt and competing evidence before narrating a historical claim.",
+      "confidence": "needs_research",
+      "source_ids": []
+    }
+  ],
+  "research_questions": [
+    "Which records establish the central event, date and participants?",
+    "Which sources establish objectives, constraints and outcomes?",
+    "Which interpretations conflict, and what evidence supports each?"
+  ],
+  "source_register": [],
+  "visual_evidence_ideas": [
+    "Contextualized period maps",
+    "Contemporary photographs",
+    "Identifiable declassified records"
+  ],
+  "risk_flags": [
+    "Local planning is provisional, not historical verification.",
+    "User-supplied excerpts are not independently authenticated."
+  ],
+  "readiness": "research_required",
+  "revision_notes": [
+    "Beat 1: falta suporte identificável e revisão da afirmação.",
+    "Beat 2: falta suporte identificável e revisão da afirmação.",
+    "Beat 3: falta suporte identificável e revisão da afirmação.",
+    "Beat 4: falta suporte identificável e revisão da afirmação.",
+    "Beat 5: falta suporte identificável e revisão da afirmação.",
+    "Revise correspondência entre cada afirmação e as fontes fornecidas; o módulo não autentica documentos."
+  ],
+  "evidence_reviewed": false,
+  "distinct_angle_reviewed": false,
+  "approved_for_script": false,
+  "memory_digest": "a5f087ca2f4b8257e27fcaa36781984bd39fb3f516b25e9117bb2fb6227536b9",
+  "analysis_method": "local_provisional"
+}

@@ -1,0 +1,46 @@
+{
+  "channel": "Beyond the Archives",
+  "inventory_version": 1,
+  "notes": "Titles/topics and publication status provided by channel owner. Dates, URLs, analytics and scripts not supplied. Story archetypes are provisional inferences based only on titles and topics.",
+  "videos": [
+    {
+      "id": "bta-001",
+      "title": "The ENTIRE History of the GRU in 20 Minutes",
+      "status": "published",
+      "primary_subject": "GRU",
+      "topic_aliases": ["Main Intelligence Directorate", "Soviet military intelligence"],
+      "editorial_angle": "Institutional history",
+      "narrative_archetype_provisional": "institutional_chronology",
+      "youtube_url": null,
+      "published_at": null,
+      "script_path": null,
+      "performance_metrics": null
+    },
+    {
+      "id": "bta-002",
+      "title": "The CIA Built a Mining Ship. It Was Secretly Hunting a Soviet Submarine",
+      "status": "published",
+      "primary_subject": "Project Azorian",
+      "topic_aliases": ["CIA submarine recovery", "Glomar Explorer"],
+      "editorial_angle": "Covert recovery operation",
+      "narrative_archetype_provisional": "covert_mission",
+      "youtube_url": null,
+      "published_at": null,
+      "script_path": null,
+      "performance_metrics": null
+    },
+    {
+      "id": "bta-003",
+      "title": "The US Planned to Hide Nuclear Missiles Beneath Greenland’s Ice",
+      "status": "published",
+      "primary_subject": "Project Iceworm",
+      "topic_aliases": ["Greenland nuclear missile plan", "Camp Century"],
+      "editorial_angle": "Ambitious Cold War plan and constraints",
+      "narrative_archetype_provisional": "plan_vs_reality",
+      "youtube_url": null,
+      "published_at": null,
+      "script_path": null,
+      "performance_metrics": null
+    }
+  ]
+}

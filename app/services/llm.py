@@ -918,7 +918,16 @@ def generate_script(
     video_script_prompt: str = "",
     custom_system_prompt: str = "",
     app_config=None,
+    editorial_subject: str | None = None,
 ) -> str:
+    from app.services import channel_skill_runtime
+    try:
+        channel_skill_runtime.require_script_ready(
+            editorial_subject or video_subject,
+            app_config.get("_channel_skill_snapshot", []) if app_config is not None else None)
+    except ValueError as exc:
+        logger.warning(str(exc))
+        return ""
     paragraph_number = _normalize_script_paragraph_number(paragraph_number)
     video_script_prompt = _limit_script_text(
         video_script_prompt, MAX_SCRIPT_PROMPT_LENGTH, "video_script_prompt"

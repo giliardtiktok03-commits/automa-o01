@@ -5493,6 +5493,12 @@ def _render_local_script_generation(params):
         st.warning(tr("Please Enter the Video Subject First"))
         return
 
+    from app.services import channel_skill_runtime
+    try:
+        channel_skill_runtime.require_script_ready(params.video_subject, params.skill_snapshot)
+    except ValueError as exc:
+        st.warning(str(exc))
+        return
     with st.spinner(tr("Generating Video Script and Keywords")):
 
         def generate_script_and_terms(app_config_snapshot):

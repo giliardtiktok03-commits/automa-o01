@@ -32,6 +32,8 @@ def render(panel, params, set_config, heading):
     with panel:
         with st.container(border=True, key="stage_channel_skills"):
             heading(0, "Configurações de Skills", "#be123c")
+            from app.services import story_intelligence
+            story_intelligence.install()
             installed = library.installed()
             names = {item.skill_id: item.name for item in installed}
             params.skills_enabled = st.checkbox(
@@ -66,6 +68,18 @@ def render(panel, params, set_config, heading):
                 st.caption("Nenhuma skill ativa: o MPT usa o modo padrão. O perfil editorial do seu canal ainda pode ser definido antes de instalar uma skill.")
             st.caption("Configurações explícitas do projeto prevalecem. Skills complementares não substituem a primeira em caso de conflito.")
 
+            from webui.story_intelligence import render as render_story_intelligence
+            render_story_intelligence(params)
+            approved = st.session_state.get("bta_approved")
+            if approved and params.skills_enabled and story_intelligence.SKILL_ID in params.skill_ids:
+                try:
+                    # Subject widget is rendered later in Main.py; read its current state.
+                    params.video_subject = st.session_state.get("video_subject", params.video_subject)
+                    story_intelligence.bind(params, approved)
+                except ValueError as exc:
+                    st.caption(str(exc))
+            st.session_state["active_channel_skill_snapshot"] = [item.model_dump() for item in params.skill_snapshot]
+
             with st.expander("Instalar ou gerenciar SKILL.md", expanded=False):
                 uploaded = st.file_uploader("Carregar arquivo SKILL.md (UTF-8, até 24 KB)", type=["md"], key="channel_skill_upload")
                 skill_id = st.text_input("Identificador da nova skill", placeholder="meu-canal", key="channel_skill_new_id")
@@ -78,7 +92,7 @@ def render(panel, params, set_config, heading):
                 st.download_button("Baixar modelo vazio de SKILL.md", TEMPLATE.encode("utf-8"), "SKILL.md", "text/markdown", key="channel_skill_template")
                 st.caption("O modelo precisa ser preenchido com regras aprovadas. Nenhuma identidade de canal é ativada automaticamente. Não inclua chaves ou senhas.")
                 if installed:
-                    editing = st.selectbox("Skill para visualizar ou editar", list(names), format_func=lambda value: names[value], key="channel_skill_edit_id")
+                    editing = st.selectbox("Skill para visualizar ou editar", list(names), index=list(names).index(selected[0]) if selected else 0, format_func=lambda value: names[value], key="channel_skill_edit_id")
                     current = library.load(editing)
                     st.caption(f"Versão: {current.version or 'sem rótulo'} · SHA-256: {current.sha256[:12]}")
                     content = st.text_area("Conteúdo de SKILL.md", value=current.content, height=220, key=f"channel_skill_editor_{editing}_{current.sha256}")

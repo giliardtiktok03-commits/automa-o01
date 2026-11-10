@@ -151,7 +151,7 @@ def test_missing_skill_fails_before_consuming_pipeline():
 def test_old_chapter_fingerprint_ignores_new_inactive_fields():
     params = VideoParams(video_subject="topic", video_source="mixed")
     raw = params.model_dump(mode="json")
-    for key in ("skills_enabled", "skill_ids", "skill_snapshot", "mixed_resume", "mixed_grok_unlimited", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines",
+    for key in ("historical_archive_resume", "historical_archive_prepared", "mixed_use_deepinfra", "deepinfra_steps", "skills_enabled", "skill_ids", "skill_snapshot", "mixed_resume", "mixed_grok_unlimited", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines",
                 "runware_model", "runware_steps", "runware_size", "mixed_use_runware", "mixed_use_google_flow", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"):
         raw.pop(key)
     expected = hashlib.sha256(json.dumps({"params": raw, "references": []}, sort_keys=True).encode()).hexdigest()
@@ -191,7 +191,8 @@ def test_ui_archiving_is_reversible_and_clears_selection():
         app = AppTest.from_string(UI_SCRIPT).run()
         app.checkbox(key="channel_skills_enabled").check().run()
         app.multiselect(key="channel_skill_ids").select("profile").run()
+        app.selectbox(key="channel_skill_edit_id").select("profile").run()
         app.button(key="channel_skill_archive").click().run()
         assert not app.exception
-        assert library.installed() == []
+        assert "profile" not in [item.skill_id for item in library.installed()]
         assert app.session_state["captured_params"]["skill_snapshot"] == []

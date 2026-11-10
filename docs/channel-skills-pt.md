@@ -4,9 +4,9 @@ O novo bloco fica na primeira coluna, imediatamente acima das configurações do
 roteiro. Ele permite instalar e selecionar instruções editoriais de arquivos
 `SKILL.md`, mantendo múltiplas skills e uma cópia das versões usadas por projeto.
 
-**Esta atualização fornece o suporte. Não instala nem ativa um perfil definitivo
-de história militar, espionagem ou outro nicho.** As decisões editoriais do canal
-devem ser definidas e aprovadas antes de preencher a primeira skill.
+**A biblioteca inclui agora Beyond the Archives — Editorial Director**, instalada
+sem ativação automática. A análise e os blueprints ficam no mesmo bloco de Skills.
+Consulte [Story Intelligence](story-intelligence-pt.md) para testar sem gerar mídia.
 
 ## Identidade do canal e decisões de cada vídeo
 
@@ -15,9 +15,9 @@ fontes aceitáveis, tratamento de incertezas, estilo visual, direção musical e
 perfil vocal desejado. O tema, o recorte e o ângulo de um vídeo continuam podendo
 ser definidos nos campos de tema e instruções adicionais daquele projeto.
 
-Para o canal em discussão, o nicho e a referência ArchiveInMinutes são contexto
-prévio, não uma análise concluída nem uma receita validada. Não foram preenchidos
-automaticamente público, idioma, duração, abertura, profundidade ou ângulos.
+A skill Beyond the Archives usa a identidade e o inventário fornecidos pelo
+proprietário. Isso não equivale a uma análise de desempenho do canal de referência:
+roteiros e métricas dos vídeos publicados continuam não fornecidos.
 
 ## Usar na interface
 

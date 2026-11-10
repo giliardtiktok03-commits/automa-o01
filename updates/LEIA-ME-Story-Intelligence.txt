@@ -1,0 +1,19 @@
+ATUALIZACAO BEYOND THE ARCHIVES — STORY INTELLIGENCE
+
+Feche o MPT e faça backup. Extraia o ZIP na raiz e reabra webui.bat.
+O pacote preserva storage, config.toml real e .venv; não instala dependências.
+
+00 · Configurações de Skills > Ativar Skills editoriais > selecione:
+Beyond the Archives — Editorial Director (primeira, se for a principal).
+Abra Beyond the Archives · Story Intelligence.
+Preencha Topic or Working Title e clique Analyze Story · Analisar tema.
+O modo local não usa API. Opcionalmente ative o modelo central de texto.
+Não gera imagens, áudio ou vídeo durante a análise.
+
+O inventário inicial contém os 3 temas publicados informados pelo proprietário.
+Revise memória, estrutura, beats e fontes; salve ou exporte o blueprint.
+Sem evidência suficiente, o estado é pesquisa necessária.
+Aprovar para roteiro exige revisão explícita e o mesmo tema no campo Tema do vídeo.
+Nenhuma voz ou provedor é trocado automaticamente.
+
+Guia, arquivos e testes: docs/story-intelligence-pt.md
