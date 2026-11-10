@@ -127,3 +127,27 @@ def test_global_flow_source_defaults_to_static_without_changing_grok_settings():
         choices=[widget for widget in app.selectbox if str(widget.key).startswith('flow_image_motion_select')]
         assert len(choices)==1 and choices[0].value=='static'
         assert config.ui['image_motion']=='zoom'
+
+
+@pytest.mark.parametrize('has_result', [True, False])
+def test_settings_restore_saved_test_diagnostic_without_generating(tmp_path, monkeypatch, has_result):
+    monkeypatch.setattr(flow_browser, '_root', lambda: tmp_path)
+    request = tmp_path / 'tests' / 'saved' / 'flow-request.json'
+    request.parent.mkdir(parents=True)
+    request.write_text(json.dumps({'action':'generate','profile':'principal','project':'https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66'}))
+    request.with_suffix('.diagnostic.json').write_text(json.dumps({'stage':'awaiting','submitted':True}))
+    if has_result:
+        request.with_suffix('.result.json').write_text(json.dumps({'status':'failed','submitted':True,'error':'Saved test error'}))
+    script = """
+from webui.google_flow_settings import render
+render({}, lambda *args: None)
+"""
+    with patch.object(flow_browser,'start_test') as generate, patch.object(flow_browser,'connect') as connect:
+        app = AppTest.from_string(script).run()
+        assert not app.exception
+        assert app.session_state['google_flow_test_request'] == str(request)
+        assert 'Baixar diagnóstico do teste automático Flow' in [item.label for item in app.get('download_button')]
+        app.button(key='google_flow_load_last_test').click().run()
+        assert not app.exception
+        generate.assert_not_called()
+        connect.assert_not_called()

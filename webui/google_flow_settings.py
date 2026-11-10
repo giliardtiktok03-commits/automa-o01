@@ -37,6 +37,15 @@ def render(settings,set_config):
         login_state=json.loads(Path(login_result).read_text(encoding='utf-8'))
         if login_state.get('status')=='closed':st.caption('Janela do perfil fechada. O próximo teste verificará se a sessão está pronta.')
         else:st.warning(str(login_state.get('error') or 'Não foi possível abrir o perfil Chrome.'))
+    # Test history survives Streamlit sessions and MPT restarts. Read only.
+    latest=flow_browser.latest_test(profile)
+    current=st.session_state.get('google_flow_test_request')
+    if latest and (not current or not Path(current).exists()):
+        st.session_state.google_flow_test_request=str(latest[1])
+    if st.button('Carregar último teste salvo — sem gerar imagem',key='google_flow_load_last_test',disabled=latest is None):
+        st.session_state.google_flow_test_request=str(latest[1])
+    if latest is None:
+        st.caption('Nenhum teste automático salvo foi encontrado para este perfil.')
     if st.button('Testar envio automático de 1 imagem',disabled=not project or mode!='automatic',key='google_flow_test'):
         previous=st.session_state.get('google_flow_test_request')
         if previous and not Path(previous).with_suffix('.result.json').exists():
@@ -105,10 +114,12 @@ def render(settings,set_config):
                 st.image(str(path.with_suffix('.png')))
             elif state.get('status')=='refused':st.warning('Flow recusou o pedido. O teste não foi repetido.')
             else:st.warning(str(state.get('error') or 'Teste interrompido; revise antes de outro envio.'))
-            diagnostic=path.with_suffix('.diagnostic.json')
-            if diagnostic.exists():
-                st.download_button('Baixar diagnóstico do teste Flow',data=diagnostic.read_bytes(),file_name='diagnostico-flow.json',mime='application/json',key='google_flow_diagnostic_download')
-        else:st.info('Aguardando o teste existente; não foi solicitado outro automaticamente.')
+        else:st.info('O teste salvo ainda não tem resultado confirmado. Nenhum novo envio foi iniciado.')
+        diagnostic=path.with_suffix('.diagnostic.json')
+        if diagnostic.exists():
+            st.download_button('Baixar diagnóstico do teste automático Flow',data=diagnostic.read_bytes(),file_name='diagnostico-flow.json',mime='application/json',key='google_flow_diagnostic_download')
+        elif result.exists():
+            st.caption('Este teste salvo não possui arquivo de diagnóstico.')
     st.markdown('**Prompts e recuperação por importação**')
     st.caption('As imagens já importadas são reutilizadas. Se o navegador enviar um pedido e o resultado ficar incerto, baixe a imagem no Flow e importe aqui; o MPT não repete esse envio.')
     task_id=st.text_input('ID do projeto MPT para prompts/importação',key='google_flow_task_id').strip()
