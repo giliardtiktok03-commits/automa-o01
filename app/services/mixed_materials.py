@@ -18,7 +18,7 @@ from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoFitMode
 from app.services import generation_progress, llm, material, task_artifacts, visual_validation, flow_browser
 from app.services import state as sm
-from app.services import runware_image, grok_image, google_flow
+from app.services import runware_image, grok_image, google_flow, deepinfra_image
 from app.services.ai33 import provider as ai33_provider
 from app.services.ai33 import AI33Error, AI33Client, AI33PendingError
 from app.utils import utils
@@ -90,7 +90,7 @@ def providers(settings=None, params=None):
 def configure_sources(params, settings):
     # Legacy names remain readable, but no new generation can use those providers.
     enabled = params.mixed_select_sources or params.mixed_image_provider != "none"
-    params.mixed_image_provider = ("google_flow" if params.mixed_use_google_flow else "grok" if params.mixed_use_grok else "ai33" if params.mixed_use_ai33 else "none") if enabled else "none"
+    params.mixed_image_provider = ("deepinfra" if params.mixed_use_deepinfra else "google_flow" if params.mixed_use_google_flow else "grok" if params.mixed_use_grok else "ai33" if params.mixed_use_ai33 else "none") if enabled else "none"
 
 
 def grok_unlimited(params):
@@ -114,6 +114,9 @@ def validate(params, settings=None, *, external_audio=False):
     image_enabled = grok_unlimited(params) or params.mixed_max_images > 0
     if not providers(settings, params) and (params.mixed_image_provider == "none" or not image_enabled):
         raise MixedError("Select and configure at least one material source", key="mixed.no_sources")
+    if image_enabled and params.mixed_image_provider == "deepinfra":
+        try: deepinfra_image.freeze(params, settings)
+        except deepinfra_image.DeepInfraError as exc: raise MixedError(str(exc)) from exc
     if image_enabled and params.mixed_image_provider == "grok":
         try:
             grok_image.freeze(params, settings)
@@ -433,7 +436,7 @@ def checkpoint_matches(signature, fingerprint):
 def legacy_continuation(signature, manifest):
     """Only image-provider fields may migrate; narration/editing must still match."""
     previous = manifest.get("signature")
-    if not isinstance(previous, dict) or previous.get("image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none", "ai33", "runware", "grok", "google_flow"}:
+    if not isinstance(previous, dict) or previous.get("image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none", "ai33", "runware", "grok", "google_flow", "deepinfra"}:
         return False
     original_hash = hashlib.sha256(json.dumps(previous, sort_keys=True).encode()).hexdigest()
     if original_hash != manifest.get("fingerprint"):
@@ -496,6 +499,10 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if params.mixed_image_provider == "grok":
             signature.update(image_model=params.grok_model, image_size=None, image_quality=None, image_credit_cap=None)
             signature["selected_sources"]["grok"] = True
+        if params.mixed_image_provider == "deepinfra":
+            signature.update(image_model=deepinfra_image.MODEL, image_size=None, image_quality=None,
+                             image_credit_cap=None, image_steps=params.deepinfra_steps)
+            signature["selected_sources"]["deepinfra"] = True
         if params.mixed_image_provider == "google_flow":
             signature.update(image_model=params.google_flow_model if params.google_flow_mode == "automatic" else "manual_import", image_size=None, image_quality=None, image_credit_cap=None)
             signature["selected_sources"]["google_flow"] = True
@@ -519,7 +526,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     for saved_scene in manifest["scenes"]:
                         if saved_scene.get("image_file"):
                             original_provider = manifest["signature"].get("image_provider", "openai")
-                            saved_scene.setdefault("image_provider", original_provider + "_image" if original_provider in {"ai33", "runware", "grok"} else "flow_browser" if original_provider == "flow_browser" or saved_scene.get("flow_image_received") else "openai_image")
+                            saved_scene.setdefault("image_provider", original_provider + "_image" if original_provider in {"ai33", "runware", "grok", "deepinfra"} else "flow_browser" if original_provider == "flow_browser" or saved_scene.get("flow_image_received") else "openai_image")
                 manifest["previous_fingerprint"] = manifest["fingerprint"]
                 manifest["fingerprint"] = fingerprint
                 manifest["signature"] = signature
@@ -567,7 +574,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 rotation = stock_turn % len(available)
                 source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
                 stock_turn += 1
-            if source is None and params.mixed_image_provider == "none" and not scene.get("image_file") and not scene.get("ai33_job") and not scene.get("runware_job") and not scene.get("grok_job") and not scene.get("google_flow_job"):
+            if source is None and params.mixed_image_provider == "none" and not scene.get("image_file") and not scene.get("ai33_job") and not scene.get("runware_job") and not scene.get("grok_job") and not scene.get("google_flow_job") and not scene.get("deepinfra_job"):
                 raise MixedError("No approved stock material and image generators are disabled or unconfigured",
                                  key="mixed.no_images")
             if source is None:
@@ -577,15 +584,16 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     if not image.is_file() or _hash(image) != scene.get("image_sha256"):
                         raise MixedError("A paid image is missing or changed; review the task before ordering another")
                 else:
+                    resuming_deepinfra = bool(scene.get("deepinfra_job"))
                     resuming_ai33 = bool(scene.get("ai33_job"))
                     resuming_runware = bool(scene.get("runware_job"))
                     resuming_grok = bool(scene.get("grok_job"))
                     resuming_flow = bool(scene.get("google_flow_job"))
-                    provider = "google_flow" if resuming_flow else "grok" if resuming_grok else "ai33" if resuming_ai33 else "runware" if resuming_runware else params.mixed_image_provider
+                    provider = "deepinfra" if resuming_deepinfra else "google_flow" if resuming_flow else "grok" if resuming_grok else "ai33" if resuming_ai33 else "runware" if resuming_runware else params.mixed_image_provider
                     job_params = params.model_copy(deep=True)
                     if scene.get("image_settings"):
                         for key, value in scene["image_settings"].items():
-                            if key in {"ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "runware_model", "runware_steps", "runware_size", "grok_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"}:
+                            if key in {"ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "deepinfra_steps", "runware_model", "runware_steps", "runware_size", "grok_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"}:
                                 setattr(job_params, key, value)
                     elif resuming_ai33:
                         # Old paid jobs retain the original frozen specification.
@@ -594,7 +602,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         for key, field in {"image_model": "ai33_model", "image_size": "ai33_resolution", "image_quality": "ai33_quality", "image_credit_cap": "ai33_max_credits"}.items():
                             if key in previous:
                                 setattr(job_params, field, previous[key])
-                    if scene.get("image_request_started") and not (resuming_ai33 or resuming_runware or resuming_grok or resuming_flow):
+                    if scene.get("image_request_started") and not (resuming_deepinfra or resuming_ai33 or resuming_runware or resuming_grok or resuming_flow):
                         raise MixedError("A previous image request has an unknown result; review it before ordering again")
                     if not scene.get("image_request_started"):
                         if not grok_unlimited(params) and manifest["image_requests"] >= params.mixed_max_images:
@@ -607,7 +615,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                             raise MixedError("The remaining AI budget is reserved for planned historical/illustrative scenes")
                     job_dir = scene_dir / f"{provider}-{scene['id']:03d}"
                     # An interrupted attempt without a ledger is ambiguous; never repost.
-                    if (resuming_ai33 or resuming_runware or resuming_grok or resuming_flow) and not (job_dir / ("flow-image.json" if provider == "google_flow" else provider + "-image.json")).is_file():
+                    if (resuming_deepinfra or resuming_ai33 or resuming_runware or resuming_grok or resuming_flow) and not (job_dir / ("flow-image.json" if provider == "google_flow" else provider + "-image.json")).is_file():
                         raise MixedError("Image attempt has no checkpoint; reconcile before another paid request")
                     prompt = image_prompt(scene)
                     try:
@@ -615,7 +623,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                             manifest["image_requests"] += 1
                             scene["image_request_started"] = True
                             scene[provider + "_job"] = f"{provider}-{scene['id']:03d}"
-                            fields = ("ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits") if provider == "ai33" else ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero") if provider == "google_flow" else ("grok_model",) if provider == "grok" else ("runware_model", "runware_steps", "runware_size")
+                            fields = ("deepinfra_steps",) if provider == "deepinfra" else ("ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits") if provider == "ai33" else ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero") if provider == "google_flow" else ("grok_model",) if provider == "grok" else ("runware_model", "runware_steps", "runware_size")
                             scene["image_settings"] = {key: getattr(job_params, key) for key in fields}
                             _save(manifest_file, manifest)
                         if provider == "google_flow":
@@ -624,6 +632,9 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                             google_flow.export(directory, manifest, getattr(params.video_aspect, "value", params.video_aspect), image_prompt)
                             generated, details = google_flow.generate(job_params, prompt, flow_folder, scene["id"], job_dir, before_submit=mark_submitted)
                             scene.pop("flow_waiting", None)
+                        elif provider == "deepinfra":
+                            generated, details = deepinfra_image.generate(job_params, prompt, job_dir,
+                                before_submit=mark_submitted, existing_only=resuming_deepinfra)
                         elif provider == "grok":
                             generated, details = grok_image.generate(job_params, prompt, job_dir, before_submit=mark_submitted, existing_only=resuming_grok)
                         elif provider == "runware":
@@ -648,6 +659,13 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         image = _context_card(scene, params, scene_dir)
                         scene["image_provider"] = "editorial_card"
                     except flow_browser.FlowError as exc:
+                        raise MixedError(str(exc)) from exc
+                    except deepinfra_image.DeepInfraRefusal:
+                        scene["image_refused"] = True
+                        _save(manifest_file, manifest)
+                        image = _context_card(scene, params, scene_dir)
+                        scene["image_provider"] = "editorial_card"
+                    except deepinfra_image.DeepInfraError as exc:
                         raise MixedError(str(exc)) from exc
                     except grok_image.GrokRefusal:
                         scene["image_refused"] = True
@@ -689,7 +707,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
             output_paths.append(str(output))
             records.append(scene["provenance"])
         counts = {provider: sum(record["provider"] == provider for record in records)
-                  for provider in ("pexels", "pixabay", "coverr", "google_flow", "grok_image", "runware_image", "ai33_image", "openai_image")}
+                  for provider in ("pexels", "pixabay", "coverr", "deepinfra_image", "google_flow", "grok_image", "runware_image", "ai33_image", "openai_image")}
         cards = sum(record["provider"] == "editorial_card" for record in records)
         if cards:
             counts["editorial_card"] = cards
@@ -697,7 +715,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
         if flow_count:
             counts["flow_browser"] = flow_count
         logger.info("Mixed sources used: Pexels={}, Pixabay={}, Coverr={}, AI={}",
-                    counts["pexels"], counts["pixabay"], counts["coverr"], counts["grok_image"] + counts["runware_image"] + counts["ai33_image"] + counts["openai_image"])
+                    counts["pexels"], counts["pixabay"], counts["coverr"], counts["deepinfra_image"] + counts["grok_image"] + counts["runware_image"] + counts["ai33_image"] + counts["openai_image"])
         sm.state.update_task(task_id, mixed_source_counts=counts)
         material._persist_material_sources(task_id, records)
         task_artifacts.patch_script_data(task_id, mixed_scene_plan=manifest, mixed_timing=timing)

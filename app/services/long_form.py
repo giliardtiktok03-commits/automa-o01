@@ -26,7 +26,7 @@ class ChapterError(RuntimeError):
 
 
 def validate(params, *, external_audio=False):
-    if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"}:
+    if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
         from app.services import mixed_materials
 
         mixed_materials.validate(params, external_audio=external_audio)
@@ -73,6 +73,9 @@ def _digest(file):
 def _fingerprint(params, references):
     payload = {"params": params.model_dump(mode="json"), "references": references}
     payload["params"].pop("mixed_resume", None)
+    if not params.mixed_use_deepinfra:
+        payload["params"].pop("mixed_use_deepinfra", None)
+        payload["params"].pop("deepinfra_steps", None)
     if not params.mixed_use_google_flow:
         payload["params"].pop("mixed_use_google_flow", None)
         for name in ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"):
@@ -92,7 +95,7 @@ def _fingerprint(params, references):
     if not params.skills_enabled or not params.skill_snapshot:
         for key in ("skills_enabled", "skill_ids", "skill_snapshot"):
             payload["params"].pop(key, None)
-    if params.video_source not in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"}:
+    if params.video_source not in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
         for key in ("mixed_max_images", "mixed_scene_duration", "mixed_visual_validation", "mixed_vision_model", "mixed_max_candidates", "mixed_variable_pacing", "mixed_timeline_offset", "mixed_total_duration", "mixed_previous_sources", "mixed_is_chapter", "mixed_image_provider", "flow_profile", "flow_project_url", "flow_require_zero", "mixed_select_sources", "mixed_use_pexels", "mixed_use_pixabay", "mixed_use_coverr", "mixed_use_openai", "mixed_use_flow", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
             payload["params"].pop(key, None)
     if params.custom_audio_file:
@@ -272,7 +275,7 @@ def _migrate_image_provider(params, references, directory, manifest):
     if params.video_source != "mixed" or not (directory / "script.json").is_file():
         return False
     saved = json.loads((directory / "script.json").read_text(encoding="utf-8"))["params"]
-    if saved.get("mixed_image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none", "ai33", "runware", "grok", "google_flow"}:
+    if saved.get("mixed_image_provider", "openai") not in {"openai", "openai_flow", "flow_browser", "none", "ai33", "runware", "grok", "google_flow", "deepinfra"}:
         return False
     original = dict(saved)
     original.pop("mixed_resume", None)
@@ -282,6 +285,9 @@ def _migrate_image_provider(params, references, directory, manifest):
         original["custom_audio_file"] = "<external-narration>"
     candidates = [original]
     normalized = dict(original)
+    if not normalized.get("mixed_use_deepinfra"):
+        normalized.pop("mixed_use_deepinfra", None)
+        normalized.pop("deepinfra_steps", None)
     if not normalized.get("mixed_use_google_flow"):
         normalized.pop("mixed_use_google_flow", None)
         for name in ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"):
@@ -305,7 +311,7 @@ def _migrate_image_provider(params, references, directory, manifest):
         return False
     before = VideoParams.model_validate(saved).model_dump(mode="json")
     after = params.model_dump(mode="json")
-    for key in ("google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero", "mixed_resume", "mixed_use_google_flow", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    for key in ("mixed_use_deepinfra", "deepinfra_steps", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero", "mixed_resume", "mixed_use_google_flow", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
         before.pop(key, None)
         after.pop(key, None)
     if before != after:
@@ -364,7 +370,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
                 "video_terms": params.video_terms,
                 "custom_audio_file": chapter_audio,
             })
-            if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"}:
+            if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
                 from app.services import mixed_materials
 
                 spent_elsewhere = sum(
@@ -413,7 +419,7 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
               "warnings": [dict(warning, chapter_index=index + 1)
                            for index, chapter in enumerate(chapters)
                            for warning in chapter.get("warnings", [])] or None}
-    if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"}:
+    if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
         from app.services import mixed_materials
 
         result["mixed_image_requests"] = sum(

@@ -111,6 +111,7 @@ def test_grouped_video_source_keeps_groups_and_accessible_label_binding():
             "AI Video",
             "AI Image",
             "Local Files",
+            "Mixed mode",
         ]
         assert [
             option["value"] for group in data["groups"] for option in group["options"]
@@ -126,9 +127,12 @@ def test_grouped_video_source_keeps_groups_and_accessible_label_binding():
             "jalapeno",
             "wavespeed",
             "muapi",
-            "openai_image",
-            "codex_image",
+            "deepinfra_image",
+            "google_flow",
+            "grok_image",
+            "ai33_image",
             "local",
+            "mixed",
         ]
 
         # AppTest 当前不会暴露 Components v2 的内部 DOM，因此同时校验组件声明
@@ -184,3 +188,11 @@ def test_stock_concurrency_only_appears_for_stock_sources():
                 if item.key.startswith("clip_rendering_concurrency_select_")
             ).value == 2
             assert config.app["material_concurrency"] == 4
+
+
+def test_deepinfra_source_is_selectable_without_sending_generation():
+    harness = _GroupedSelectHarness()
+    with _running_app(harness, saved_video_source='deepinfra_image') as app:
+        assert app.session_state['video_source_select_en'] == 'deepinfra_image'
+        assert any('DeepInfra' in item.value for item in app.info)
+        assert app.number_input(key='ai33_only_image_limit').value == 12

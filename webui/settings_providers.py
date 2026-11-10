@@ -103,6 +103,8 @@ def configured_material_providers(settings, groups, codex_connected=False):
             enabled["google_flow"] = True
         except ValueError:
             pass
+    from app.services import deepinfra_image
+    enabled["deepinfra_image"] = bool(deepinfra_image.api_key(settings))
     from app.services import grok_image
     enabled["grok_image"] = grok_image.is_enabled(settings)
     enabled.update(

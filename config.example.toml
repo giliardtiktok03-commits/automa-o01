@@ -27,6 +27,9 @@ log_requests = false
 # Synthetic images: AI33.Pro only. Configure these in Material Sources > AI Image.
 # Do not commit config.toml or copy its credentials into projects.
 # Imagens Grok via SDK oficial xAI; chave separada do ChatGPT.
+deepinfra_api_key = ""
+deepinfra_steps = 1
+deepinfra_timeout_seconds = 180
 grok_image_api_key = ""
 grok_image_model = "grok-imagine-image"
 grok_image_timeout_seconds = 600

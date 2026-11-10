@@ -392,7 +392,7 @@ def test_coverr_is_rotated_alongside_pexels_and_pixabay(setup, monkeypatch):
     assert [s["provenance"]["provider"] for s in scenes] == ["pexels", "pixabay", "coverr"]
     images.assert_not_called()
     assert mixed.sm.state.get_task("job")["mixed_source_counts"] == {
-        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0, "runware_image": 0, "grok_image": 0, "google_flow": 0}
+        "pexels": 1, "pixabay": 1, "coverr": 1, "openai_image": 0, "ai33_image": 0, "runware_image": 0, "grok_image": 0, "google_flow": 0, "deepinfra_image": 0}
 
 
 def test_coverr_can_be_the_only_configured_bank(setup, monkeypatch):
@@ -900,3 +900,29 @@ def test_flow_waits_then_imports_and_resumes_without_paid_fallback(setup,monkeyp
     model.assert_called_once()
     images.assert_not_called()
     grok.assert_not_called()
+
+
+def test_deepinfra_keeps_stock_first_and_audits_image_budget(setup, monkeypatch):
+    folder, subtitles, params, _, search, _, _ = setup
+    params.mixed_use_deepinfra = True
+    params.mixed_select_sources = True
+    mixed.config.app['deepinfra_api_key'] = 'test-key'
+    search.side_effect = lambda *args, **kwargs: []
+    def generate(params,prompt,directory,*,before_submit=None,**kwargs):
+        assert search.called
+        before_submit()
+        Path(directory).mkdir(parents=True,exist_ok=True)
+        image=Path(directory)/'image.png'
+        image.write_bytes(('deepinfra-test:'+prompt).encode())
+        return image, {'model':'stabilityai/sdxl-turbo'}
+    provider=Mock(side_effect=generate)
+    monkeypatch.setattr(mixed.deepinfra_image,'generate',provider)
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    manifest=json.loads((folder/'mixed-scenes.json').read_text())
+    assert manifest['signature']['image_provider']=='deepinfra'
+    assert provider.called and manifest['image_requests']==provider.call_count
+    assert any(scene.get('image_provider')=='deepinfra_image' for scene in manifest['scenes'])
+    # Completed scenes are reused without another provider request.
+    count=provider.call_count
+    mixed.prepare('job',params,SCRIPT,30,str(subtitles))
+    assert provider.call_count==count

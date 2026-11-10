@@ -46,7 +46,7 @@ def load(task_id, limit, *, grok_unlimited=None):
     ):
         raise ValueError("Invalid scene checkpoint")
     params = VideoParams.model_validate(saved["params"])
-    if params.video_source not in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image"} or params.long_form or params.mixed_is_chapter:
+    if params.video_source not in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"} or params.long_form or params.mixed_is_chapter:
         raise ValueError(
             "This resume action requires a single-video mixed project; use chapter resume for long-form projects"
         )
@@ -57,8 +57,8 @@ def load(task_id, limit, *, grok_unlimited=None):
     if grok_unlimited is not None:
         params.mixed_grok_unlimited = bool(grok_unlimited)
     from app.config import config
-    uses_unlimited_grok = (params.mixed_grok_unlimited and params.video_source != "ai33_image"
-                          and bool(config.ui.get("mixed_use_grok", True))) or params.video_source == "google_flow" or bool(config.ui.get("mixed_use_google_flow", False))
+    uses_unlimited_grok = (params.mixed_grok_unlimited and params.video_source not in {"ai33_image", "deepinfra_image"} and not bool(config.ui.get("mixed_use_deepinfra", False))
+                          and bool(config.ui.get("mixed_use_grok", True))) or params.video_source == "google_flow" or (bool(config.ui.get("mixed_use_google_flow", False)) and not bool(config.ui.get("mixed_use_deepinfra", False)) and params.video_source != "deepinfra_image")
 
     if not uses_unlimited_grok and limit < manifest["image_requests"]:
         raise ValueError("New total limit cannot be below requests already started")
@@ -156,11 +156,14 @@ def run(task_id, limit, *, grok_unlimited=None, subtitle_settings=None):
                 raise ValueError("O projeto não tem SRT salvo; desative legendas ou gere a transcrição antes de retomar")
         # Current source preferences affect only new images; paid jobs keep their provider.
         from app.config import config
-        params.mixed_use_google_flow = params.video_source == "google_flow" or bool(config.ui.get("mixed_use_google_flow", False))
+        params.mixed_use_google_flow = params.video_source == "google_flow" or (bool(config.ui.get("mixed_use_google_flow", False)) and not bool(config.ui.get("mixed_use_deepinfra", False)) and params.video_source != "deepinfra_image")
+        params.mixed_use_deepinfra = params.video_source == "deepinfra_image" or (params.video_source == "mixed" and bool(config.ui.get("mixed_use_deepinfra", False)))
         params.mixed_use_runware = False
         params.mixed_use_grok = bool(config.ui.get("mixed_use_grok", True))
         params.mixed_use_ai33 = bool(config.ui.get("mixed_use_ai33", False)) if config.ui.get("image_source_policy") == "grok-v1" else False
-        if params.video_source == "ai33_image":
+        if params.video_source == "deepinfra_image":
+            params.mixed_use_google_flow = params.mixed_use_grok = params.mixed_use_ai33 = False
+        elif params.video_source == "ai33_image":
             params.mixed_use_runware = False
             params.mixed_use_grok = False
             params.mixed_use_ai33 = True

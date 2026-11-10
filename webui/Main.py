@@ -145,7 +145,7 @@ VIDEO_SOURCE_GROUPS = {
         "wavespeed",
         "muapi",
     ),
-    "ai_image": ("google_flow", "grok_image", "ai33_image",),
+    "ai_image": ("deepinfra_image", "google_flow", "grok_image", "ai33_image",),
     "local": ("local",),
 }
 # Upload-Post 的 API Key 与发布用户分别在两个页面管理，并且发布用户名称
@@ -1579,9 +1579,9 @@ def _apply_restored_params(params):
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
     st.session_state["channel_skills_enabled"] = params.get("skills_enabled", False)
     st.session_state["channel_skill_ids"] = list(params.get("skill_ids", []))
-    for source in ("pexels", "pixabay", "coverr", "grok", "google_flow", "ai33"):
+    for source in ("pexels", "pixabay", "coverr", "deepinfra", "grok", "google_flow", "ai33"):
         key = "mixed_use_" + source
-        st.session_state[key] = params.get(key, source != "google_flow") if source not in {"ai33", "grok"} else source == "grok"
+        st.session_state[key] = params.get(key, source not in {"google_flow", "deepinfra"}) if source not in {"ai33", "grok"} else source == "grok"
     _set_stable_widget_value("mixed_image_provider", params.get("mixed_image_provider", "grok"))
     st.session_state["flow_require_zero"] = params.get("flow_require_zero", True)
     st.session_state["flow_profile"] = params.get("flow_profile", "principal")
@@ -2130,7 +2130,7 @@ def _render_generation_activity(task):
     if phase == "downloading" and activity.get("downloaded_bytes"):
         downloaded = activity["downloaded_bytes"] / (1024 * 1024)
         st.caption(tr("Generation Downloaded").format(size=f"{downloaded:.1f}"))
-    if activity.get("provider") in {"ai33_image", "grok_image"} and isinstance(activity.get("remote_progress"), (int, float)):
+    if activity.get("provider") in {"ai33_image", "grok_image", "deepinfra_image"} and isinstance(activity.get("remote_progress"), (int, float)):
         st.caption(tr("Generation Remote Progress").format(progress=activity["remote_progress"]))
     if activity.get("remote_id"):
         st.caption(tr("Generation Remote Task").format(task_id=activity["remote_id"]))
@@ -2158,7 +2158,9 @@ def _render_generation_task_snapshot(task_id, task):
     if isinstance(task.get("mixed_source_counts"), Mapping):
         counts = task["mixed_source_counts"]
         display_counts = {name: counts.get(name, 0) for name in ("pexels", "pixabay", "coverr", "openai_image")}
-        display_counts["openai_image"] += counts.get("google_flow", 0) + counts.get("ai33_image", 0) + counts.get("grok_image", 0) + counts.get("runware_image", 0)
+        display_counts["openai_image"] += counts.get("deepinfra_image", 0) + counts.get("google_flow", 0) + counts.get("ai33_image", 0) + counts.get("grok_image", 0) + counts.get("runware_image", 0)
+        if counts.get("deepinfra_image"):
+            st.caption(f"Imagens DeepInfra utilizadas: {counts['deepinfra_image']}")
         if counts.get("grok_image"):
             st.caption(f"Imagens Grok utilizadas: {counts['grok_image']}")
         st.caption(tr("Mixed Source Counts").format(**display_counts))
@@ -3478,6 +3480,7 @@ def _material_provider_labels():
         "jalapeno": tr("Jalapeno Cloud AI Video"),
         "wavespeed": tr("WaveSpeed AI Video"),
         "muapi": tr("MuAPI AI Video"),
+        "deepinfra_image": "DeepInfra · SDXL Turbo",
         "google_flow": "Google Flow · Imagens no navegador",
         "grok_image": "Grok · Imagens IA",
         "ai33_image": "AI33.Pro · Imagens IA",
@@ -4177,6 +4180,9 @@ def _render_material_provider_settings(provider):
     elif provider == "google_flow":
         from webui.google_flow_settings import render
         render(app_settings, _set_runtime_config)
+    elif provider == "deepinfra_image":
+        from webui.deepinfra_settings import render
+        render(config.snapshot_config_with_pending(config.app), _set_runtime_config)
     elif provider == "grok_image":
         from webui.grok_settings import render
         render(app_settings, _set_runtime_config)
@@ -6170,8 +6176,9 @@ def _render_video_settings(panel, params):
                 "metaso_minimax": tr("Metaso MiniMax H3"),
                 "muapi": tr("MuAPI AI Video"),
                 "loomloom": tr("Shengsuan Cloud AI Video"),
+                "deepinfra_image": "DeepInfra · SDXL Turbo",
                 "google_flow": "Google Flow · Imagens no navegador",
-        "grok_image": "Grok · Imagens IA",
+                "grok_image": "Grok · Imagens IA",
                 "ai33_image": "AI33.Pro · Imagens IA",
                 "codex_image": tr("codex.image.label"),
                 "local": tr("Local file"),
@@ -6202,22 +6209,24 @@ def _render_video_settings(panel, params):
                 st.info(tr("Mixed Materials Help"))
                 params.mixed_select_sources = True
                 st.write(tr("Mixed Sources"))
-                for source in ("pexels", "pixabay", "coverr", "grok", "google_flow", "ai33"):
+                for source in ("pexels", "pixabay", "coverr", "deepinfra", "grok", "google_flow", "ai33"):
                     key = "mixed_use_" + source
-                    labels = {"pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "grok": "Grok · Imagens IA", "google_flow": "Google Flow · Imagens no navegador", "ai33": "AI33.Pro · Imagens IA (opcional)"}
+                    labels = {"deepinfra": "DeepInfra · SDXL Turbo", "pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "grok": "Grok · Imagens IA", "google_flow": "Google Flow · Imagens no navegador", "ai33": "AI33.Pro · Imagens IA (opcional)"}
                     if config.ui.get("image_source_policy") != "grok-v1" and source == "grok":
                         st.session_state[key] = True
                         _set_runtime_config("ui", key, True)
                     if config.ui.get("image_source_policy") != "grok-v1" and source == "ai33":
                         st.session_state[key] = False
                         _set_runtime_config("ui", key, False)
-                    value = st.checkbox(labels[source], value=config.ui.get(key, source not in {"ai33", "google_flow"}), key=key)
+                    value = st.checkbox(labels[source], value=config.ui.get(key, source not in {"ai33", "google_flow", "deepinfra"}), key=key)
                     setattr(params, key, value)
                     _set_runtime_config("ui", key, value)
-                if params.mixed_use_google_flow:
+                if params.mixed_use_deepinfra:
+                    st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois SDXL Turbo. Respeita o limite de imagens abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
+                elif params.mixed_use_google_flow:
                     st.info("Flow selecionado: bancos primeiro; envia os prompts ao Chrome conforme o modo configurado. Grok/AI33 não são acionados automaticamente em falhas. Configure e teste uma imagem em Fontes de material → Google Flow.")
                 _set_runtime_config("ui", "image_source_policy", "grok-v1")
-                st.caption("Prioriza Pexels, Pixabay e Coverr. Grok gera quando faltar material adequado. AI33 fica desmarcada por padrão; se ambas forem ativadas, Grok tem prioridade. Não troca de gerador automaticamente em falhas.")
+                st.caption("Prioriza Pexels, Pixabay e Coverr. O gerador selecionado produz imagens quando faltar material adequado. Prioridade entre geradores marcados: DeepInfra, Flow, Grok, AI33. DeepInfra e AI33 ficam desmarcadas por padrão. Não troca de gerador automaticamente em falhas.")
                 params.mixed_variable_pacing = st.checkbox(
                     tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
                 st.caption(tr("Mixed Pacing Help"))
@@ -6232,12 +6241,12 @@ def _render_video_settings(panel, params):
                         step=1, key="mixed_max_candidates")
                 params.mixed_grok_unlimited = st.checkbox(
                     "Grok sem limite de imagens", value=config.ui.get("mixed_grok_unlimited", True),
-                    key="mixed_grok_unlimited", disabled=not params.mixed_use_grok)
+                    key="mixed_grok_unlimited", disabled=not params.mixed_use_grok or params.mixed_use_deepinfra)
                 _set_runtime_config("ui", "mixed_grok_unlimited", params.mixed_grok_unlimited)
-                if params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_google_flow:
+                if params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_google_flow and not params.mixed_use_deepinfra:
                     st.caption("Consulta Pexels, Pixabay e Coverr antes. Sem material aprovado, gera pelo Grok até concluir as cenas faltantes, sem limite de quantidade. Cada nova imagem pode consumir saldo xAI; pedidos já enviados não são repetidos automaticamente.")
                 params.mixed_max_images = st.number_input(
-                    tr("Mixed Image Limit"), disabled=params.mixed_use_grok and params.mixed_grok_unlimited, min_value=0, max_value=120,
+                    tr("Mixed Image Limit"), disabled=params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_deepinfra, min_value=0, max_value=120,
                     value=12, step=1, key="mixed_max_images",
                 )
                 params.mixed_scene_duration = st.slider(
@@ -6252,8 +6261,8 @@ def _render_video_settings(panel, params):
                 params.mixed_use_grok = params.mixed_use_ai33 = False
                 st.info("Flow: geração por navegador Chrome visível, com login inicial manual. Configure o perfil e o projeto em Fontes de material → Google Flow. Teste uma imagem antes de iniciar vídeos longos.")
                 params.image_motion = ImageMotion.static
-            if params.video_source in {"ai33_image", "grok_image"}:
-                provider_name = "Grok" if params.video_source == "grok_image" else "AI33.Pro"
+            if params.video_source in {"ai33_image", "grok_image", "deepinfra_image"}:
+                provider_name = "DeepInfra" if params.video_source == "deepinfra_image" else "Grok" if params.video_source == "grok_image" else "AI33.Pro"
                 st.info(f"Todas as cenas usarão imagens {provider_name}. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
                 if params.video_source == "grok_image":
                     params.mixed_grok_unlimited = st.checkbox("Grok sem limite de imagens", value=True, key="grok_only_unlimited")
@@ -6307,7 +6316,7 @@ def _render_video_settings(panel, params):
             # 文案顺序匹配会从关键词生成到最终合成全程保持叙事顺序，因此开启时
             # 顺序拼接是唯一符合实际执行逻辑的选项。同步控件值可避免界面仍显示
             # “随机拼接”，同时保留用户原选择，关闭后自动恢复。
-            if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image"}:
+            if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"}:
                 st.session_state.setdefault("mixed_previous_match", st.session_state.get("match_materials_to_script", False))
                 st.session_state["match_materials_to_script"] = True
             elif "mixed_previous_match" in st.session_state:
@@ -6333,7 +6342,7 @@ def _render_video_settings(panel, params):
                 tr("Match Materials to Script Order"),
                 help=tr("Match Materials to Script Order Help"),
                 key="match_materials_to_script",
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image"},
+                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
                 on_change=sync_script_order_concat_mode,
             )
             _set_runtime_config(
@@ -6368,7 +6377,7 @@ def _render_video_settings(panel, params):
                     VideoTransitionMode.none.value,
                 ),
                 key="video_transition_mode_select",
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image"},
+                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
                 format_func=lambda value: dict(
                     (v, label) for label, v in video_transition_modes
                 )[value],
@@ -6440,7 +6449,7 @@ def _render_video_settings(panel, params):
                 "ui", "video_fit_mode", params.video_fit_mode.value
             )
 
-            if params.video_source in {"local", "google_flow", "ai33_image", "grok_image", "mixed"}:
+            if params.video_source in {"local", "google_flow", "ai33_image", "grok_image", "mixed", "deepinfra_image"}:
                 image_motion_labels = {
                     ImageMotion.static.value: tr("Static Image"),
                     ImageMotion.zoom.value: tr("Slow Zoom"),
@@ -6494,7 +6503,7 @@ def _render_video_settings(panel, params):
                     else 3,
                 ),
                 key="video_clip_duration_select",
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image"},
+                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
                 help=tr("Clip Duration Help"),
             )
             _set_runtime_config(
@@ -6517,7 +6526,7 @@ def _render_video_settings(panel, params):
                 step=0.05,
                 format="%.2fx",
                 key=clip_speed_key,
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image"},
+                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
                 help=tr("Clip Speed Help"),
             )
             _set_runtime_config("ui", "video_clip_speed", params.video_clip_speed)
@@ -9256,7 +9265,8 @@ def _render_mixed_resume():
     with st.expander(tr("Mixed Resume Project")):
         st.caption(tr("Mixed Resume Help"))
         resume_id = st.text_input(tr("Mixed Resume ID"), key="mixed_resume_id").strip()
-        grok_selected = bool(config.snapshot_config_with_pending(config.ui).get("mixed_use_grok", True))
+        resume_sources = config.snapshot_config_with_pending(config.ui)
+        grok_selected = bool(resume_sources.get("mixed_use_grok", True)) and not bool(resume_sources.get("mixed_use_deepinfra", False))
         unlimited = st.checkbox("Grok sem limite de imagens nesta retomada", value=True,
                                 key="mixed_resume_grok_unlimited", disabled=not grok_selected) and grok_selected
         st.caption("Quando Grok estiver selecionado, completa as cenas sem teto de quantidade; novas imagens podem consumir saldo. Materiais salvos são reaproveitados.")
@@ -9418,15 +9428,16 @@ def _render_generation_controls(
             "metaso_minimax",
             "muapi",
             "loomloom",
-            "google_flow", "grok_image", "ai33_image",
+            "google_flow", "grok_image", "ai33_image", "deepinfra_image",
             "local",
         ]:
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
             st.stop()
 
-        if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image"}:
+        if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"}:
             if params.video_source != "mixed":
+                params.mixed_use_deepinfra = params.video_source == "deepinfra_image"
                 params.mixed_use_google_flow = params.video_source == "google_flow"
                 params.mixed_use_ai33 = params.video_source == "ai33_image"
                 params.mixed_use_grok = params.video_source == "grok_image"
