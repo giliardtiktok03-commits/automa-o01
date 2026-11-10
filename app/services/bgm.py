@@ -11,9 +11,8 @@ from loguru import logger
 from app.utils import file_security, utils
 
 
-# Streamlit 默认允许较大的上传文件，但背景音乐通常只有几 MB。这里设置明确的
-# 服务端上限，避免 API 或 WebUI 把超大文件完整写入磁盘，影响同一进程中的视频任务。
-MAX_BGM_UPLOAD_BYTES = 30 * 1024 * 1024
+# Shared UI/server limit; streaming copies still use bounded 1 MiB chunks.
+MAX_BGM_UPLOAD_BYTES = 200 * 1024 * 1024
 _COPY_CHUNK_BYTES = 1024 * 1024
 _INTERNAL_UPLOAD_PREFIX = ".bgm-upload-"
 _WINDOWS_INVALID_FILENAME_CHARS = frozenset('<>:"|?*')
@@ -252,7 +251,7 @@ def _stage_bgm_upload(filename: str, source: BinaryIO) -> tuple[str, str, int]:
                     raise BgmUploadError("background music upload must be binary")
                 total_bytes += len(chunk)
                 if total_bytes > MAX_BGM_UPLOAD_BYTES:
-                    raise BgmUploadError("background music file exceeds the 30 MB limit")
+                    raise BgmUploadError(f"background music file exceeds the {MAX_BGM_UPLOAD_BYTES // (1024 * 1024)} MB limit")
                 output.write(chunk)
             output.flush()
             os.fsync(output.fileno())
@@ -414,3 +413,36 @@ def resolve_bgm_file(unsafe_path: str) -> str:
             except ValueError as exc:
                 last_error = exc
     raise ValueError(str(last_error)) from last_error
+
+
+def save_bgm_playlist(uploads) -> str:
+    """Save validated tracks and concatenate their decoded audio in the selected order."""
+    import json
+    uploads = list(uploads)
+    if not 1 <= len(uploads) <= 20:
+        raise BgmUploadError('Selecione entre 1 e 20 músicas para a playlist')
+    tracks = [save_bgm_upload(upload.name, upload) for upload in uploads]
+    folder = Path(uploaded_bgm_dir())
+    identifier = uuid4().hex
+    name = f'playlist-{identifier}.mp3'
+    staged = folder / f'.bgm-upload-playlist-{identifier}.mp3'
+    output = folder / name
+    filters = []
+    command = [utils.get_ffmpeg_binary(), '-nostdin', '-hide_banner', '-loglevel', 'error', '-y']
+    for index, track in enumerate(tracks):
+        command += ['-i', resolve_bgm_file(track)]
+        filters.append(f'[{index}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a{index}]')
+    filters.append(''.join(f'[a{i}]' for i in range(len(tracks))) + f'concat=n={len(tracks)}:v=0:a=1[out]')
+    command += ['-filter_complex', ';'.join(filters), '-map', '[out]', '-c:a', 'libmp3lame', '-b:a', '192k', str(staged)]
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=900, check=False)
+        if result.returncode != 0 or not staged.is_file() or not staged.stat().st_size:
+            raise BgmServiceError('Não foi possível montar a playlist de música de fundo')
+        os.replace(staged, output)
+        from app.utils.atomic_files import write_bytes_atomic
+        write_bytes_atomic(folder / (name + '.json'), json.dumps({'version':1,'file':name,'tracks':[{'stored_name':track,'original_name':sanitize_upload_filename(upload.name)} for track,upload in zip(tracks,uploads)]},ensure_ascii=False,indent=2).encode())
+        return name
+    except (OSError, subprocess.TimeoutExpired):
+        raise BgmServiceError('Falha ao montar playlist; arquivos enviados foram preservados') from None
+    finally:
+        _remove_staged_file(str(staged))

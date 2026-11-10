@@ -6255,6 +6255,7 @@ def _render_video_settings(panel, params):
                 params.mixed_variable_pacing = st.checkbox(
                     tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
                 st.caption(tr("Mixed Pacing Help"))
+                st.caption("Vídeos longos: planejamento automático em lotes, até 720 cortes. O limite de imagens IA configurado continua valendo.")
                 params.mixed_visual_validation = st.checkbox(
                     tr("Mixed Visual Validation"), value=True, key="mixed_visual_validation")
                 st.caption(tr("Mixed Vision Help"))
@@ -7902,7 +7903,12 @@ def _render_background_music_settings(params, elevenlabs_api_key_rendered=False)
     _set_runtime_config("ui", "bgm_volume", params.bgm_volume)
     bgm_enabled = bgm_service.should_use_bgm(params.bgm_type, params.bgm_volume)
 
+    st.session_state['bgm_playlist_missing'] = False
     if params.bgm_type == "custom":
+        playlist_enabled = st.checkbox('Usar playlist de músicas de fundo', value=False, key='bgm_playlist_enabled')
+        if playlist_enabled:
+            from webui.bgm_playlist import render as render_bgm_playlist
+            return render_bgm_playlist(params, bgm_enabled)
         uploaded_bgm_file = st.file_uploader(
             tr("Upload Background Music"),
             type=[
@@ -7913,7 +7919,7 @@ def _render_background_music_settings(params, elevenlabs_api_key_rendered=False)
             key="custom_bgm_uploader",
             help=tr("Upload Background Music Help"),
             # Streamlit 默认会在控件上展示全局 200MB 上限。这里必须与服务层
-            # 30MB 硬限制保持一致，避免界面允许选择、提交时才被服务端拒绝。
+            # 200MB 硬限制保持一致，避免界面允许选择、提交时才被服务端拒绝。
             max_upload_size=bgm_service.MAX_BGM_UPLOAD_BYTES // (1024 * 1024),
         )
         if uploaded_bgm_file is not None and bgm_enabled:
@@ -9307,6 +9313,8 @@ def _render_mixed_resume():
                 project = mixed_resume.load(resume_id, limit, grok_unlimited=unlimited)
                 st.info(tr("Mixed Resume Summary").format(ready=project['ready'], total=project['total'],
                                                          started=project['started'], limit='sem limite (Grok)' if unlimited and project['params'].video_source != 'ai33_image' else limit))
+                if project.get("planning_required"):
+                    st.info("O plano visual ainda não foi criado. A retomada usará o áudio salvo e planejará os cortes em lotes, sem gerar a narração novamente.")
                 if resume:
                     if apply_style:
                         from app.services.subtitle_style import FIELDS
@@ -9704,13 +9712,19 @@ def _render_generation_controls(
             st.error(tr("Task Restore Custom Audio Warning"))
             st.stop()
 
+        if st.session_state.get('bgm_playlist_missing') and bgm_service.should_use_bgm(params.bgm_type,params.bgm_volume):
+            _remove_active_generation_task(task_id)
+            st.error('Adicione músicas válidas à playlist antes de gerar o vídeo.')
+            st.stop()
         if uploaded_bgm_file and bgm_service.should_use_bgm(
             params.bgm_type, params.bgm_volume
         ):
             try:
-                saved_bgm_name = bgm_service.save_bgm_upload(
-                    uploaded_bgm_file.name, uploaded_bgm_file
-                )
+                if isinstance(uploaded_bgm_file, list):
+                    with st.spinner('Preparando playlist de música de fundo…'):
+                        saved_bgm_name = bgm_service.save_bgm_playlist(uploaded_bgm_file)
+                else:
+                    saved_bgm_name = bgm_service.save_bgm_upload(uploaded_bgm_file.name, uploaded_bgm_file)
             except bgm_service.BgmUploadError as exc:
                 _remove_active_generation_task(task_id)
                 logger.warning(f"WebUI background music upload rejected: {str(exc)}")

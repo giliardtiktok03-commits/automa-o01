@@ -103,3 +103,28 @@ def test_resume_applies_explicit_subtitle_style_without_regenerating_audio(saved
     assert result['videos']
     tts.assert_not_called()
     requests.assert_not_called()
+
+
+def test_failure_before_visual_manifest_can_resume_without_audio_regeneration(saved_project,monkeypatch):
+    directory,_,requests=saved_project
+    (directory/'mixed-scenes.json').unlink()
+    model=Mock();monkeypatch.setattr(resume.mixed_materials.llm,'_generate_response',model)
+    project=resume.load(ID,24,grok_unlimited=False)
+    assert project['planning_required'] and project['total']==0 and project['started']==0
+    model.assert_not_called()  # Previewing resume is read-only.
+    prepare=Mock(return_value=['scene.mp4']);monkeypatch.setattr(resume.mixed_materials,'prepare',prepare)
+    monkeypatch.setattr(task,'generate_final_videos',lambda *a:(['final.mp4'],[],[]))
+    monkeypatch.setattr(resume.mixed_materials,'image_requests',lambda *_:0)
+    audio=Mock();monkeypatch.setattr(task,'generate_audio',audio)
+    result=resume.run(ID,24,grok_unlimited=False)
+    assert result.get('videos')==['final.mp4']
+    assert prepare.call_args.args[2]=='Original script.'
+    assert result['audio_file'].endswith('custom-audio.mp3')
+    audio.assert_not_called();requests.assert_not_called()
+
+
+def test_missing_manifest_with_orphan_materials_cannot_resubmit(saved_project):
+    directory,_,_=saved_project
+    (directory/'mixed-scenes.json').unlink()
+    (directory/'mixed').mkdir();(directory/'mixed/image.png').write_bytes(b'existing paid image')
+    with pytest.raises(ValueError,match='Materiais existentes sem manifesto'):resume.load(ID,24)

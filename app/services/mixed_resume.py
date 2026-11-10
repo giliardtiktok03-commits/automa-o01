@@ -35,13 +35,18 @@ def load(task_id, limit, *, grok_unlimited=None):
             "This project already has a final video; open its result instead of resuming"
         )
     script_file = _local(directory, "script.json")
-    manifest_file = _local(directory, "mixed-scenes.json")
+    manifest_file = directory / "mixed-scenes.json"
+    missing_plan = not manifest_file.exists()
+    if manifest_file.is_symlink():
+        raise ValueError("Invalid scene checkpoint path")
+    if missing_plan and (directory / "mixed").exists() and any((directory / "mixed").iterdir()):
+        raise ValueError("Materiais existentes sem manifesto; revise antes de retomar para evitar solicitações duplicadas")
     saved = json.loads(script_file.read_text(encoding="utf-8"))
-    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest = {"image_requests": 0, "scenes": []} if missing_plan else json.loads(_local(directory,"mixed-scenes.json").read_text(encoding="utf-8"))
     scenes = manifest.get("scenes", [])
-    if (
+    if not missing_plan and (
         not scenes
-        or len(scenes) > 180
+        or len(scenes) > mixed_materials.MAX_SHOTS
         or [s.get("id") for s in scenes] != list(range(1, len(scenes) + 1))
     ):
         raise ValueError("Invalid scene checkpoint")
@@ -99,7 +104,7 @@ def load(task_id, limit, *, grok_unlimited=None):
                     "A previously generated image changed; review project before resuming"
                 )
         elif scene.get("image_request_started") and not scene.get("image_refused"):
-            provider = "google_flow" if scene.get("google_flow_job") else "grok" if scene.get("grok_job") else "runware" if scene.get("runware_job") else "ai33"
+            provider = "deepinfra" if scene.get("deepinfra_job") else "google_flow" if scene.get("google_flow_job") else "grok" if scene.get("grok_job") else "runware" if scene.get("runware_job") else "ai33"
             ledger = directory / "mixed" / f"{provider}-{scene['id']:03d}" / ("flow-image.json" if provider == "google_flow" else provider + "-image.json")
             if not scene.get(provider + "_job") or not ledger.is_file():
                 raise ValueError("A previous image request has an unknown result; review it before resuming, no automatic resubmission")
@@ -125,6 +130,7 @@ def load(task_id, limit, *, grok_unlimited=None):
         total=len(manifest["scenes"]),
         started=manifest["image_requests"],
         media=media,
+        planning_required=missing_plan,
     )
 
 
@@ -143,7 +149,8 @@ def run(task_id, limit, *, grok_unlimited=None, subtitle_settings=None):
         )
         backup.mkdir(parents=True)
         for name in ("script.json", "mixed-scenes.json"):
-            shutil.copy2(_local(directory, name), backup / name)
+            if (directory / name).is_file():
+                shutil.copy2(_local(directory, name), backup / name)
         task_artifacts._write_json_atomic(
             directory / "resume-media.json", project["media"]
         )

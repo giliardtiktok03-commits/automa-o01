@@ -384,6 +384,8 @@ def _run_locked(task_id, params, directory, render_chapter, references, audio_fi
                 "video_terms": params.video_terms,
                 "custom_audio_file": chapter_audio,
             })
+            if Path(params.bgm_file or '').name.startswith('playlist-'):
+                child_params.mixed_timeline_offset = duration
             if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "runware_image", "deepinfra_image"}:
                 from app.services import mixed_materials
 

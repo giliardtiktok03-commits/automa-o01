@@ -405,7 +405,7 @@ def get_bgm_list(request: Request):
     summary="Upload a background music file",
     description=(
         "Validate an MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, or WMA file up to "
-        "30 MB and store it under an immutable UUID filename in storage/bgm."
+        "200 MB and store it under an immutable UUID filename in storage/bgm."
     ),
     responses={
         400: {"description": "The filename, format, size, or audio stream is invalid"},

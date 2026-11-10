@@ -1952,12 +1952,16 @@ def generate_video(
                 # 服务内解析的随机/自定义音乐可能比成片短，需要循环铺满；任务层
                 # 通过 override 传入的文件表示提供商已经完成时长适配。这里依据
                 # 文件来源决定是否循环，避免今后每增加一个提供商都修改名称白名单。
+                playlist_offset = max(0.0, float(params.mixed_timeline_offset or 0)) if os.path.basename(bgm_file).startswith('playlist-') else 0.0
                 if bgm_file_override is None:
-                    bgm_effects.append(afx.AudioLoop(duration=video_clip.duration))
+                    bgm_effects.append(afx.AudioLoop(duration=video_clip.duration + playlist_offset))
                 # Fade the complete playback timeline, not each source loop.
                 bgm_effects.append(afx.AudioFadeOut(3))
                 bgm_source_clip = clip_stack.enter_context(AudioFileClip(bgm_file))
-                bgm_clip = bgm_source_clip.with_effects(bgm_effects)
+                if playlist_offset and bgm_file_override is None:
+                    bgm_clip = bgm_source_clip.with_effects([afx.AudioLoop(duration=video_clip.duration + playlist_offset)]).subclipped(playlist_offset, playlist_offset + video_clip.duration).with_effects([afx.MultiplyVolume(params.bgm_volume), afx.AudioFadeOut(3)])
+                else:
+                    bgm_clip = bgm_source_clip.with_effects(bgm_effects)
                 audio_clip = CompositeAudioClip([audio_clip, bgm_clip])
             except Exception:
                 bgm_mix_succeeded = False

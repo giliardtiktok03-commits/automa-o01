@@ -16,9 +16,9 @@ def wav_bytes():
     return stream.getvalue()
 
 
-def test_upload_limit_is_500_mib_and_bgm_keeps_30_mib():
+def test_upload_limits_are_500_mib_narration_and_200_mib_bgm():
     assert narration.MAX_NARRATION_UPLOAD_BYTES == 500 * 1024 * 1024
-    assert bgm.MAX_BGM_UPLOAD_BYTES == 30 * 1024 * 1024
+    assert bgm.MAX_BGM_UPLOAD_BYTES == 200 * 1024 * 1024
 
 
 def test_metadata_over_limit_is_rejected_before_reading(tmp_path):
@@ -110,10 +110,9 @@ def test_large_real_wav_is_copied_in_chunks_and_fully_decoded(tmp_path):
         assert stream.tell() == 0
     assert file.stat().st_size == original.stat().st_size > 30 * 1024 * 1024
     assert list(destination.iterdir()) == [file]
-    # The same recording must still be rejected as background music.
+    # A recording above the former 30 MB limit is now valid background music.
     with original.open("rb") as stream:
-        with pytest.raises(bgm.BgmUploadError, match="30 MB"):
-            bgm.validate_bgm_upload("large.wav", stream)
+        assert bgm.validate_bgm_upload("large.wav", stream) == "large.wav"
 
 
 def test_nonseekable_source_reports_upload_error(tmp_path):

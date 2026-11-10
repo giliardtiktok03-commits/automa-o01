@@ -1,0 +1,21 @@
+CORTES LONGOS + PLAYLIST + MUSICA ATE 200 MB
+
+Feche o MPT, faça backup e extraia na raiz; reabra webui.bat.
+Preserva storage, config.toml real e .venv; sem novas dependências.
+
+Corrige o limite de 180 cortes: até 720, planejamento em lotes de 30.
+Mantém ritmo 3/5 segundos e depois a duração configurada.
+Retomar projeto salvo — modo misto:
+de689389-75ed-481d-91a8-ce465beb04a1
+A retomada aproveita áudio/SRT salvos mesmo se o plano ainda não existia.
+Não apague a pasta do projeto. Limites de imagens IA configurados são preservados.
+
+Áudio > Fonte da música de fundo > Música de Fundo Personalizada.
+Uploads: até 200 MB por arquivo.
+Marque Usar playlist de músicas de fundo para enviar várias faixas (até 20).
+Escolha a ordem; remover/reselecionar move a faixa para o final.
+A sequência repete quando necessário. Configuração de playlist vale para novas
+produções; projetos retomados preservam a música já registrada neles.
+
+259 testes passaram, 131 subtestes passaram, 1 teste real sem chave foi ignorado.
+Detalhes e arquivos: docs/cortes-longos-playlist-pt.md
