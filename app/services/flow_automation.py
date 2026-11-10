@@ -1,5 +1,6 @@
 """Visible-UI Flow automation. No private endpoints, retries or bypasses."""
 import re
+import json
 import time
 from urllib.parse import urlparse
 
@@ -108,8 +109,70 @@ def _images(page):
         if node.is_visible() and node.evaluate('(el) => el.complete && el.naturalWidth >= 128 && el.naturalHeight >= 128'):
             src = node.get_attribute('src')
             if src:
-                result[src] = node
+                result[src] = page.locator("img[src="+json.dumps(src)+"]").first
     return result
+
+
+def _visible(locator):
+    return [locator.nth(i) for i in range(locator.count()) if locator.nth(i).is_visible()]
+
+
+def _download_control(page, scope, target):
+    pattern=re.compile(r'^(?:download\s+)?(?:Baixar|Download|Fazer download)(?: (?:imagem|image))?$',re.I)
+    for role in ('menuitem','button','link'):
+        nodes=_visible(scope.get_by_role(role,name=pattern))
+        if len(nodes)==1:
+            with page.expect_download(timeout=60000) as event:nodes[0].click(timeout=5000)
+            _save_image(event.value,target)
+            return True
+    return False
+
+
+def _download_result(page,image,target,on_stage=None):
+    def stage(value):
+        if on_stage:on_stage(value)
+    stage('localizando_imagem_gerada')
+    try:
+        image.scroll_into_view_if_needed(timeout=3000)
+        image.hover(timeout=2000)
+    except Exception:
+        pass  # Reacquire through its stable src locator; never resend the prompt.
+    # Preserve direct-download cards, but do not accidentally use an old card's button.
+    legacy=image.locator('xpath=ancestor::*[.//button[contains(@aria-label,"Download") or contains(@aria-label,"Baixar") or .//*[text()="download"]]][1]')
+    if legacy.count() and legacy.locator('img').count()==1:
+        card=_one_visible(legacy,'new image result card')
+        download=_one_visible(card.locator('button[aria-label*="Download"], button[aria-label*="Baixar"], button:has-text("download")'),'result download')
+        stage('baixando_imagem')
+        with page.expect_download(timeout=60000) as event:download.click(timeout=5000)
+        _save_image(event.value,target)
+        return
+    # Current Flow gallery puts Download in the new card's More options menu.
+    scope=image
+    for _ in range(9):
+        scope=scope.locator('xpath=..')
+        more=_visible(scope.get_by_role('button',name=re.compile(r'^(Mais opções|More options)$',re.I)))
+        reuse=_visible(scope.get_by_role('button',name=re.compile(r'^(Reutilizar comando|Reuse prompt|Reuse command)$',re.I)))
+        if len(more)==1 and len(reuse)==1:
+            stage('abrindo_menu_da_imagem')
+            more[0].click(timeout=5000)
+            page.get_by_role('menu').first.wait_for(state='visible',timeout=5000)
+            menus=_visible(page.get_by_role('menu'))
+            if len(menus)!=1:raise FlowError('Menu de download ambíguo; imagem gerada preservada no Flow')
+            stage('baixando_imagem')
+            if _download_control(page,menus[0],target):return
+            raise FlowError('Não encontrei download original no menu da imagem; nenhuma nova geração foi feita')
+    raise FlowError('A imagem foi encontrada, mas seus controles de download não foram confirmados. Recupere a imagem existente, sem gerar outra.')
+
+
+def recover(page,title,target,*,on_stage=None):
+    if not title or len(title)>200:raise FlowError('Informe o título exato da imagem já gerada')
+    if on_stage:on_stage('localizando_imagem_existente')
+    page.wait_for_load_state('domcontentloaded',timeout=60000)
+    _blocked(page)
+    button=_one_visible(page.get_by_role('button',name=title,exact=True),'existing image title')
+    images=_visible(button.locator('img'))
+    if len(images)!=1:raise FlowError('O cartão indicado não contém uma única imagem visível; não houve nova geração')
+    _download_result(page,images[0],target,on_stage=on_stage)
 
 
 def generate(page, prompt, target, timeout=900, require_zero=True, *, aspect="16:9", model_name=MODEL, before_submit=None, on_stage=None):
@@ -166,19 +229,7 @@ def generate(page, prompt, target, timeout=900, require_zero=True, *, aspect="16
             raise FlowError('Multiple new Flow images; cannot correlate result safely. Review project, no retry.')
         if new:
             image = next(iter(new.values()))
-            image.hover(timeout=5000)
-            # Limit download lookup to the nearest result container, never a
-            # page-wide button that could download old material.
-            card = image.locator('xpath=ancestor::*[.//button[contains(@aria-label,"Download") or contains(@aria-label,"Baixar") or .//*[text()="download"]]][1]')
-            if not card.count():
-                page.wait_for_timeout(500)
-                continue
-            card = _one_visible(card, 'new image result card')
-            download = _one_visible(card.locator('button[aria-label*="Download"], button[aria-label*="Baixar"], button:has-text("download")'), 'result download')
-            stage('baixando_imagem')
-            with page.expect_download(timeout=60000) as event:
-                download.click(timeout=5000)
-            _save_image(event.value, target)
+            _download_result(page,image,target,on_stage=on_stage)
             return
         page.wait_for_timeout(500)
     raise FlowError('Flow generation result timed out. Review project before another request.')

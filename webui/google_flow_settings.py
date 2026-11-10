@@ -55,7 +55,28 @@ def render(settings,set_config):
             st.session_state.google_flow_inspection_request=str(inspection)
             st.info('Verificação somente leitura iniciada usando o projeto registrado no último teste deste perfil, quando disponível. Nenhum novo prompt será enviado. Depois clique em Atualizar resultado do teste.')
         except (ValueError,OSError) as exc:st.error(str(exc))
+    recovery_title=st.text_input('Título da imagem já gerada para baixar sem novo prompt',value='Empty cafe on rainy morning',key='google_flow_recovery_title')
+    if st.button('Baixar imagem já gerada — sem gerar outra',disabled=not project,key='google_flow_recover'):
+        try:
+            recovery=flow_browser.start_recovery(profile,project,recovery_title)
+            st.session_state.google_flow_recovery_request=str(recovery)
+            st.info('Recuperação de download iniciada. Nenhum novo prompt será enviado. Depois clique em Atualizar resultado do teste.')
+        except (ValueError,OSError) as exc:st.error(str(exc))
     st.button('Atualizar resultado do teste',key='google_flow_refresh')
+    recovery=st.session_state.get('google_flow_recovery_request')
+    if recovery:
+        recovery=Path(recovery)
+        state_file=recovery.with_suffix('.result.json')
+        if state_file.exists():
+            state=json.loads(state_file.read_text(encoding='utf-8'))
+            if state.get('status')=='recovered':
+                st.success('Imagem existente baixada e validada. Nenhuma nova geração foi solicitada.')
+                st.image(str(recovery.with_suffix('.png')))
+            else:st.warning(str(state.get('error') or 'O download da imagem existente não foi concluído'))
+            diagnostic=recovery.with_suffix('.diagnostic.json')
+            if diagnostic.exists():
+                st.download_button('Baixar diagnóstico da recuperação da imagem',data=diagnostic.read_bytes(),file_name='diagnostico-flow-recuperacao.json',mime='application/json',key='google_flow_recovery_download')
+        else:st.info('Aguardando download da imagem existente, sem nova geração.')
     inspection=st.session_state.get('google_flow_inspection_request')
     if inspection:
         inspection=Path(inspection)

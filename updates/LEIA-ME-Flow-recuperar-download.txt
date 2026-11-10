@@ -1,0 +1,8 @@
+RECUPERAR IMAGEM DO FLOW SEM NOVA GERACAO
+Feche o MPT e a janela Chrome do perfil Flow. Faca backup e extraia este ZIP na raiz do MPT. Abra webui.bat.
+Nas configuracoes Flow, informe o titulo exato da imagem existente (neste teste: Empty cafe on rainy morning).
+Clique em Baixar imagem ja gerada — sem gerar outra. Depois clique em Atualizar resultado do teste.
+A recuperacao usa o projeto registrado no ultimo teste do perfil quando disponivel; nao envia prompt.
+Se falhar, envie diagnostico-flow-recuperacao.json. Nao inicie outro teste de geracao.
+Correcao de reconhecimento por src estavel e download pelo menu Mais opcoes do cartao correspondente.
+Testes usam interface sintetica no Chromium; a interface real do Flow precisa ser validada no computador do usuario.

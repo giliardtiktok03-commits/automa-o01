@@ -222,3 +222,17 @@ def test_read_only_inspection_uses_recorded_project_without_new_generation(tmp_p
     assert 'prompt' not in data
     launcher.assert_called_once()
     assert flow.latest_test('principal')[1]==previous
+
+
+def test_recovery_uses_recorded_project_without_prompt(tmp_path, monkeypatch):
+    monkeypatch.setattr(flow, '_root', lambda: tmp_path)
+    monkeypatch.setattr(flow, 'validate', lambda *_: None)
+    previous = tmp_path / 'tests' / 'previous' / 'flow-request.json'
+    previous.parent.mkdir(parents=True)
+    previous.write_text(json.dumps({'action': 'generate', 'profile': 'principal', 'project': URL, 'prompt': 'private prompt'}))
+    launcher = Mock()
+    monkeypatch.setattr(flow, '_launch', launcher)
+    request = flow.start_recovery('principal', URL, 'Empty cafe on rainy morning')
+    assert json.loads(request.read_text()) == {'action': 'recover', 'profile': 'principal', 'project': URL, 'asset_title': 'Empty cafe on rainy morning'}
+    launcher.assert_called_once()
+    assert flow.latest_test('principal')[1] == previous

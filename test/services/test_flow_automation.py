@@ -21,6 +21,8 @@ class Node:
     def nth(self, _):
         return self
 
+    def scroll_into_view_if_needed(self, **_):pass
+
     def hover(self, **_):
         pass
 
@@ -99,7 +101,7 @@ class Page:
             return Node(self,"settings","Nano Banana 2.1 x1")
         if selector == "body":
             return Node(self, "body", f"A geração vai usar {self.credits} créditos")
-        if selector == "img":
+        if selector == "img" or selector.startswith("img[src="):
             return Node(self, "result", visible=self.submissions > 0)
         if selector == '[role="alert"]':
             return Node(self, "alerts", visible=False)
@@ -189,3 +191,38 @@ card.appendChild(button);document.getElementById('results').appendChild(card);}
             assert page.locator('textarea').input_value()=='Historical documentary test'
             with Image.open(target) as image:assert image.size==(320,180)
         finally:browser.close()
+
+
+def test_recover_existing_card_menu_without_submitting(tmp_path):
+    import base64, io, shutil
+    from playwright.sync_api import sync_playwright
+    chromium = shutil.which('chromium')
+    if not chromium:
+        pytest.skip('Local Chromium not installed')
+    out = io.BytesIO()
+    Image.new('RGB', (320, 180), 'green').save(out, format='PNG')
+    data = 'data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()
+    html = '''<html><body><textarea></textarea>
+<button onclick="window.submissions++">Iniciar geração</button>
+<div><button aria-label="Red apple on background"><img src="OLD"></button>
+<button aria-label="Reutilizar comando"></button><button aria-label="Mais opções" onclick="throw Error('wrong card')"></button></div>
+<div><button aria-label="Empty cafe on rainy morning"><img src="DATA"></button>
+<button aria-label="Reutilizar comando"></button><button aria-label="Mais opções" onclick="document.getElementById('menu').hidden=false"></button></div>
+<div role="menu" id="menu" hidden><button role="menuitem" onclick="downloadImage()">Baixar</button></div>
+<script>window.submissions=0;function downloadImage(){let a=document.createElement('a');a.href='DATA';a.download='existing.png';a.click()}</script>
+</body></html>'''.replace('DATA', data).replace('OLD', data+'#old')
+    with sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=chromium, headless=True)
+        try:
+            page = browser.new_page(accept_downloads=True)
+            page.route('**/*', lambda route: route.fulfill(status=200, content_type='text/html; charset=utf-8', body=html))
+            page.goto('https://flow.google.com/project/39a3cd68-17c5-4695-8c99-52ea21b38e66')
+            target = tmp_path / 'existing.png'
+            flow.recover(page, 'Empty cafe on rainy morning', target)
+            assert page.evaluate('window.submissions') == 0
+            assert page.locator('textarea').input_value() == ''
+            with Image.open(target) as image:
+                assert image.size == (320, 180)
+                assert image.getpixel((0, 0)) == (0, 128, 0)
+        finally:
+            browser.close()
