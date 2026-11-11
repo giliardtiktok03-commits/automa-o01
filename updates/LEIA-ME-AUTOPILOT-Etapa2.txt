@@ -1,0 +1,18 @@
+MPT AUTOPILOT - Etapa 2: pesquisa e roteiro com as Skills existentes
+
+1. Feche o MPT e faça backup do código, config.toml e storage.
+2. Extraia este ZIP na raiz do programa, mesclando app/webui/docs/test.
+   Preserve config.toml e storage. Nenhuma credencial está no ZIP.
+3. Reabra o MPT e ative/selecione Skills no painel 00.
+4. No AUTOPILOT, edite o canal, marque salvar a seleção do painel 00,
+   autorize pesquisa/roteiro automáticos e salve o canal.
+5. Configure a chave API OpenAI para a pesquisa web. Login ChatGPT/Codex
+   do roteiro é separado. Chamadas podem consumir saldo.
+6. Informe título + canal em Criar pesquisa e roteiro de um vídeo novo.
+   Clique Pesquisar e gerar roteiro e ative o AUTOPILOT.
+7. Baixe roteiro TXT e pacote editorial JSON quando aparecer Roteiro pronto.
+
+Esta etapa ainda não gera narração, mídia, thumbnail final nem publica vídeo.
+A recuperação da etapa 1 e DeepInfra sem limite continuam incluídos.
+O schema SQLite passa para versão 2; mantenha backup antes de instalar.
+Detalhes, limitações e retomada: docs/autopilot-editorial-pt.md.

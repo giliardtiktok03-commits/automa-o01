@@ -24,7 +24,7 @@ class Source(Record):
     excerpt: str = Field(min_length=1, max_length=8000)
     interpretation: Literal['documented', 'disputed', 'hypothesis', 'unknown'] = 'unknown'
     # A supplied excerpt is not independently fetched or authenticated by this module.
-    provenance: Literal['user_supplied'] = 'user_supplied'
+    provenance: Literal['user_supplied', 'autopilot_retrieved'] = 'user_supplied'
 
 
 class Beat(Record):
