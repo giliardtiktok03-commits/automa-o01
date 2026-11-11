@@ -1,5 +1,4 @@
 import base64
-from concurrent.futures import ThreadPoolExecutor
 import json
 import time
 from unittest.mock import MagicMock, patch
@@ -102,23 +101,6 @@ def test_capture_requires_shared_login():
     assert error.value.key == "codex.oauth.not_connected"
 
 
-def test_request_uses_fixed_endpoint_and_image_tool():
-    captured = context()
-    with patch.object(oauth.requests, "post", return_value=reply()) as post:
-        assert image.generate_image("Pirámides", captured) == b"image bytes"
-    request = post.call_args.kwargs
-    assert post.call_args.args == (oauth.RESPONSES_URL,)
-    assert request["allow_redirects"] is False
-    assert request["headers"]["Authorization"] == "Bearer old"
-    assert request["json"]["model"] == "selected-model"
-    assert request["json"]["tools"] == [
-        {"type": "image_generation", "action": "generate", "output_format": "png"}
-    ]
-    assert request["json"]["tool_choice"] == {"type": "image_generation"}
-    assert request["json"]["parallel_tool_calls"] is False
-    assert request["json"]["store"] is False
-
-
 def test_parser_handles_chunk_boundaries_and_ignores_partial_events():
     raw = (
         b'data: {"type":"response.image_generation_call.partial_image","partial_image_b64":"discard"}\r\n\r\n'
@@ -150,11 +132,11 @@ def test_parser_handles_chunk_boundaries_and_ignores_partial_events():
     ],
 )
 def test_invalid_results_never_retry_or_expose_bodies(event):
-    with patch.object(oauth, "_post", return_value=reply(event=event)) as post:
+    with patch.object(oauth, "_post") as post:
         with pytest.raises(image.CodexImageError) as error:
-            image.generate_image("p", context())
+            image._event(json.dumps(event).encode())
     assert "secret" not in str(error.value)
-    assert post.call_count == 1
+    post.assert_not_called()
 
 
 def test_multiple_images_and_bad_base64_rejected():
@@ -189,139 +171,11 @@ def test_decoded_and_transport_limits_are_independent():
     ],
 )
 def test_truncated_stream_does_not_retry(response):
-    with patch.object(oauth, "_post", return_value=response) as post:
+    with patch.object(oauth, "_post") as post:
         with pytest.raises(image.CodexImageError) as error:
-            image.generate_image("p", context())
+            image._read_stream(response, time.monotonic() + 10)
     assert error.value.key == "codex.image.uncertain"
-    assert post.call_count == 1
-
-
-def test_network_failure_does_not_retry():
-    with patch.object(
-        oauth.requests, "post", side_effect=requests.Timeout("secret")
-    ) as post:
-        with pytest.raises(image.CodexImageError) as error:
-            image.generate_image("p", context())
-    assert error.value.key == "codex.image.uncertain"
-    assert "secret" not in str(error.value)
-    assert post.call_count == 1
-
-
-def test_401_renews_once_then_uses_same_authorization_generation():
-    captured = context()
-    replies = [
-        reply(401),
-        reply(
-            payload={
-                "access_token": "new",
-                "refresh_token": "new-refresh",
-                "expires_in": 3600,
-            }
-        ),
-        reply(),
-    ]
-    with patch.object(oauth, "_post", side_effect=replies) as post:
-        assert image.generate_image("p", captured) == b"image bytes"
-    assert post.call_count == 3
-    assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer new"
-    image.assert_current(captured)
-
-
-def test_second_401_stops_and_keeps_shared_login():
-    replies = [
-        reply(401),
-        reply(payload={"access_token": "new", "expires_in": 3600}),
-        reply(401),
-    ]
-    with patch.object(oauth, "_post", side_effect=replies) as post:
-        with pytest.raises(image.CodexImageError):
-            image.generate_image("p", context())
-    assert post.call_count == 3
-    assert oauth.account_status()
-
-
-def test_stale_queued_context_makes_no_request():
-    captured = context()
-    oauth.disconnect()
-    with patch.object(oauth, "_post") as post, pytest.raises(image.CodexImageError):
-        image.generate_image("p", captured)
     post.assert_not_called()
-
-
-def test_account_change_during_result_rejects_old_image():
-    captured = context()
-
-    def read_then_change(response, deadline):
-        oauth.disconnect()
-        return b"old account image"
-
-    with (
-        patch.object(oauth, "_post", return_value=reply()),
-        patch.object(image, "_read_stream", read_then_change),
-    ):
-        with pytest.raises(image.CodexImageError) as error:
-            image.generate_image("p", captured)
-    assert error.value.key == "codex.oauth.changed"
-
-
-def test_generation_rechecked_after_credentials_wait():
-    captured = context()
-
-    def credentials(**kwargs):
-        oauth.disconnect()
-        return {"access_token": "new-account", "account_id": "another"}
-
-    with (
-        patch.object(oauth, "_credentials", side_effect=credentials),
-        patch.object(oauth, "_post") as post,
-    ):
-        with pytest.raises(image.CodexImageError):
-            image.generate_image("p", captured)
-    post.assert_not_called()
-
-
-def test_concurrent_image_and_text_share_single_refresh():
-    captured = context()
-    bundle = oauth._load()
-    bundle["expires_at"] = 0
-    oauth._save(bundle)
-    refreshes = []
-
-    def post(url, **kwargs):
-        if url == oauth.TOKEN_URL:
-            refreshes.append(True)
-            return reply(
-                payload={
-                    "access_token": "new",
-                    "refresh_token": "rotated",
-                    "expires_in": 3600,
-                }
-            )
-        if "tools" in kwargs["json"]:
-            return reply()
-        response = reply()
-        event = {
-            "type": "response.completed",
-            "response": {
-                "status": "completed",
-                "output": [
-                    {
-                        "type": "message",
-                        "content": [{"type": "output_text", "text": "OK"}],
-                    }
-                ],
-            },
-        }
-        response.iter_lines.return_value = iter(["data: " + json.dumps(event), ""])
-        return response
-
-    with patch.object(oauth, "_post", side_effect=post), ThreadPoolExecutor(2) as pool:
-        image_future = pool.submit(image.generate_image, "p", captured)
-        text_future = pool.submit(oauth.generate_text, "p", "text-model")
-        assert image_future.result() == b"image bytes"
-        assert text_future.result() == "OK"
-    assert len(refreshes) == 1
-    assert captured.generation == oauth.authorization_generation()
 
 
 def stream_events(*events):
@@ -448,14 +302,7 @@ def test_opt_in_diagnostics_are_selected_metadata_not_credentials_or_content():
     }
     with oauth.capture_image_diagnostics() as records:
         with patch.object(oauth, "_post", return_value=response):
-            assert image.generate_image("private prompt", context()) == b"image bytes"
-    assert records[0] == {
-        "kind": "http",
-        "attempt": 1,
-        "status": 200,
-        "requested_model": "selected-model",
-        "request_id": "req_synthetic",
-    }
+            assert image._read_stream(response, time.monotonic() + 10) == b"image bytes"
     assert {
         "kind": "response",
         "event": "response.completed",
@@ -480,40 +327,7 @@ def test_opt_in_diagnostics_are_selected_metadata_not_credentials_or_content():
     ):
         assert secret not in serialized
     oauth._record_image_diagnostic(kind="http", status=200)
-    assert len(records) == 3
-
-
-def test_provider_diagnostic_classifies_maintainer_400_without_recording_body():
-    response = reply(
-        status=400,
-        payload={
-            "error": {
-                "type": "invalid_request_error",
-                "param": "tool_choice",
-                "code": "unknown-private-code",
-                "message": "Tool choice 'image_generation' must be specified with 'tools' parameter.",
-                "secret": "do not retain",
-            }
-        },
-    )
-    response.iter_content.return_value = iter(
-        [json.dumps(response.json.return_value).encode()]
-    )
-    response.headers = {}
-    with oauth.capture_image_diagnostics() as records:
-        with patch.object(oauth, "_post", return_value=response) as post:
-            with pytest.raises(image.CodexImageError):
-                image.generate_image("private prompt", context())
-    assert post.call_count == 1
-    assert records[-1] == {
-        "kind": "provider_error",
-        "error_type": "invalid_request_error",
-        "error_code": "other",
-        "error_param": "tool_choice",
-        "reason": "tool_choice_missing_image_tool",
-    }
-    assert "do not retain" not in json.dumps(records)
-    assert "unknown-private-code" not in json.dumps(records)
+    assert len(records) == 2
 
 
 def test_legacy_credentials_migrate_without_refresh_or_new_login():
@@ -560,19 +374,6 @@ def test_unbound_image_transport_never_sends():
     post.assert_not_called()
 
 
-def test_binding_is_checked_on_loaded_credentials_before_dispatch():
-    captured = context()
-    wrong = dict(oauth._load(), account_id="different-account")
-    with (
-        patch.object(oauth, "_credentials", return_value=wrong),
-        patch.object(oauth, "_post") as post,
-    ):
-        with pytest.raises(image.CodexImageError) as error:
-            image.generate_image("private prompt", captured)
-    assert error.value.key == "codex.oauth.changed"
-    post.assert_not_called()
-
-
 @pytest.mark.parametrize("failure", ["oversize", "deadline", "network"])
 def test_error_diagnostics_body_is_bounded_and_never_changes_http_failure(failure):
     response = reply(status=400)
@@ -599,3 +400,16 @@ def test_error_diagnostics_body_is_bounded_and_never_changes_http_failure(failur
         }
     ]
     response.json.assert_not_called()
+
+
+@pytest.mark.parametrize("captured", [None, "connected", "stale"])
+def test_disabled_generation_never_sends_or_refreshes_credentials(captured):
+    from app.services.ai33.policy import SyntheticImagePolicyError
+    binding = context() if captured else None
+    if captured == "stale":
+        oauth.disconnect()
+    with patch.object(oauth, "_post") as post, patch.object(oauth, "_credentials") as credentials:
+        with pytest.raises(SyntheticImagePolicyError):
+            image.generate_image("prompt", binding)
+    post.assert_not_called()
+    credentials.assert_not_called()

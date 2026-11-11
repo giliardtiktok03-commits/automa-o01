@@ -9929,6 +9929,13 @@ def _render_application():
 
     _render_subtitle_settings(right_panel, params)
 
+    from webui.autopilot import render as render_autopilot
+    import sqlite3
+    try:
+        render_autopilot(params)
+    except (sqlite3.Error, OSError, ValueError):
+        st.warning("AUTOPILOT indisponível. Confira o diagnóstico antes de retomar. O fluxo manual continua disponível.")
+
     generation_submitted = _render_generation_controls(
         params,
         uploaded_files,
