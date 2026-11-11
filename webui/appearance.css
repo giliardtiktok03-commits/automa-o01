@@ -1,0 +1,110 @@
+/* Theme tokens affect the editor, never image/video output. No global inversion. */
+:root {
+    --st-background-color: var(--mpt-bg);
+    --st-secondary-background-color: var(--mpt-control);
+    --st-text-color: var(--mpt-text);
+    --st-link-color: var(--mpt-link);
+}
+html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"],
+[data-testid="stMain"], [data-testid="stHeader"] {
+    background-color: var(--mpt-bg) !important;
+    color: var(--mpt-text) !important;
+}
+[data-testid="stSidebar"], [data-testid="stSidebarContent"],
+[data-testid="stDialog"] [role="dialog"], [data-testid="stPopoverBody"],
+[data-baseweb="popover"] > div, [data-baseweb="menu"], [role="listbox"] {
+    background-color: var(--mpt-panel) !important;
+    color: var(--mpt-text) !important;
+    border-color: var(--mpt-border) !important;
+}
+[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] :is(p,li,h1,h2,h3,h4,h5,h6),
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
+[data-testid="stRadio"] label, [data-testid="stCheckbox"] label,
+[data-testid="stToggle"] label, [data-testid="stMetricValue"], [data-testid="stMetricLabel"],
+[data-testid="stTabs"] [role="tab"], [data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary p {
+    color: var(--mpt-text) !important;
+}
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+[data-testid="stFileUploaderDropzoneInstructions"] :is(span,small),
+[data-testid="stTooltipContent"] {
+    color: var(--mpt-muted) !important;
+}
+[data-testid="stTooltipContent"] {background-color:var(--mpt-panel) !important;}
+a, a:visited {color:var(--mpt-link);}
+[data-testid="stMarkdownContainer"] a, .mpt-brand__update {color:var(--mpt-link) !important;}
+[data-testid="stTextInput"] [data-baseweb="input"],
+[data-testid="stNumberInput"] [data-baseweb="input"],
+[data-testid="stTextArea"] [data-baseweb="textarea"],
+[data-baseweb="select"] > div, [data-testid="stFileUploaderDropzone"],
+[data-testid="stCode"], pre, [data-testid="stJson"],
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea, [data-baseweb="select"] input {
+    background-color: var(--mpt-control) !important;
+    color: var(--mpt-text) !important;
+    caret-color: var(--mpt-text);
+    border-color: var(--mpt-border) !important;
+}
+input::placeholder, textarea::placeholder {color:var(--mpt-muted) !important;opacity:1;}
+[data-baseweb="select"] :is(span,svg), [data-baseweb="select"] [data-testid="stIconMaterial"] {
+    color: var(--mpt-text) !important;
+}
+[data-baseweb="tag"] {background-color:var(--mpt-hover) !important;color:var(--mpt-text) !important;}
+[data-baseweb="tag"] span {color:var(--mpt-text) !important;}
+[role="option"], [data-baseweb="menu"] li {background-color:var(--mpt-panel) !important;color:var(--mpt-text) !important;}
+[role="option"]:hover, [role="option"][aria-selected="true"], [data-baseweb="menu"] li:hover {
+    background-color:var(--mpt-hover) !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"], [data-testid="stForm"],
+[data-testid="stExpander"] details, [data-testid="stExpander"], hr {
+    border-color:var(--mpt-border) !important;
+}
+button[kind="secondary"], button[kind="tertiary"],
+button[data-testid="stBaseButton-secondary"], [data-testid="stNumberInput"] button,
+[data-testid="stFileUploaderDropzone"] button {
+    background-color:var(--mpt-panel) !important;
+    color:var(--mpt-text) !important;
+    border-color:var(--mpt-border) !important;
+}
+button[kind="primary"] {background-color:var(--mpt-accent) !important;color:var(--mpt-accent-text) !important;}
+button[kind="primary"] p {color:var(--mpt-accent-text) !important;}
+button:not(:disabled):hover {border-color:var(--mpt-accent) !important;}
+button:disabled {color:var(--mpt-muted) !important;}
+:is(button,input,textarea,summary,[role="combobox"]):focus-visible {
+    outline:2px solid var(--mpt-accent) !important;outline-offset:2px;
+}
+/* Preserve semantic status hues while keeping their text readable in both modes. */
+[data-testid="stAlert"] {background:var(--mpt-panel) !important;border:1px solid var(--mpt-border);}
+[data-testid="stAlert"] [data-baseweb="notification"] {background:transparent !important;}
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] {color:var(--mpt-text) !important;}
+[data-testid="stTable"] :is(table,th,td), [data-testid="stMarkdownContainer"] :is(table,th,td) {
+    color:var(--mpt-text) !important;border-color:var(--mpt-border) !important;
+}
+[data-testid="stMarkdownContainer"] :not(pre) > code {background:var(--mpt-control);color:var(--mpt-link);}
+.mpt-stage-heading {
+    border-left:6px solid var(--mpt-stage-accent);
+    padding:10px 12px;
+    background:color-mix(in srgb,var(--mpt-stage-accent) 14%,var(--mpt-bg));
+    border-radius:6px;font-weight:700;color:var(--mpt-text);
+}
+.mpt-stage-heading__number {color:color-mix(in srgb,var(--mpt-stage-accent) 45%,var(--mpt-text));}
+.driver-popover, .driver-popover :is(h2,p,button) {background:var(--mpt-panel) !important;color:var(--mpt-text) !important;}
+@media (max-width:700px) {.st-key-top_bar_actions {flex-wrap:wrap !important;}}
+[data-testid="stPopoverBody"]:has(.st-key-appearance_controls) {
+    width:min(340px,calc(100vw - 32px)) !important;
+    max-width:min(340px,calc(100vw - 32px)) !important;
+}
+/* Streamlit 1.66 uses React Aria for select controls; keep legacy selectors above. */
+.react-aria-ComboBox [role="group"], input[role="combobox"] {
+    background-color:var(--mpt-control) !important;
+    color:var(--mpt-text) !important;
+    border-color:var(--mpt-border) !important;
+}
+.react-aria-ComboBox button {background:transparent !important;color:var(--mpt-text) !important;}
+.react-aria-ComboBox svg {color:var(--mpt-text) !important;}
+.react-aria-Popover, .react-aria-ListBox {background:var(--mpt-panel) !important;color:var(--mpt-text) !important;}
+[role="option"] * {color:inherit !important;}
+[data-testid="stTooltipIcon"] svg {color:var(--mpt-muted) !important;}
+@media (max-width:700px) {
+    .mpt-brand > span:first-child {flex-wrap:wrap;row-gap:0.25rem;}
+}
