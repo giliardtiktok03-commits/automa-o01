@@ -98,6 +98,8 @@ st.set_page_config(
 style_file = Path(__file__).with_name("styles.css")
 streamlit_style = f"<style>{style_file.read_text(encoding='utf-8')}</style>"
 st.markdown(streamlit_style, unsafe_allow_html=True)
+from webui import appearance
+appearance.apply()
 # 定义资源目录
 font_dir = utils.font_dir()
 song_dir = utils.song_dir()
@@ -1850,6 +1852,7 @@ def _render_top_bar():
             gap="small",
             width="stretch",
         ):
+            appearance.render_control()
             _render_task_manager_entry()
 
             st.button(
@@ -2562,7 +2565,7 @@ _GROUPED_SELECT_COMPONENT = st.components.v2.component(
     css="""
         .mpt-grouped-select {
             width: 100%;
-            color: var(--st-text-color);
+            color: var(--mpt-text, var(--st-text-color));
             font-family: var(--st-font);
         }
 
@@ -2583,7 +2586,7 @@ _GROUPED_SELECT_COMPONENT = st.components.v2.component(
             padding: 0;
             border: 0;
             background: transparent;
-            color: var(--st-link-color);
+            color: var(--mpt-link, var(--st-link-color));
             font: inherit;
             font-size: 0.8rem;
             line-height: 1.25rem;
@@ -2597,7 +2600,7 @@ _GROUPED_SELECT_COMPONENT = st.components.v2.component(
 
         .mpt-grouped-select__settings:focus-visible {
             border-radius: 0.2rem;
-            outline: 2px solid var(--st-primary-color);
+            outline: 2px solid var(--mpt-accent, var(--st-primary-color));
             outline-offset: 2px;
         }
 
@@ -2626,7 +2629,7 @@ _GROUPED_SELECT_COMPONENT = st.components.v2.component(
             border-radius: 0.5rem;
             outline: none;
             appearance: none;
-            background: var(--st-secondary-background-color);
+            background: var(--mpt-control, var(--st-secondary-background-color));
             color: inherit;
             font: inherit;
             cursor: pointer;
@@ -2637,8 +2640,8 @@ _GROUPED_SELECT_COMPONENT = st.components.v2.component(
         }
 
         .mpt-grouped-select select:focus-visible {
-            border-color: var(--st-primary-color);
-            box-shadow: 0 0 0 1px var(--st-primary-color);
+            border-color: var(--mpt-accent, var(--st-primary-color));
+            box-shadow: 0 0 0 1px var(--mpt-accent, var(--st-primary-color));
         }
     """,
     js="""
@@ -9266,9 +9269,9 @@ def _stage_task_audio(audio_path, audio_bytes):
 
 
 def _stage_heading(number, label, color):
-    st.markdown(f'<div style="border-left:6px solid {color};padding:10px 12px;'
-                f'background:{color}18;border-radius:6px;font-weight:700">'
-                f'<span style="color:{color}">{number:02d}</span> · {html.escape(label)}</div>',
+    label = str(label).replace("**", "")
+    st.markdown(f'<div class="mpt-stage-heading" style="--mpt-stage-accent:{color}">'
+                f'<span class="mpt-stage-heading__number">{number:02d}</span> · {html.escape(label)}</div>',
                 unsafe_allow_html=True)
 
 

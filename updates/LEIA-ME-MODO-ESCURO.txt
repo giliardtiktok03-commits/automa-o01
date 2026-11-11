@@ -1,0 +1,15 @@
+MPT - APARENCIA: CLARO, ESCURO E SEGUIR O SISTEMA
+
+Feche o servidor do MPT e faça backup do código, config.toml e storage.
+Extraia o ZIP na pasta do programa, mesclando app/webui/resource/docs/test.
+Não apague config.toml nem storage.
+
+Reabra o MPT. No topo, clique Aparência e escolha o Tema do aplicativo:
+Claro, Escuro ou Seguir o sistema. A preferência é salva para novas sessões.
+
+A mudança afeta a interface. Não modifica vídeos, legendas, imagens, Skills,
+provedores ou tarefas. Não interrompe uma geração em andamento.
+
+O ZIP inclui as atualizações anteriores de AUTOPILOT/Historical Director e
+DeepInfra. A reorganização completa dos módulos não faz parte deste ajuste de tema.
+Detalhes: docs/APARENCIA_MPT.md.
