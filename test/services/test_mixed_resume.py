@@ -128,3 +128,42 @@ def test_missing_manifest_with_orphan_materials_cannot_resubmit(saved_project):
     (directory/'mixed-scenes.json').unlink()
     (directory/'mixed').mkdir();(directory/'mixed/image.png').write_bytes(b'existing paid image')
     with pytest.raises(ValueError,match='Materiais existentes sem manifesto'):resume.load(ID,24)
+
+
+@pytest.mark.parametrize('source', ['mixed', 'deepinfra_image'])
+def test_unlimited_deepinfra_resume_preserves_counter_and_ignores_cap(saved_project, monkeypatch, source):
+    from app.config import config
+    directory, manifest, requests = saved_project
+    monkeypatch.setattr(config, 'ui', {'mixed_use_deepinfra': True})
+    saved = json.loads((directory/'script.json').read_text())
+    saved['params']['video_source'] = source
+    (directory/'script.json').write_text(json.dumps(saved))
+    manifest['image_requests'] = 300
+    (directory/'mixed-scenes.json').write_text(json.dumps(manifest))
+    project = resume.load(ID, 0, grok_unlimited=False, deepinfra_unlimited=True)
+    assert project['started'] == 300
+    assert project['params'].mixed_deepinfra_unlimited
+    requests.assert_not_called()
+    with pytest.raises(ValueError, match='below requests'):
+        resume.load(ID, 0, grok_unlimited=False, deepinfra_unlimited=False)
+
+
+def test_resume_worker_keeps_deepinfra_unlimited_and_reuses_audio(saved_project, monkeypatch):
+    from app.config import config
+    directory, manifest, requests = saved_project
+    monkeypatch.setattr(config, 'ui', {'mixed_use_deepinfra': True})
+    manifest['image_requests'] = 300
+    (directory/'mixed-scenes.json').write_text(json.dumps(manifest))
+    def prepare(task_id, params, script, duration, subtitle):
+        assert params.mixed_deepinfra_unlimited
+        assert params.mixed_use_deepinfra
+        return ['scene.mp4']
+    monkeypatch.setattr(resume.mixed_materials, 'prepare', prepare)
+    monkeypatch.setattr(task, 'generate_final_videos', lambda *a: (['final.mp4'], [], []))
+    audio = Mock(side_effect=AssertionError('Must reuse narration'))
+    monkeypatch.setattr(task, 'generate_audio', audio)
+    result = resume.run(ID, 0, grok_unlimited=False, deepinfra_unlimited=True)
+    assert result['videos'] == ['final.mp4']
+    assert json.loads((directory/'script.json').read_text())['params']['mixed_deepinfra_unlimited']
+    audio.assert_not_called()
+    requests.assert_not_called()

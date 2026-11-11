@@ -1009,3 +1009,37 @@ def test_archive_no_material_failure_explains_reason_and_disabled_fallback(setup
         mixed.prepare('job',params,SCRIPT,30,str(subtitles))
     assert 'gerador de imagens selecionado: nenhum' in str(exc.value)
     assert 'diagnostic-report.json' in str(exc.value)
+
+
+def test_unlimited_deepinfra_fallback_after_rejected_stock_reuses_saved_scenes(setup, monkeypatch):
+    folder, subtitles, params, _, search, _, _ = setup
+    params.mixed_select_sources = True
+    params.mixed_use_deepinfra = True
+    params.mixed_max_images = 0
+    params.mixed_visual_validation = True
+    mixed.config.app.update(deepinfra_api_key='test-key', openai_api_key='test-vision')
+    # Valid stock downloads are rejected by the visual relevance check.
+    monkeypatch.setattr(mixed.visual_validation, 'inspect_clip', lambda *args, **kwargs: (False, {'relevant': False, 'confidence': 0.9, 'reason': 'Unrelated footage'}))
+    params.mixed_deepinfra_unlimited = False
+    with pytest.raises(mixed.MixedError, match='image limit reached'):
+        mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    checkpoint = folder/'mixed-scenes.json'
+    manifest = json.loads(checkpoint.read_text())
+    manifest['image_requests'] = 300
+    checkpoint.write_text(json.dumps(manifest))
+    params.mixed_resume = True
+    params.mixed_deepinfra_unlimited = True
+    def generate(params, prompt, directory, *, before_submit=None, **kwargs):
+        assert search.called
+        before_submit()
+        Path(directory).mkdir(parents=True, exist_ok=True)
+        image = Path(directory)/'image.png'
+        image.write_bytes(prompt.encode())
+        return image, {'model': 'black-forest-labs/FLUX-1-schnell'}
+    provider = Mock(side_effect=generate)
+    monkeypatch.setattr(mixed.deepinfra_image, 'generate', provider)
+    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    assert provider.call_count == 3
+    assert json.loads(checkpoint.read_text())['image_requests'] == 303
+    mixed.prepare('job', params, SCRIPT, 30, str(subtitles))
+    assert provider.call_count == 3

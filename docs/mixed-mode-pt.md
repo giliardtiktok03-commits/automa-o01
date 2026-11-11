@@ -247,3 +247,19 @@ Esta ação vale para um vídeo misto único; projetos por capítulos usam a ret
 já existente do modo longo. O vídeo final só é montado depois que todas as cenas
 ficarem prontas. Uma renderização final interrompida pode precisar ser refeita,
 mesmo com os materiais reaproveitados. Projetos já finalizados não são reenviados.
+
+
+### DeepInfra sem limite de quantidade
+
+Selecione DeepInfra nas fontes e marque **DeepInfra sem limite de imagens**.
+No modo misto, os bancos habilitados são consultados primeiro. Se nenhum candidato
+passar na validação visual, o modelo DeepInfra configurado gera a imagem da cena.
+O modo sem limite ignora o teto numérico de solicitações, inclusive quando o
+contador salvo já ultrapassou esse teto. Cada nova imagem pode consumir saldo DeepInfra.
+
+Para continuar uma tarefa interrompida, informe seu ID e marque
+**DeepInfra sem limite de imagens nesta retomada**. Clique em **Verificar projeto salvo**
+e confirme que o resumo mostra **sem limite (DeepInfra)** antes de retomar.
+As cenas e imagens já salvas são reutilizadas; o contador de solicitações é preservado.
+Requisições anteriores com resultado desconhecido continuam exigindo reconciliação,
+sem reenvio automático. Desmarcar a opção restaura o limite numérico.

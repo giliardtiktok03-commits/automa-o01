@@ -1,0 +1,21 @@
+ATUALIZACAO: DEEPINFRA SEM LIMITE DE IMAGENS
+
+1. Feche o MPT e o terminal que executa o programa.
+2. Faca uma copia de seguranca dos arquivos de codigo que serao substituidos.
+3. Extraia este ZIP na pasta principal do MPT, onde estao webui.bat, app e webui.
+   Mescle as pastas app e webui e aceite substituir os arquivos de codigo.
+4. Inicie o MPT novamente.
+5. Nas fontes do modo misto, selecione DeepInfra e mantenha a validacao visual ativa.
+6. Na retomada, informe o ID da tarefa original.
+7. Marque "DeepInfra sem limite de imagens nesta retomada".
+8. Clique em "Verificar projeto salvo". O resumo deve mostrar "sem limite (DeepInfra)".
+9. Clique em "Retomar projeto salvo".
+
+Os bancos habilitados sao consultados primeiro. Se nenhum video passar na
+validacao, o DeepInfra gera a imagem. Nao existe teto de quantidade quando a
+opcao esta marcada; cada nova imagem pode consumir saldo DeepInfra.
+As cenas salvas sao verificadas e reaproveitadas. O contador nao e zerado.
+
+O pacote contem apenas codigo e este texto. Nao substitui storage, mixed,
+config.toml, audio, legendas ou credenciais. Nao e necessario apagar materiais.
+Base do pacote: a75d8e8bc0168b13aa481b71ee8c8bdacb1738bf.

@@ -2118,7 +2118,7 @@ def start(
                 return resume(task_id)
             if getattr(params, "mixed_resume", False):
                 from app.services import mixed_resume
-                return mixed_resume.run(task_id, params.mixed_max_images, grok_unlimited=params.mixed_grok_unlimited, subtitle_settings=params.mixed_resume_subtitle_style)
+                return mixed_resume.run(task_id, params.mixed_max_images, grok_unlimited=params.mixed_grok_unlimited, deepinfra_unlimited=params.mixed_deepinfra_unlimited, subtitle_settings=params.mixed_resume_subtitle_style)
             if getattr(params, "long_form", False):
                 from app.services import long_form
 

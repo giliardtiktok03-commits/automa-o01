@@ -97,8 +97,12 @@ def configure_sources(params, settings):
     params.mixed_image_provider = ("deepinfra" if params.mixed_use_deepinfra else "google_flow" if params.mixed_use_google_flow else "grok" if params.mixed_use_grok else "ai33" if params.mixed_use_ai33 else "none") if enabled else "none"
 
 
-def grok_unlimited(params):
-    return params.mixed_image_provider == "google_flow" or (params.mixed_image_provider == "grok" and params.mixed_grok_unlimited)
+def images_unlimited(params):
+    return (params.mixed_image_provider == "deepinfra" and params.mixed_deepinfra_unlimited) or params.mixed_image_provider == "google_flow" or (params.mixed_image_provider == "grok" and params.mixed_grok_unlimited)
+
+
+# Compatibility for integrations using the previous helper name.
+grok_unlimited = images_unlimited
 
 
 def validate(params, settings=None, *, external_audio=False):
@@ -115,7 +119,7 @@ def validate(params, settings=None, *, external_audio=False):
     if params.mixed_image_provider == "google_flow":
         try: google_flow.freeze(params, settings)
         except google_flow.FlowError as exc: raise MixedError(str(exc)) from exc
-    image_enabled = grok_unlimited(params) or params.mixed_max_images > 0
+    image_enabled = images_unlimited(params) or params.mixed_max_images > 0
     if not archives_enabled() and not providers(settings, params) and (params.mixed_image_provider == "none" or not image_enabled):
         raise MixedError("Select and configure at least one material source", key="mixed.no_sources")
     if image_enabled and params.mixed_image_provider == "deepinfra":
@@ -576,7 +580,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
         pending_images = 0 if params.mixed_select_sources else sum(s["source"] == "image" and not s.get("image_file")
                              and not s.get("image_request_started")
                              for s in manifest["scenes"])
-        if not archives_enabled() and not grok_unlimited(params) and manifest["image_requests"] + pending_images > params.mixed_max_images:
+        if not archives_enabled() and not images_unlimited(params) and manifest["image_requests"] + pending_images > params.mixed_max_images:
             raise MixedBudgetError(manifest["image_requests"] + pending_images,
                                    params.mixed_max_images, manifest["image_requests"])
         output_paths, records, used = [], [], {}
@@ -596,7 +600,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 image_choices={'deepinfra':{'selected':params.mixed_use_deepinfra,'key_configured':bool(deepinfra_image.api_key())},
                                'grok':{'selected':params.mixed_use_grok,'key_configured':bool(grok_image.api_key())},
                                'ai33':{'selected':params.mixed_use_ai33,'key_configured':bool(config.app.get('ai33_api_key'))}},
-                image_limit=params.mixed_max_images)
+                image_limit=params.mixed_max_images, images_unlimited=images_unlimited(params))
         for scene in manifest["scenes"]:
             generation_progress.stage("mixed_scene")
             sm.state.update_task(task_id, progress=40 + 10 * (scene["id"] - 1) / len(manifest["scenes"]),
@@ -624,7 +628,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 except (ArchiveError,material.OpenAIImagePaidResultError) as exc:
                     archive_service.report('pipeline','material_delivery','failed',scene_id=scene['id'],reason='Arquivo histórico não pôde ser preparado: '+str(exc)[:300])
                     source,provenance=None,None
-            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or grok_unlimited(params) or archive_service is not None) and not scene.get("image_file") and not scene.get("image_request_started"):
+            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or images_unlimited(params) or archive_service is not None) and not scene.get("image_file") and not scene.get("image_request_started"):
                 history = records or params.mixed_previous_sources
                 scene["previous_identity"] = history[-1].get("source_identity") if history else None
                 rotation = stock_turn % len(available)
@@ -668,13 +672,13 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     if scene.get("image_request_started") and not (resuming_deepinfra or resuming_ai33 or resuming_runware or resuming_grok or resuming_flow):
                         raise MixedError("A previous image request has an unknown result; review it before ordering again")
                     if not scene.get("image_request_started"):
-                        if not grok_unlimited(params) and manifest["image_requests"] >= params.mixed_max_images:
+                        if not images_unlimited(params) and manifest["image_requests"] >= params.mixed_max_images:
                             raise MixedError("AI image limit reached; no matching stock material was available for this scene")
                         reserved = 0 if params.mixed_select_sources else sum(
                             other["source"] == "image" and other["id"] != scene["id"]
                             and not other.get("image_file") and not other.get("image_request_started")
                             for other in manifest["scenes"])
-                        if not grok_unlimited(params) and manifest["image_requests"] + 1 + reserved > params.mixed_max_images:
+                        if not images_unlimited(params) and manifest["image_requests"] + 1 + reserved > params.mixed_max_images:
                             raise MixedError("The remaining AI budget is reserved for planned historical/illustrative scenes")
                     job_dir = scene_dir / f"{provider}-{scene['id']:03d}"
                     # An interrupted attempt without a ledger is ambiguous; never repost.
