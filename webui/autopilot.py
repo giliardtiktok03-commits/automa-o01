@@ -65,6 +65,10 @@ def render(params=None, *, repository=None, autostart=True):
             except (ValueError, Conflict) as exc:
                 st.error(str(exc))
         _new_title(repository, channels)
+        from webui.historical_director import render as render_director
+        render_director(params, repository, autostart=autostart)
+        if st.session_state.pop("autopilot_worker_pending_enabled", False):
+            st.session_state["autopilot_worker_enabled"] = True
         enabled = st.checkbox("Ativar AUTOPILOT", value=repository.enabled(), key="autopilot_worker_enabled")
         if enabled != repository.enabled():
             repository.set_enabled(enabled)
@@ -141,6 +145,8 @@ def _new_title(repository, channels):
 def _render_editorial_jobs(repository):
     from app.services.autopilot.editorial import STEP_NAMES
     for job in repository.editorial_jobs(limit=10):
+        if repository.director_item(job['task_id']):
+            continue
         label = 'Roteiro pronto' if job['state'] == 'completed' else 'Pesquisa/roteiro: ' + ('Em andamento' if job['state'] == 'running' else STATES.get(job['state'], job['state']))
         st.write(f"**{job['title']}** · {job['channel_id']} · {label}")
         stages = repository.stages(job['task_id'])

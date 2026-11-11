@@ -213,7 +213,7 @@ def test_migration_keeps_v1_profiles_recovery_and_queue_settings(tmp_path):
     assert migrated.enabled() and len(migrated.jobs())==1
     assert not ChannelProfile.model_validate({k:v for k,v in migrated.channels()[0].items() if k!='version'}).auto_editorial
     assert migrated.get(migrated.jobs()[0]['task_id'])['title']=='Existing title'
-    with migrated.connect() as db:assert db.execute('PRAGMA user_version').fetchone()[0]==2
+    with migrated.connect() as db:assert db.execute('PRAGMA user_version').fetchone()[0]==3
 
 
 def test_metadata_validates_and_appends_all_verified_sources(monkeypatch,snapshot,report):
