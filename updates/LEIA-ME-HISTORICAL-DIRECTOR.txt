@@ -1,0 +1,33 @@
+HISTORICAL DOCUMENTARY DIRECTOR - MPT personalizado / AUTOPILOT
+
+Feche o servidor do MPT. Faça backup do código, config.toml e storage.
+Extraia este ZIP na raiz do programa, mesclando as pastas e substituindo o código.
+Não apague config.toml ou storage. O ZIP não contém seus dados nem credenciais.
+É cumulativo com AUTOPILOT etapas 1/2 e o ajuste DeepInfra sem teto.
+O SQLite migra para v3. Para voltar ao código antigo, restaure o backup do banco.
+
+1. Reabra o MPT. No painel 00, ative Skills editoriais e selecione
+   Historical Documentary Director. Não precisa importar o anexo como Skill.
+2. No AUTOPILOT, escolha seu canal, salve a seleção do painel 00,
+   autorize pesquisa/roteiro e salve idioma, duração e provedor.
+3. Abra Historical Documentary Director - Ângulos e fila.
+4. Informe título e roteiro opcional. Pode carregar até 3 thumbnails e
+   ligar/desligar a análise visual. Configure lente e identidade do canal.
+5. Escolha ângulos manualmente (1 a 5) ou automático (um por padrão).
+   Desligar Angle Intelligence mantém o título/ângulo original para um pacote.
+6. Clique Pesquisar referência e analisar ângulos e ative AUTOPILOT.
+7. Manual: revise as opções, marque as elegíveis e adicione à fila.
+   Automático: o worker seleciona as melhores elegíveis na quantidade autorizada.
+8. Baixe o pacote ZIP de cada item concluído. Há pausa, retomada,
+   cancelamento, reordenação e troca versionada de referências antes do início.
+
+Pesquisa/visão exigem chave da API oficial OpenAI. Login ChatGPT/Codex para
+roteiro é separado. Chamadas podem consumir saldo; a conta real ainda precisa
+ser validada no uso. Uma falha remota não é reenviada automaticamente.
+
+ESTA ENTREGA PRODUZ PACOTES EDITORIAIS. Ainda não gera narração, mídia,
+thumbnail final, renderização nem publicação do novo fluxo.
+Sem Google Flow neste fluxo. O gerador manual e as integrações antigas continuam.
+
+Detalhes, critérios e limitações: docs/HISTORICAL_DOCUMENTARY_DIRECTOR.md.
+Especificação recebida preservada: docs/SPEC_HISTORICAL_DOCUMENTARY_DIRECTOR.md.

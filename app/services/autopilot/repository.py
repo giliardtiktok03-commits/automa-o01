@@ -10,6 +10,7 @@ import time
 from uuid import UUID
 
 from app.models.autopilot import ChannelProfile
+from app.services.historical_director.repository import DirectorRepositoryMixin, SCHEMA as DIRECTOR_SCHEMA
 from app.utils import utils
 
 
@@ -17,13 +18,13 @@ class Conflict(ValueError):
     pass
 
 
-class Repository:
+class Repository(DirectorRepositoryMixin):
     def __init__(self, path=None):
         self.path = Path(path) if path is not None else Path(utils.storage_dir("autopilot", create=True)) / "autopilot.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3):
                 raise ValueError("Versão AUTOPILOT incompatível; atualize o programa")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS channels (
@@ -57,8 +58,9 @@ class Repository:
                     id INTEGER PRIMARY KEY, task_id TEXT NOT NULL REFERENCES editorial_jobs(task_id),
                     stages TEXT NOT NULL, created REAL NOT NULL
                 );
-                PRAGMA user_version = 2;
+
             """)
+            db.executescript(DIRECTOR_SCHEMA + "\nPRAGMA user_version = 3;")
 
     @contextmanager
     def connect(self):
@@ -196,16 +198,20 @@ class Repository:
             return dict(row) if row else None
 
     def take_editorial(self):
+        self.prepare_director_automatic()
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             enabled = db.execute("SELECT value FROM settings WHERE key='enabled'").fetchone()
             if not enabled or enabled[0] != 'true':
                 return None
             for row in db.execute("SELECT * FROM editorial_jobs WHERE state IN ('queued','running') ORDER BY created").fetchall():
+                if not self.director_available(db, row):
+                    continue
                 channel = db.execute('SELECT profile FROM channels WHERE channel_id=?', (row['channel_id'],)).fetchone()
                 if not channel or not ChannelProfile.model_validate_json(channel[0]).auto_editorial:
                     continue
                 db.execute("UPDATE editorial_jobs SET state='running',error=NULL,updated=? WHERE task_id=?", (time.time(), row['task_id']))
+                db.execute("UPDATE director_batches SET state='running',updated=? WHERE batch_id IN (SELECT batch_id FROM director_items WHERE task_id=? AND role='production')", (time.time(), row['task_id']))
                 return {**dict(row), 'kind': 'editorial'}
         return None
 
@@ -240,11 +246,13 @@ class Repository:
             db.execute("UPDATE editorial_stages SET state='failed',updated=? WHERE task_id=? AND name=? AND state='running'", (time.time(), task_id, name))
 
     def finish_editorial(self, task_id, state, *, error=None, result=None):
-        if state not in {'completed', 'blocked', 'failed'}:
+        if state not in {'completed', 'blocked', 'failed', 'paused', 'cancelled'}:
             raise ValueError('Estado editorial inválido')
         with self.connect() as db:
-            db.execute("UPDATE editorial_jobs SET state=?,error=?,result=?,updated=? WHERE task_id=? AND state='running'",
-                       (state, error, json.dumps(result, ensure_ascii=False) if result else None, time.time(), task_id))
+            changed = db.execute("UPDATE editorial_jobs SET state=?,error=?,result=?,updated=? WHERE task_id=? AND state='running'",
+                       (state, error, json.dumps(result, ensure_ascii=False) if result else None, time.time(), task_id)).rowcount
+            if changed:
+                self.director_finished(db, task_id, state, result, error)
 
     def retry_editorial(self, task_id, *, restart=False, acknowledge_cost=False):
         if not acknowledge_cost:
@@ -254,6 +262,8 @@ class Repository:
             job = db.execute('SELECT state FROM editorial_jobs WHERE task_id=?', (task_id,)).fetchone()
             if not job or job[0] not in {'failed', 'blocked'}:
                 return False
+            if db.execute('SELECT 1 FROM director_items WHERE task_id=?', (task_id,)).fetchone() and db.execute('SELECT count(*) FROM editorial_history WHERE task_id=?', (task_id,)).fetchone()[0] >= 3:
+                raise Conflict('Limite de 3 tentativas adicionais atingido; revise e crie uma nova versão explícita do lote')
             history = [dict(row) for row in db.execute('SELECT * FROM editorial_stages WHERE task_id=?', (task_id,))]
             db.execute('INSERT INTO editorial_history(task_id,stages,created) VALUES(?,?,?)', (task_id, json.dumps(history, ensure_ascii=False), time.time()))
             if restart:

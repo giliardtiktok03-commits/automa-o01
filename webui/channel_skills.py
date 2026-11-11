@@ -34,6 +34,8 @@ def render(panel, params, set_config, heading):
             heading(0, "Configurações de Skills", "#be123c")
             from app.services import story_intelligence
             story_intelligence.install()
+            from app.services.historical_director.library import install as install_director
+            install_director()
             installed = library.installed()
             names = {item.skill_id: item.name for item in installed}
             params.skills_enabled = st.checkbox(

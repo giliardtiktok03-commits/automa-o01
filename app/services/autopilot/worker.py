@@ -10,6 +10,7 @@ from loguru import logger
 from app.models.autopilot import ChannelProfile
 from app.services.autopilot.repository import Repository
 from app.services.autopilot import recovery
+from app.services.historical_director.repository import DirectorPaused, DirectorCancelled
 from app.utils import utils
 
 _thread = None
@@ -114,9 +115,18 @@ def run_once(repository=None, handler=None):
                     result = handler(job)
                 elif editorial_job:
                     from app.services.autopilot import editorial
-                    result = editorial.run(job, repository)
+                    item = repository.director_item(job['task_id'])
+                    if item:
+                        from app.services.historical_director import runner
+                        result = runner.run(job, repository, item)
+                    else:
+                        result = editorial.run(job, repository)
                 else:
                     result = execute(job)
+            except DirectorPaused:
+                finish(job["task_id"], "paused", error="Pausado entre etapas; resultados concluídos preservados")
+            except DirectorCancelled:
+                finish(job["task_id"], "cancelled", error="Cancelado em ponto seguro; uma chamada já aceita pode ter sido cobrada")
             except Timeout:
                 finish(job["task_id"], "blocked" if editorial_job else "waiting_remote", error="Etapa ocupada; revise antes de repetir" if editorial_job else "Projeto ocupado; nova verificação automática em breve")
             except recovery.RecoveryBlocked as exc:
