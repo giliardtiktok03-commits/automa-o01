@@ -104,24 +104,32 @@ def run_once(repository=None, handler=None):
         # OS-owned lock survives page reruns, coordinates multiple processes and
         # is released on process death. A stale lock file is harmless.
         with FileLock(str(repository.path) + ".worker.lock", timeout=0):
-            job = repository.take()
+            job = repository.take() or repository.take_editorial()
             if job is None:
                 return False
+            editorial_job = job.get('kind') == 'editorial'
+            finish = repository.finish_editorial if editorial_job else repository.finish
             try:
-                result = (handler or execute)(job)
+                if handler is not None:
+                    result = handler(job)
+                elif editorial_job:
+                    from app.services.autopilot import editorial
+                    result = editorial.run(job, repository)
+                else:
+                    result = execute(job)
             except Timeout:
-                repository.finish(job["task_id"], "waiting_remote", error="Projeto ocupado; nova verificação automática em breve")
+                finish(job["task_id"], "blocked" if editorial_job else "waiting_remote", error="Etapa ocupada; revise antes de repetir" if editorial_job else "Projeto ocupado; nova verificação automática em breve")
             except recovery.RecoveryBlocked as exc:
-                repository.finish(job["task_id"], "blocked", error=str(exc))
+                finish(job["task_id"], "blocked", error=str(exc))
             except Exception:
                 # Provider exceptions can carry keys/URLs. Never persist them.
-                logger.warning("AUTOPILOT recovery stopped: task_id={}", job["task_id"])
-                repository.finish(job["task_id"], "failed", error="Falha na recuperação; materiais preservados. Confira o projeto")
+                logger.warning("AUTOPILOT job stopped: task_id={}", job["task_id"])
+                finish(job["task_id"], "failed", error="Falha na etapa editorial; confira o provedor antes de repetir" if editorial_job else "Falha na recuperação; materiais preservados. Confira o projeto")
             else:
                 if result.get("waiting_remote"):
-                    repository.finish(job["task_id"], "waiting_remote")
+                    finish(job["task_id"], "waiting_remote")
                 else:
-                    repository.finish(job["task_id"], "completed", result=result)
+                    finish(job["task_id"], "completed", result=result)
             return True
     except Timeout:
         return False

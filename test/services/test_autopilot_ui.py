@@ -68,3 +68,44 @@ def test_journal_failure_keeps_manual_generation_available(tmp_path, monkeypatch
     assert not app.exception
     assert app.button(key='generate_video_button') is not None
     assert any('fluxo manual continua' in message.value for message in app.warning)
+
+
+def test_channel_reuses_existing_skill_panel_selection(tmp_path):
+    path=tmp_path/'autopilot.sqlite3'
+    script=f'''
+from webui.autopilot import render
+from app.models.schema import VideoParams
+from app.services.autopilot.repository import Repository
+render(VideoParams(video_subject='Preview',skills_enabled=True,skill_ids=['primary','supplement']),repository=Repository({str(path)!r}),autostart=False)
+'''
+    app=AppTest.from_string(script).run()
+    app.text_input[0].set_value('archives')
+    app.text_input[1].set_value('Archives')
+    next(c for c in app.checkbox if c.label=='Autorizar pesquisa e roteiro automáticos para este canal').check()
+    next(b for b in app.button if b.label=='Salvar canal').click().run()
+    assert not app.exception
+    profile=Repository(path).channels()[0]
+    assert profile['skill_ids']==['primary','supplement'] and profile['auto_editorial']
+    # Existing channels keep their saved Skills until the user chooses to sync.
+    assert not app.checkbox(key='autopilot_sync_skills_archives').value
+
+
+def test_new_title_submission_and_preflight_error_are_visible(tmp_path,monkeypatch):
+    from app.models.autopilot_editorial import EditorialSnapshot
+    from app.services.autopilot import editorial
+    from app.services.autopilot.recovery import RecoveryBlocked
+    path=tmp_path/'journal.sqlite3';repo=Repository(path)
+    profile=ChannelProfile(channel_id='history',name='History',auto_editorial=True)
+    repo.save_channel(profile)
+    prepare=Mock(return_value=EditorialSnapshot(channel=profile,script_provider='openai',script_model='configured-model'))
+    monkeypatch.setattr(editorial,'prepare',prepare)
+    app=AppTest.from_string(app_script(path)).run()
+    app.text_input(key='autopilot_new_title').set_value('Original title')
+    next(b for b in app.button if b.label=='Pesquisar e gerar roteiro').click().run()
+    assert not app.exception and len(repo.editorial_jobs())==1
+    assert prepare.call_args.args[0].channel_id=='history'
+    next(b for b in app.button if b.label=='Pesquisar e gerar roteiro').click().run()
+    assert len(repo.editorial_jobs())==1
+    prepare.side_effect=RecoveryBlocked('Configure a chave da API OpenAI para pesquisar fontes')
+    next(b for b in app.button if b.label=='Pesquisar e gerar roteiro').click().run()
+    assert not app.exception and any('chave da API' in error.value for error in app.error)

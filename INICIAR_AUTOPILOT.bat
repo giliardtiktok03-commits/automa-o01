@@ -2,8 +2,8 @@
 setlocal
 cd /d "%~dp0"
 set "PYTHONPATH=%CD%"
-echo AUTOPILOT - worker de recuperacao de projetos salvos.
-echo Configure canais, vincule projetos e ative o worker no painel do MPT.
+echo AUTOPILOT - worker de pesquisa, roteiro e recuperacao.
+echo Configure os canais e ative o AUTOPILOT no painel do MPT.
 echo Este worker nao publica videos. Para encerrar, pressione Ctrl+C.
 if exist ".venv\Scripts\python.exe" (
     ".venv\Scripts\python.exe" -m app.services.autopilot

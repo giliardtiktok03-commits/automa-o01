@@ -1,5 +1,9 @@
 # AUTOPILOT — primeira entrega: canais e recuperação
 
+> Etapa 2 disponível: veja `autopilot-editorial-pt.md` para pesquisa e roteiro
+> de vídeos novos, reaproveitando o painel de Skills. O restante desta página
+> descreve a recuperação implementada na etapa 1.
+
 Esta entrega inicia a base prevista na `AUDITORIA_AUTOPILOT_MPT.md`. Ela permite
 cadastrar canais, localizar e vincular projetos mistos salvos, manter uma fila
 em SQLite e continuar a produção quando o MPT for reaberto, sem digitar UUID.
@@ -19,7 +23,7 @@ que prometa gerar/publicar um vídeo novo enquanto essas etapas estiverem ausent
 5. Marque a autorização de recuperação para esse canal e salve.
 6. Clique em **Localizar projetos salvos**, escolha o projeto pelo título e
    associe-o a um canal. Não é necessário informar o ID.
-7. Clique em **Vincular e colocar na fila** e marque **Ativar recuperação automática**.
+7. Clique em **Vincular e colocar na fila** e marque **Ativar AUTOPILOT**.
 
 Ao reabrir o MPT, a fila e o botão de ativação são restaurados do disco.
 Fechar somente a aba do navegador não encerra o servidor do MPT. Após reinício

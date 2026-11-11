@@ -1,5 +1,7 @@
 """SQLite journal. No credentials, media copies or process-only job identity."""
 from contextlib import contextmanager
+import hashlib
+import unicodedata
 import json
 import re
 from pathlib import Path
@@ -21,7 +23,7 @@ class Repository:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise ValueError("Versão AUTOPILOT incompatível; atualize o programa")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS channels (
@@ -39,7 +41,23 @@ class Repository:
                     kind TEXT NOT NULL, created REAL NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                PRAGMA user_version = 1;
+                CREATE TABLE IF NOT EXISTS editorial_jobs (
+                    task_id TEXT PRIMARY KEY, channel_id TEXT NOT NULL REFERENCES channels(channel_id),
+                    title TEXT NOT NULL, identity_hash TEXT NOT NULL UNIQUE,
+                    snapshot TEXT NOT NULL, state TEXT NOT NULL, error TEXT, result TEXT,
+                    created REAL NOT NULL, updated REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS editorial_stages (
+                    task_id TEXT NOT NULL REFERENCES editorial_jobs(task_id),
+                    name TEXT NOT NULL, remote INTEGER NOT NULL, state TEXT NOT NULL,
+                    result TEXT, digest TEXT, updated REAL NOT NULL,
+                    PRIMARY KEY(task_id,name)
+                );
+                CREATE TABLE IF NOT EXISTS editorial_history (
+                    id INTEGER PRIMARY KEY, task_id TEXT NOT NULL REFERENCES editorial_jobs(task_id),
+                    stages TEXT NOT NULL, created REAL NOT NULL
+                );
+                PRAGMA user_version = 2;
             """)
 
     @contextmanager
@@ -143,3 +161,104 @@ class Repository:
                 db.execute("UPDATE jobs SET profile=(SELECT profile FROM channels WHERE channels.channel_id=jobs.channel_id),channel_version=(SELECT version FROM channels WHERE channels.channel_id=jobs.channel_id) WHERE task_id=? AND state IN ('failed','blocked','waiting_remote')", (task_id,))
             changed = db.execute("UPDATE jobs SET state='queued',error=NULL,next_attempt=0,updated=? WHERE task_id=? AND state IN ('failed','blocked','waiting_remote')", (time.time(), task_id)).rowcount
             return bool(changed)
+
+    def submit_editorial(self, title, snapshot):
+        from uuid import uuid4
+        from app.models.autopilot_editorial import EditorialSnapshot
+        snapshot = EditorialSnapshot.model_validate(snapshot)
+        title = title.strip()
+        if not title or len(title) > 300 or '\x00' in title:
+            raise ValueError("Informe um título de até 300 caracteres")
+        canonical_title = ' '.join(unicodedata.normalize('NFKC', title).casefold().split())
+        identity = hashlib.sha256((snapshot.channel.channel_id + '\0' + canonical_title).encode()).hexdigest()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            prior = db.execute('SELECT task_id FROM editorial_jobs WHERE identity_hash=?', (identity,)).fetchone()
+            if prior:
+                return prior[0], False
+            row = db.execute('SELECT profile FROM channels WHERE channel_id=?', (snapshot.channel.channel_id,)).fetchone()
+            if not row or ChannelProfile.model_validate_json(row[0]) != snapshot.channel:
+                raise Conflict("O canal mudou antes do envio; confira e tente novamente")
+            if not snapshot.channel.auto_editorial:
+                raise Conflict("Autorize pesquisa e roteiro automáticos nas configurações do canal")
+            task_id, now = str(uuid4()), time.time()
+            db.execute('INSERT INTO editorial_jobs VALUES(?,?,?,?,?,?,?,?,?,?)',
+                       (task_id, snapshot.channel.channel_id, title, identity, snapshot.model_dump_json(), 'queued', None, None, now, now))
+            return task_id, True
+
+    def editorial_jobs(self, *, limit=50):
+        with self.connect() as db:
+            return [dict(r) for r in db.execute('SELECT * FROM editorial_jobs ORDER BY created DESC LIMIT ?', (limit,))]
+
+    def get_editorial(self, task_id):
+        with self.connect() as db:
+            row = db.execute('SELECT * FROM editorial_jobs WHERE task_id=?', (task_id,)).fetchone()
+            return dict(row) if row else None
+
+    def take_editorial(self):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            enabled = db.execute("SELECT value FROM settings WHERE key='enabled'").fetchone()
+            if not enabled or enabled[0] != 'true':
+                return None
+            for row in db.execute("SELECT * FROM editorial_jobs WHERE state IN ('queued','running') ORDER BY created").fetchall():
+                channel = db.execute('SELECT profile FROM channels WHERE channel_id=?', (row['channel_id'],)).fetchone()
+                if not channel or not ChannelProfile.model_validate_json(channel[0]).auto_editorial:
+                    continue
+                db.execute("UPDATE editorial_jobs SET state='running',error=NULL,updated=? WHERE task_id=?", (time.time(), row['task_id']))
+                return {**dict(row), 'kind': 'editorial'}
+        return None
+
+    def stages(self, task_id):
+        with self.connect() as db:
+            return {row['name']: dict(row) for row in db.execute('SELECT * FROM editorial_stages WHERE task_id=?', (task_id,))}
+
+    def begin_stage(self, task_id, name, *, remote):
+        from app.services.autopilot.recovery import RecoveryBlocked
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM editorial_stages WHERE task_id=? AND name=?', (task_id, name)).fetchone()
+            if row and row['state'] == 'completed':
+                if hashlib.sha256(row['result'].encode()).hexdigest() != row['digest']:
+                    raise RecoveryBlocked("Artefato editorial alterado; revise antes de repetir uma chamada paga")
+                return json.loads(row['result'])
+            if row and (row['remote'] or row['state'] == 'failed'):
+                raise RecoveryBlocked("Etapa remota interrompida ou com falha. Revise antes de autorizar outra chamada")
+            db.execute("INSERT INTO editorial_stages VALUES(?,?,?,'running',NULL,NULL,?) ON CONFLICT(task_id,name) DO UPDATE SET state='running',updated=excluded.updated",
+                       (task_id, name, int(remote), time.time()))
+            return None
+
+    def complete_stage(self, task_id, name, value):
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True)
+        digest = hashlib.sha256(encoded.encode()).hexdigest()
+        with self.connect() as db:
+            db.execute("UPDATE editorial_stages SET state='completed',result=?,digest=?,updated=? WHERE task_id=? AND name=? AND state='running'",
+                       (encoded, digest, time.time(), task_id, name))
+
+    def fail_stage(self, task_id, name):
+        with self.connect() as db:
+            db.execute("UPDATE editorial_stages SET state='failed',updated=? WHERE task_id=? AND name=? AND state='running'", (time.time(), task_id, name))
+
+    def finish_editorial(self, task_id, state, *, error=None, result=None):
+        if state not in {'completed', 'blocked', 'failed'}:
+            raise ValueError('Estado editorial inválido')
+        with self.connect() as db:
+            db.execute("UPDATE editorial_jobs SET state=?,error=?,result=?,updated=? WHERE task_id=? AND state='running'",
+                       (state, error, json.dumps(result, ensure_ascii=False) if result else None, time.time(), task_id))
+
+    def retry_editorial(self, task_id, *, restart=False, acknowledge_cost=False):
+        if not acknowledge_cost:
+            raise Conflict("Confirme que repetir uma etapa remota pode consumir saldo")
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            job = db.execute('SELECT state FROM editorial_jobs WHERE task_id=?', (task_id,)).fetchone()
+            if not job or job[0] not in {'failed', 'blocked'}:
+                return False
+            history = [dict(row) for row in db.execute('SELECT * FROM editorial_stages WHERE task_id=?', (task_id,))]
+            db.execute('INSERT INTO editorial_history(task_id,stages,created) VALUES(?,?,?)', (task_id, json.dumps(history, ensure_ascii=False), time.time()))
+            if restart:
+                db.execute('DELETE FROM editorial_stages WHERE task_id=?', (task_id,))
+            else:
+                db.execute("DELETE FROM editorial_stages WHERE task_id=? AND state!='completed'", (task_id,))
+            db.execute("UPDATE editorial_jobs SET state='queued',error=NULL,updated=? WHERE task_id=?", (time.time(), task_id))
+            return True

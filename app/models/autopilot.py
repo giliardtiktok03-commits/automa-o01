@@ -13,6 +13,25 @@ class ChannelProfile(BaseModel):
     deepinfra_unlimited: bool = False
     image_limit: int = Field(default=120, ge=0, le=120)
     auto_resume: bool = False
+    auto_editorial: bool = False
+    target_minutes: int = Field(default=20, ge=3, le=30)
+    research_model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=160)
+    research_domains: list[str] = Field(default_factory=list, max_length=30)
+    script_provider: str = Field(default="current", max_length=80)
+    script_model: str = Field(default="", max_length=160)
+
+    @field_validator("research_domains")
+    @classmethod
+    def valid_domains(cls, values):
+        import re
+        result = []
+        for value in values:
+            domain = value.strip().lower().removeprefix("www.")
+            if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,250}[a-z0-9])?\.[a-z]{2,63}", domain) or ".." in domain:
+                raise ValueError("Use apenas domínios, sem https, porta ou caminho")
+            if domain not in result:
+                result.append(domain)
+        return result
 
     @field_validator("name", "language", "niche")
     @classmethod
