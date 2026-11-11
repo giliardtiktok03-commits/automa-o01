@@ -103,7 +103,7 @@ def test_chapter_migration_requires_original_fingerprint_and_unchanged_editorial
     saved = params.model_dump(mode="json")
     for key in ("mixed_use_ai33", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits", "mixed_resume_subtitle_style", "subtitle_soft_shadow", "subtitle_max_lines", "mixed_use_google_flow", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero"):
         saved.pop(key)
-    original = {k: v for k, v in saved.items() if k not in {"mixed_resume", "mixed_grok_unlimited"}}
+    original = {k: v for k, v in saved.items() if k not in {"mixed_resume", "mixed_deepinfra_unlimited", "mixed_grok_unlimited"}}
     references = ["audio-digest", "", ""]
     fingerprint = hashlib.sha256(json.dumps({"params": original, "references": references}, sort_keys=True).encode()).hexdigest()
     manifest = {"version": 1, "fingerprint": fingerprint, "chapters": []}

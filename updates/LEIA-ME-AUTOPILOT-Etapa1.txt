@@ -1,0 +1,37 @@
+MPT AUTOPILOT - ETAPA 1: CANAIS E RECUPERACAO
+
+Este ZIP e uma atualizacao de codigo, diferente do arquivo de auditoria.
+Ele adiciona o painel AUTOPILOT e a fila de recuperacao de projetos mistos.
+A criacao por titulo, pesquisa e publicacao serao ligadas em outras entregas.
+
+INSTALAR
+1. Feche o MPT e qualquer worker antes de copiar os arquivos.
+2. Faca backup dos arquivos de codigo que serao substituidos.
+3. Extraia o ZIP na pasta principal do programa, onde estao app, webui e webui.bat.
+4. Mescle as pastas e aceite substituir os arquivos de codigo.
+5. Abra o MPT novamente. Nao ha novas dependencias de producao a instalar.
+
+USAR
+1. Abra "AUTOPILOT - Canais e recuperacao automatica" no painel principal.
+2. Cadastre seu canal e marque a autorizacao de recuperacao dos projetos vinculados.
+3. Para projetos DeepInfra, marque "DeepInfra sem limite de quantidade" se desejar.
+4. Salve o canal.
+5. Clique em "Localizar projetos salvos", escolha o titulo e o canal.
+6. Clique em "Vincular e colocar na fila".
+7. Marque "Ativar recuperacao automatica".
+
+Nao precisa digitar o ID. A fila persiste quando o programa e fechado.
+Apos reiniciar o Windows, abra novamente o MPT ou INICIAR_AUTOPILOT.bat.
+Esta entrega nao instala servico nem tarefa agendada para abrir o programa no boot.
+Nenhum video sera publicado automaticamente por esta entrega.
+
+O provedor, roteiro, voz, audio, legendas e contexto original do projeto sao
+preservados. Novas imagens podem consumir saldo da conta configurada.
+Resultado pago desconhecido ou saida corrompida para para revisao, sem reenvio
+cego e sem apagar materiais. Projetos por capitulos entram em outra entrega.
+
+O pacote contem codigo e testes atualizados, incluindo a base DeepInfra anterior.
+NAO contem storage, config.toml, chaves, tokens ou dados da sua fila.
+A fila nova fica em storage/autopilot. Preserve sua pasta storage inteira.
+
+Detalhes e limites: docs/autopilot-pt.md
