@@ -197,5 +197,25 @@ def test_saved_project_check_uses_original_id_and_total_budget(headless_task_app
     app.number_input(key='mixed_resume_limit').set_value(24)
     app.button(key='mixed_resume_check').click().run()
     assert not app.exception
-    load.assert_called_once_with(task_id,24,grok_unlimited=False)
+    load.assert_called_once_with(task_id,24,grok_unlimited=False,deepinfra_unlimited=False)
     assert any('21/60' in item.value and '12' in item.value and '24' in item.value for item in app.info)
+
+
+def test_deepinfra_unlimited_controls_disable_numeric_caps(headless_task_app, monkeypatch):
+    app, _ = headless_task_app
+    for key in ('mixed_use_deepinfra', 'mixed_deepinfra_unlimited'):
+        monkeypatch.setitem(config.ui, key, config.ui.get(key, False))
+    language = app.session_state['ui_language']
+    app.session_state[f'video_source_select_{language}'] = 'mixed'
+    app.run()
+    app.checkbox(key='mixed_use_deepinfra').check().run()
+    assert not app.exception
+    assert not app.checkbox(key='mixed_deepinfra_unlimited').disabled
+    app.checkbox(key='mixed_deepinfra_unlimited').check().run()
+    assert app.number_input(key='mixed_max_images').disabled
+    assert not app.checkbox(key='mixed_resume_deepinfra_unlimited').disabled
+    app.checkbox(key='mixed_resume_deepinfra_unlimited').check().run()
+    assert not app.exception
+    assert app.number_input(key='mixed_resume_limit').disabled
+    app.checkbox(key='mixed_resume_deepinfra_unlimited').uncheck().run()
+    assert not app.number_input(key='mixed_resume_limit').disabled

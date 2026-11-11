@@ -23,7 +23,7 @@ def _local(directory, name):
     return candidate
 
 
-def load(task_id, limit, *, grok_unlimited=None):
+def load(task_id, limit, *, grok_unlimited=None, deepinfra_unlimited=None):
     task_id = str(UUID(task_id.strip()))
     directory = Path(utils.task_dir(task_id))
     if not directory.resolve().is_relative_to(Path(utils.task_dir()).resolve()):
@@ -61,11 +61,14 @@ def load(task_id, limit, *, grok_unlimited=None):
     ).mixed_max_images
     if grok_unlimited is not None:
         params.mixed_grok_unlimited = bool(grok_unlimited)
+    if deepinfra_unlimited is not None:
+        params.mixed_deepinfra_unlimited = bool(deepinfra_unlimited)
     from app.config import config
+    uses_unlimited_deepinfra = params.mixed_deepinfra_unlimited and (params.video_source == "deepinfra_image" or (params.video_source == "mixed" and bool(config.ui.get("mixed_use_deepinfra", False))))
     uses_unlimited_grok = (params.mixed_grok_unlimited and params.video_source not in {"ai33_image", "deepinfra_image"} and not bool(config.ui.get("mixed_use_deepinfra", False))
                           and bool(config.ui.get("mixed_use_grok", True))) or params.video_source == "google_flow" or (bool(config.ui.get("mixed_use_google_flow", False)) and not bool(config.ui.get("mixed_use_deepinfra", False)) and params.video_source != "deepinfra_image")
 
-    if not uses_unlimited_grok and limit < manifest["image_requests"]:
+    if not (uses_unlimited_grok or uses_unlimited_deepinfra) and limit < manifest["image_requests"]:
         raise ValueError("New total limit cannot be below requests already started")
     script = saved.get("script")
     if not isinstance(script, str) or not script.strip():
@@ -134,11 +137,11 @@ def load(task_id, limit, *, grok_unlimited=None):
     )
 
 
-def run(task_id, limit, *, grok_unlimited=None, subtitle_settings=None):
+def run(task_id, limit, *, grok_unlimited=None, deepinfra_unlimited=None, subtitle_settings=None):
     from app.services import task
 
     sm.state.update_task(task_id, error=None, error_key=None, error_params={}, failed_stage=None)
-    project = load(task_id, limit, grok_unlimited=grok_unlimited)
+    project = load(task_id, limit, grok_unlimited=grok_unlimited, deepinfra_unlimited=deepinfra_unlimited)
     directory = project["directory"]
     with FileLock(str(directory / "mixed-resume.lock"), timeout=0):
         # Keep a pre-resume copy of manifests. Never move/delete source media.

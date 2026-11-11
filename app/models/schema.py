@@ -150,6 +150,7 @@ class VideoParams(BaseModel):
     google_flow_model: Optional[str] = None
     google_flow_timeout: Optional[int] = Field(default=None, ge=30, le=1800)
     google_flow_require_zero: Optional[bool] = None
+    mixed_deepinfra_unlimited: bool = False
     mixed_grok_unlimited: bool = True
     grok_model: Optional[str] = None
     runware_model: Optional[str] = None

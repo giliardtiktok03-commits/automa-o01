@@ -1574,6 +1574,7 @@ def _apply_restored_params(params):
     st.session_state["long_form_chapter_minutes"] = params.get("chapter_duration_minutes", 3)
     st.session_state["long_form_resume_task_id"] = ""
     st.session_state["mixed_max_images"] = params.get("mixed_max_images", 12)
+    st.session_state["mixed_deepinfra_unlimited"] = params.get("mixed_deepinfra_unlimited", False)
     st.session_state["mixed_grok_unlimited"] = params.get("mixed_grok_unlimited", True)
     st.session_state["mixed_scene_duration"] = params.get("mixed_scene_duration", 10)
     st.session_state["mixed_variable_pacing"] = params.get("mixed_variable_pacing", True)
@@ -6247,7 +6248,7 @@ def _render_video_settings(panel, params):
                     setattr(params, key, value)
                     _set_runtime_config("ui", key, value)
                 if params.mixed_use_deepinfra:
-                    st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois o modelo DeepInfra configurado. Respeita o limite de imagens abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
+                    st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois o modelo DeepInfra configurado. Permite gerar sem limite de quantidade ao marcar a opção abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
                 elif params.mixed_use_google_flow:
                     st.info("Flow selecionado: bancos primeiro; envia os prompts ao Chrome conforme o modo configurado. Grok/AI33 não são acionados automaticamente em falhas. Configure e teste uma imagem em Fontes de material → Google Flow.")
                 _set_runtime_config("ui", "image_source_policy", "grok-v1")
@@ -6265,6 +6266,12 @@ def _render_video_settings(panel, params):
                     params.mixed_max_candidates = st.number_input(
                         tr("Mixed Candidates"), min_value=1, max_value=6, value=3,
                         step=1, key="mixed_max_candidates")
+                params.mixed_deepinfra_unlimited = st.checkbox(
+                    "DeepInfra sem limite de imagens", value=config.ui.get("mixed_deepinfra_unlimited", False),
+                    key="mixed_deepinfra_unlimited", disabled=not params.mixed_use_deepinfra)
+                _set_runtime_config("ui", "mixed_deepinfra_unlimited", params.mixed_deepinfra_unlimited)
+                if params.mixed_use_deepinfra and params.mixed_deepinfra_unlimited:
+                    st.caption("Consulta os bancos primeiro. Se nenhum vídeo passar na validação, gera com DeepInfra sem teto de quantidade até concluir as cenas. Novas imagens consomem saldo DeepInfra; materiais salvos são reaproveitados.")
                 params.mixed_grok_unlimited = st.checkbox(
                     "Grok sem limite de imagens", value=config.ui.get("mixed_grok_unlimited", True),
                     key="mixed_grok_unlimited", disabled=not params.mixed_use_grok or params.mixed_use_deepinfra)
@@ -6272,7 +6279,7 @@ def _render_video_settings(panel, params):
                 if params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_google_flow and not params.mixed_use_deepinfra:
                     st.caption("Consulta Pexels, Pixabay e Coverr antes. Sem material aprovado, gera pelo Grok até concluir as cenas faltantes, sem limite de quantidade. Cada nova imagem pode consumir saldo xAI; pedidos já enviados não são repetidos automaticamente.")
                 params.mixed_max_images = st.number_input(
-                    tr("Mixed Image Limit"), disabled=params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_deepinfra, min_value=0, max_value=120,
+                    tr("Mixed Image Limit"), disabled=(params.mixed_use_deepinfra and params.mixed_deepinfra_unlimited) or (params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_deepinfra), min_value=0, max_value=120,
                     value=12, step=1, key="mixed_max_images",
                 )
                 params.mixed_scene_duration = st.slider(
@@ -6293,7 +6300,9 @@ def _render_video_settings(panel, params):
                 if params.video_source == "grok_image":
                     params.mixed_grok_unlimited = st.checkbox("Grok sem limite de imagens", value=True, key="grok_only_unlimited")
                     st.caption("Novas imagens podem consumir saldo xAI. O modo misto prioriza bancos antes de gerar.")
-                params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit", disabled=params.video_source == "grok_image" and params.mixed_grok_unlimited)
+                if params.video_source == "deepinfra_image":
+                    params.mixed_deepinfra_unlimited = st.checkbox("DeepInfra sem limite de imagens", value=False, key="deepinfra_only_unlimited")
+                params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit", disabled=(params.video_source == "grok_image" and params.mixed_grok_unlimited) or (params.video_source == "deepinfra_image" and params.mixed_deepinfra_unlimited))
                 params.mixed_variable_pacing = st.checkbox(tr("Mixed Variable Pacing"), value=True, key="ai33_only_pacing")
                 params.mixed_scene_duration = st.slider(tr("Mixed Scene Duration"), min_value=5, max_value=30, value=10, key="ai33_only_duration")
 
@@ -9297,11 +9306,16 @@ def _render_mixed_resume():
         st.caption(tr("Mixed Resume Help"))
         resume_id = st.text_input(tr("Mixed Resume ID"), key="mixed_resume_id").strip()
         resume_sources = config.snapshot_config_with_pending(config.ui)
+        deepinfra_selected = bool(resume_sources.get("mixed_use_deepinfra", False))
+        deepinfra_unlimited = st.checkbox("DeepInfra sem limite de imagens nesta retomada", value=False,
+                                          key="mixed_resume_deepinfra_unlimited", disabled=not deepinfra_selected) and deepinfra_selected
+        if deepinfra_selected:
+            st.caption("Sem vídeos aprovados nos bancos, gera com DeepInfra até concluir as cenas. Novas imagens consomem saldo DeepInfra; arquivos já salvos são reaproveitados.")
         grok_selected = bool(resume_sources.get("mixed_use_grok", True)) and not bool(resume_sources.get("mixed_use_deepinfra", False))
         unlimited = st.checkbox("Grok sem limite de imagens nesta retomada", value=True,
                                 key="mixed_resume_grok_unlimited", disabled=not grok_selected) and grok_selected
         st.caption("Quando Grok estiver selecionado, completa as cenas sem teto de quantidade; novas imagens podem consumir saldo. Materiais salvos são reaproveitados.")
-        limit = st.number_input(tr("Mixed Resume Limit"), disabled=unlimited, min_value=0, max_value=120, value=24,
+        limit = st.number_input(tr("Mixed Resume Limit"), disabled=unlimited or deepinfra_unlimited, min_value=0, max_value=120, value=24,
                                 step=1, key="mixed_resume_limit")
         apply_style = st.checkbox("Aplicar o estilo atual das legendas ao retomar", value=True, key="mixed_resume_apply_subtitle_style")
         check = st.button(tr("Mixed Resume Check"), key="mixed_resume_check")
@@ -9310,9 +9324,9 @@ def _render_mixed_resume():
             try:
                 if webui_task.is_generation_active(resume_id):
                     raise ValueError(tr("Generating Video"))
-                project = mixed_resume.load(resume_id, limit, grok_unlimited=unlimited)
+                project = mixed_resume.load(resume_id, limit, grok_unlimited=unlimited, deepinfra_unlimited=deepinfra_unlimited)
                 st.info(tr("Mixed Resume Summary").format(ready=project['ready'], total=project['total'],
-                                                         started=project['started'], limit='sem limite (Grok)' if unlimited and project['params'].video_source != 'ai33_image' else limit))
+                                                         started=project['started'], limit='sem limite (DeepInfra)' if deepinfra_unlimited and project['params'].video_source in {'mixed', 'deepinfra_image'} else 'sem limite (Grok)' if unlimited and project['params'].video_source != 'ai33_image' else limit))
                 if project.get("planning_required"):
                     st.info("O plano visual ainda não foi criado. A retomada usará o áudio salvo e planejará os cortes em lotes, sem gerar a narração novamente.")
                 if resume:

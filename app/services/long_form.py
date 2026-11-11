@@ -89,6 +89,7 @@ def _fingerprint(params, references):
         payload["params"].pop("subtitle_soft_shadow", None)
     if not params.subtitle_max_lines:
         payload["params"].pop("subtitle_max_lines", None)
+    payload["params"].pop("mixed_deepinfra_unlimited", None)
     payload["params"].pop("mixed_grok_unlimited", None)
     if params.mixed_image_provider != "grok":
         for key in ("grok_model", "mixed_use_grok"):
@@ -289,6 +290,7 @@ def _migrate_image_provider(params, references, directory, manifest):
     original.pop("historical_archive_prepared", None)
     original.pop("mixed_resume", None)
     original.pop("mixed_resume_subtitle_style", None)
+    original.pop("mixed_deepinfra_unlimited", None)
     original.pop("mixed_grok_unlimited", None)
     if original.get("custom_audio_file"):
         original["custom_audio_file"] = "<external-narration>"
@@ -325,7 +327,7 @@ def _migrate_image_provider(params, references, directory, manifest):
         return False
     before = VideoParams.model_validate(saved).model_dump(mode="json")
     after = params.model_dump(mode="json")
-    for key in ("mixed_use_deepinfra", "deepinfra_steps", "deepinfra_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero", "mixed_resume", "mixed_use_google_flow", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
+    for key in ("mixed_deepinfra_unlimited", "mixed_use_deepinfra", "deepinfra_steps", "deepinfra_model", "google_flow_mode", "google_flow_profile", "google_flow_project_url", "google_flow_model", "google_flow_timeout", "google_flow_require_zero", "mixed_resume", "mixed_use_google_flow", "mixed_grok_unlimited", "mixed_image_provider", "mixed_use_grok", "grok_model", "mixed_use_ai33", "mixed_use_runware", "mixed_use_grok", "grok_model", "runware_model", "runware_steps", "runware_size", "ai33_model", "ai33_resolution", "ai33_quality", "ai33_max_credits"):
         before.pop(key, None)
         after.pop(key, None)
     if before != after:
