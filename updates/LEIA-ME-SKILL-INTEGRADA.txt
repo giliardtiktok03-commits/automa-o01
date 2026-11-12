@@ -1,0 +1,30 @@
+MPT - HISTORICAL DOCUMENTARY DIRECTOR INTEGRADA NO BLOCO 00
+
+Feche o servidor do MPT. Faça backup do código, config.toml e storage.
+Extraia o ZIP na raiz do programa, mesclando as pastas e substituindo o código.
+Preserve config.toml, storage e seus arquivos de produção.
+O ZIP é cumulativo e mantém modo escuro, AUTOPILOT e DeepInfra sem teto.
+
+Agora tudo do fluxo da Skill está em 00 - Configurações de Skills:
+00.1 Canal e permissões
+00.2 Referências
+00.3 Ângulos e direção visual
+00.4 Pesquisa e revisão
+00.5 Ângulos e seleção
+00.6 Fila e pacotes
+
+Ative Skills editoriais, selecione Historical Documentary Director e configure
+seu canal em 00.1. Salvar canal não inicia chamadas de geração.
+Informe título/referências e clique Pesquisar referência e analisar ângulos.
+Esse botão inicia a execução ali mesmo, após o preflight e a autorização do canal.
+Acompanhe seleção, fila, pausa, retomada e downloads no mesmo bloco.
+As chamadas de IA podem consumir saldo.
+
+Não é mais necessário configurar esta Skill em outro painel do AUTOPILOT.
+Chaves de API continuam globais; há um atalho para elas em 00.4.
+Projetos anteriores, preferências e banco existentes são preservados.
+Sem nova migração de banco nesta atualização.
+
+A entrega continua sendo pacotes editoriais, sem conectar narração, mídia,
+renderização ou publicação do fluxo novo. Google Flow não participa desse fluxo.
+Guia completo: docs/ORGANIZACAO_SKILL_MPT.md.

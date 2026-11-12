@@ -1,5 +1,9 @@
 # Historical Documentary Director — implantação no MPT personalizado
 
+> Layout atualizado: o fluxo agora está integralmente no bloco 00 · Skills.
+> Veja `ORGANIZACAO_SKILL_MPT.md` para o cadastro do canal, as seis etapas e os
+> controles atuais. As instruções de navegação abaixo descrevem a implantação anterior.
+
 Implementação baseada em `SPEC_HISTORICAL_DOCUMENTARY_DIRECTOR.md`, enviada pelo
 usuário, sobre a versão personalizada com AUTOPILOT etapa 2 e DeepInfra sem teto.
 Não pressupõe equivalência com o MoneyPrinterTurbo original.

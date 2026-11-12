@@ -1,5 +1,9 @@
 # Aparência do MPT: claro, escuro e sistema
 
+> A Historical Documentary Director agora tem um workspace próprio no bloco 00.
+> A organização atual está em `ORGANIZACAO_SKILL_MPT.md`; o seletor de aparência
+> descrito aqui permanece no topo.
+
 O botão **Aparência**, no topo do aplicativo, oferece:
 
 - **Claro**: fundo claro, preservado como padrão inicial.
