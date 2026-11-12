@@ -1,9 +1,11 @@
-"""Optional documentary workflow, reusing panel-00 Skills and AUTOPILOT channels."""
+"""Historical Documentary Director workspace, entirely inside the Skills block."""
+import html
 import json
 import time
 import streamlit as st
 from app.models.autopilot import ChannelProfile
-from app.models.historical_director import Request, Weights
+from app.models.historical_director import Request
+from app.models.llm_provider import LLM_PROVIDER_REGISTRY
 from app.services.autopilot import editorial, worker
 from app.services.historical_director import images, production
 from app.services.historical_director.library import SKILL_ID
@@ -11,6 +13,13 @@ from app.services.historical_director.library import SKILL_ID
 LABELS={'analyzing':'Analisando referência','selection':'Aguardando seleção','ready':'Pronto para iniciar',
         'running':'Produzindo pacotes','paused':'Pausado','completed':'Lote concluído',
         'queued':'Aguardando','blocked':'Requer revisão','failed':'Falhou','cancelled':'Cancelado'}
+COLORS={1:'#2563eb',2:'#7c3aed',3:'#d97706',4:'#0891b2',5:'#a16207',6:'#059669'}
+
+
+def section(number,title):
+    st.markdown(f'<div class="mpt-stage-heading" style="--mpt-stage-accent:{COLORS[number]}">'
+                f'<span class="mpt-stage-heading__number">00.{number}</span> · {html.escape(title)}</div>',
+                unsafe_allow_html=True)
 
 
 def reference_text(uploaded):
@@ -23,86 +32,145 @@ def reference_text(uploaded):
     return text
 
 
-def render(params,repository,*,autostart=True):
-    with st.expander('Historical Documentary Director · Ângulos e fila',key='director_panel'):
-        active=bool(params is not None and params.skills_enabled and SKILL_ID in params.skill_ids)
-        enabled=st.checkbox('Usar a Skill neste fluxo de documentários',value=active,key='director_enabled')
-        st.caption('Pacotes editoriais: pesquisa independente, roteiro, descrição, tags e 3 conceitos de thumbnail. Este fluxo ainda não gera mídia nem publica vídeos.')
-        if enabled:
-            channels=repository.channels()
-            if not channels:
-                st.info('Cadastre um canal no AUTOPILOT para começar.')
-            else:
-                _new_batch(repository,channels)
+def render(params,repository,*,autostart=True,on_settings=None):
+    active=bool(params is not None and params.skills_enabled and SKILL_ID in params.skill_ids)
+    with st.expander('Historical Documentary Director · Espaço da Skill',expanded=active,key='director_panel'):
+        st.caption('Canal → referências → ângulos → pesquisa → seleção → fila e pacotes. Tudo neste bloco da Skill.')
+        st.caption('Entrega atual: pacotes editoriais. Narração, mídia, renderização e publicação ainda não estão conectadas.')
+        if autostart and repository.enabled():worker.ensure_started()
+        if active:
+            profile=_channel_setup(repository,params)
+            if profile is not None:_new_batch(repository,profile,autostart=autostart,on_settings=on_settings)
         else:
-            st.caption('O gerador habitual do MPT permanece disponível. Para desativar também as instruções editoriais no gerador manual, desmarque a Skill no painel 00. Lotes já enviados mantêm sua autorização; use Pausar para interromper a fila.')
+            st.info('Para criar novos pacotes, ative as Skills editoriais e selecione Historical Documentary Director acima. Os lotes já enviados continuam disponíveis abaixo.')
         _batches(repository,autostart)
+    return True
 
 
-def _new_batch(repo,channels):
-    channel_id=st.selectbox('Canal para a direção histórica',[c['channel_id'] for c in channels],
-        format_func=lambda x:next(c['name'] for c in channels if c['channel_id']==x),key='director_channel')
+def _channel_setup(repo,params):
+    section(1,'Canal e permissões')
+    channels=repo.channels()
+    options=[c['channel_id'] for c in channels]+['__new__']
+    pending=st.session_state.pop('director_pending_channel',None)
+    if pending in options:st.session_state['director_channel']=pending
+    if st.session_state.get('director_channel') not in options:
+        st.session_state['director_channel']=options[0]
+    selected=st.selectbox('Canal para a direção histórica',options,
+        format_func=lambda x:'Cadastrar novo canal' if x=='__new__' else next(c['name'] for c in channels if c['channel_id']==x),key='director_channel')
+    old=next((c for c in channels if c['channel_id']==selected),None)
+    values={k:v for k,v in old.items() if k!='version'} if old else ChannelProfile(channel_id='new',name='Novo canal').model_dump()
+    profile=ChannelProfile.model_validate(values)
+    ready=old is not None and SKILL_ID in profile.skill_ids and profile.auto_editorial
+    with st.expander('Configurar canal, Skills e autorização',expanded=not ready,key='director_channel_editor_'+selected):
+        with st.form('director_channel_form_'+selected):
+            left,right=st.columns(2)
+            identifier=left.text_input('Identificador do canal (sem @)',value=profile.channel_id if old else '',disabled=old is not None,key='director_channel_id_'+selected)
+            name=right.text_input('Nome do canal',value=profile.name if old else '',key='director_channel_name_'+selected)
+            language=left.text_input('Idioma do canal',value=profile.language,key='director_channel_language_'+selected)
+            minutes=right.number_input('Duração desejada (minutos)',min_value=3,max_value=30,value=profile.target_minutes,key='director_channel_minutes_'+selected)
+            niche=st.text_input('Nicho do canal',value=profile.niche,key='director_channel_niche_'+selected)
+            sync=st.checkbox('Salvar neste canal as Skills selecionadas neste bloco',value=profile.skill_ids!=list(params.skill_ids),key='director_sync_skills_'+selected)
+            st.caption('Seleção atual: '+' → '.join(params.skill_ids)+' · a primeira tem prioridade.')
+            st.caption('Skills salvas: '+(' → '.join(profile.skill_ids) or 'nenhuma'))
+            permission=st.checkbox('Autorizar pesquisa e roteiro automáticos para este canal',value=profile.auto_editorial,key='director_channel_permission_'+selected)
+            st.caption('Salvar esta autorização não inicia chamadas de IA. O botão de pesquisar ou de retomar a fila inicia a execução e pode consumir saldo.')
+            with st.expander('Avançado · modelos e fontes da pesquisa'):
+                research_model=st.text_input('Modelo OpenAI para pesquisa e Blueprint',value=profile.research_model,key='director_channel_research_model_'+selected)
+                domains=st.text_area('Restringir pesquisa a estes domínios (opcional, um por linha)',value='\n'.join(profile.research_domains),key='director_channel_domains_'+selected)
+                providers=['current',*[p.provider_id for p in LLM_PROVIDER_REGISTRY]]
+                provider=st.selectbox('Provedor do roteiro',providers,index=providers.index(profile.script_provider) if profile.script_provider in providers else 0,
+                    format_func=lambda x:'Usar provedor atual do MPT' if x=='current' else next(p.default_label for p in LLM_PROVIDER_REGISTRY if p.provider_id==x),key='director_channel_provider_'+selected)
+                model=st.text_input('Modelo do roteiro (vazio usa o configurado no provedor)',value=profile.script_model,key='director_channel_script_model_'+selected)
+                st.caption('A pesquisa usa a chave da API oficial OpenAI configurada no MPT. O roteiro usa o provedor escolhido. Credenciais globais continuam em Settings/Configurações.')
+            save=st.form_submit_button('Salvar canal desta Skill')
+        if save:
+            try:
+                update=dict(channel_id=identifier.strip(),name=name,language=language,niche=niche,target_minutes=int(minutes),
+                    skill_ids=list(params.skill_ids) if sync else profile.skill_ids,auto_editorial=permission,
+                    research_model=research_model,research_domains=[d.strip() for d in domains.splitlines() if d.strip()],script_provider=provider,script_model=model)
+                updated=ChannelProfile.model_validate({**profile.model_dump(),**update})
+                repo.save_channel(updated,expected_version=old['version'] if old else 0)
+                st.session_state['director_pending_channel']=updated.channel_id
+                st.rerun()
+            except ValueError as exc:st.error(str(exc))
+    if old is None:
+        st.info('Cadastre e salve o canal acima. Depois, as referências aparecerão aqui.')
+        return None
+    if SKILL_ID not in profile.skill_ids:
+        st.warning('Salve a seleção de Skills acima para vincular Historical Documentary Director a este canal.')
+    elif not profile.auto_editorial:
+        st.warning('Autorize pesquisa e roteiro no formulário acima antes de iniciar a pesquisa.')
+    else:
+        st.caption(f'{profile.name} · {profile.language} · {profile.target_minutes} minutos · canal pronto para esta Skill.')
+    return profile
+
+
+def _new_batch(repo,profile,*,autostart=True,on_settings=None):
+    channel_id=profile.channel_id
     saved=repo.director_profile(channel_id)
     defaults=Request(title='Defaults',**saved)
-    profile=ChannelProfile.model_validate({k:v for k,v in next(c for c in channels if c['channel_id']==channel_id).items() if k!='version'})
-    st.caption(f'Perfil salvo: {profile.language} · {profile.target_minutes} minutos. Ajuste idioma, duração e provedor no cadastro do canal no AUTOPILOT.')
-    if SKILL_ID not in profile.skill_ids:
-        st.info('No painel 00, selecione Historical Documentary Director. No cadastro do canal, salve a seleção desse painel. Autorize pesquisa e roteiro para o canal.')
-    with st.container(border=True):
-        title=st.text_input('Título de referência',max_chars=300,key='director_reference_title_'+channel_id)
-        source_mode=st.radio('Roteiro de referência (opcional)',['Colar texto','Enviar arquivo'],key='director_reference_mode_'+channel_id)
-        pasted=st.text_area('Colar roteiro de referência',max_chars=120000,height=160,key='director_reference_text_'+channel_id) if source_mode=='Colar texto' else ''
-        script_file=st.file_uploader('Arquivo de referência TXT ou MD (UTF-8)',type=['txt','md'],max_upload_size=1,key='director_reference_file_'+channel_id) if source_mode=='Enviar arquivo' else None
-        central=st.text_area('Ângulo central do canal',value=defaults.central_angle,max_chars=1000,key='director_central_'+channel_id)
-        identity=st.text_area('Identidade visual do canal',value=defaults.visual_identity,max_chars=1500,key='director_identity_'+channel_id)
-        angle_enabled=st.checkbox('Angle Intelligence — propor novos ângulos',value=defaults.angle_enabled,key='director_angle_enabled_'+channel_id)
-        mode='manual';multiple=False;top_n=1
-        if angle_enabled:
-            mode=st.radio('Seleção de ângulos',['manual','automatic'],index=['manual','automatic'].index(defaults.selection_mode),
-                format_func=lambda x:'Manual' if x=='manual' else 'Automática',key='director_mode_'+channel_id)
-            if mode=='automatic':
-                multiple=st.checkbox('Autorizar múltiplos vídeos no modo automático',value=defaults.automatic_multiple,key='director_multiple_'+channel_id)
-                if multiple:
-                    top_n=st.number_input('Quantidade no automático',min_value=1,max_value=5,value=defaults.automatic_top_n,key='director_top_n_'+channel_id)
-        st.caption('Se Angle Intelligence estiver desligado, o título e o ângulo originais serão mantidos e apenas um pacote será enfileirado. A escolha manual será feita após a análise.')
-        visual=st.checkbox('Analisar thumbnails de referência',value=defaults.thumbnail_reference_enabled,key='director_visual_'+channel_id)
+    section(2,'Referências')
+    title=st.text_input('Título de referência',max_chars=300,key='director_reference_title_'+channel_id)
+    source_mode=st.radio('Roteiro de referência (opcional)',['Colar texto','Enviar arquivo'],horizontal=True,key='director_reference_mode_'+channel_id)
+    pasted=st.text_area('Colar roteiro de referência',max_chars=120000,height=160,key='director_reference_text_'+channel_id) if source_mode=='Colar texto' else ''
+    script_file=st.file_uploader('Arquivo de referência TXT ou MD (UTF-8)',type=['txt','md'],max_upload_size=1,key='director_reference_file_'+channel_id) if source_mode=='Enviar arquivo' else None
+    visual=st.checkbox('Analisar thumbnails de referência',value=defaults.thumbnail_reference_enabled,key='director_visual_'+channel_id)
+    with st.expander('Limite dos arquivos de referência'):
         max_mb=st.number_input('Limite por thumbnail (MB)',min_value=1,max_value=20,value=defaults.max_image_mb,key='director_image_mb_'+channel_id)
-        uploaded=st.file_uploader('Até 3 thumbnails de referência (JPG, PNG, WebP)',type=['jpg','jpeg','png','webp'],accept_multiple_files=True,max_upload_size=int(max_mb),key='director_thumbnails_'+channel_id)
-        st.caption('Use o X do carregador para remover ou substituir arquivos. Desativar análise mantém os anexos sem enviá-los ao modelo visual. Imagens não serão usadas como thumbnails finais.')
-        vision_model=st.text_input('Modelo OpenAI com visão para referências',value=defaults.vision_model,key='director_vision_model_'+channel_id)
-        st.markdown('**Pesos editoriais (devem somar 100)**')
-        weights={}
-        for name,label in [('curiosity','Curiosidade'),('originality','Originalidade'),('thumbnail','Thumbnail'),('retention','Retenção'),('sources','Fontes verificáveis')]:
-            weights[name]=st.number_input(label,min_value=0,max_value=100,value=getattr(defaults.weights,name),key='director_weight_'+channel_id+'_'+name)
-        policy=st.selectbox('Quando um item falhar',['pause_queue','skip'],index=['pause_queue','skip'].index(defaults.on_failure),
-            format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
-        st.caption('Publicação: desativada nesta entrega. A busca web e a análise visual usam a API oficial OpenAI. Texto e revisões usam o provedor salvo no canal. Chamadas podem consumir saldo.')
-        new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
-        save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
-        submit=st.button('Pesquisar referência e analisar ângulos',key='director_submit_'+channel_id)
+    uploaded=st.file_uploader('Até 3 thumbnails de referência (JPG, PNG, WebP)',type=['jpg','jpeg','png','webp'],accept_multiple_files=True,max_upload_size=int(max_mb),key='director_thumbnails_'+channel_id)
+    st.caption('O roteiro serve para análise, não como prova factual. Use o X para remover arquivos. Com análise visual desligada, as imagens não são enviadas ao modelo.')
     if len(uploaded or [])>3:st.error('Envie no máximo 3 thumbnails de referência')
     elif uploaded:
-        for f in uploaded:
-            # Preview only decoded, sanitized images. No provider call during a rerun.
+        previews=st.columns(len(uploaded))
+        for target,f in zip(previews,uploaded):
             try:
-                ref=images.store(f.getvalue(),max_mb=int(max_mb))
-                st.image(images.read(ref),width=220,caption=f.name)
+                ref=images.store(f.getvalue(),max_mb=int(max_mb));target.image(images.read(ref),width=220,caption=f.name)
             except ValueError as exc:st.error(str(exc))
+    section(3,'Ângulos e direção visual')
+    angle_enabled=st.checkbox('Angle Intelligence — propor novos ângulos',value=defaults.angle_enabled,key='director_angle_enabled_'+channel_id)
+    mode='manual';multiple=False;top_n=1
+    if angle_enabled:
+        mode=st.radio('Seleção de ângulos',['manual','automatic'],index=['manual','automatic'].index(defaults.selection_mode),horizontal=True,
+            format_func=lambda x:'Manual' if x=='manual' else 'Automática',key='director_mode_'+channel_id)
+        if mode=='automatic':
+            multiple=st.checkbox('Autorizar múltiplos vídeos no modo automático',value=defaults.automatic_multiple,key='director_multiple_'+channel_id)
+            if multiple:top_n=st.number_input('Quantidade no automático',min_value=1,max_value=5,value=defaults.automatic_top_n,key='director_top_n_'+channel_id)
+    st.caption('Sem mudança de ângulo: mantém o título original e cria um pacote. No automático: um pacote por padrão; múltiplos exigem autorização explícita.')
+    with st.expander('Perfil editorial e visual do canal'):
+        central=st.text_area('Ângulo central do canal',value=defaults.central_angle,max_chars=1000,key='director_central_'+channel_id)
+        identity=st.text_area('Identidade visual do canal',value=defaults.visual_identity,max_chars=1500,key='director_identity_'+channel_id)
+    section(4,'Pesquisa e revisão')
+    if on_settings is not None:
+        st.button('Configurar acesso aos provedores',key='director_provider_access',on_click=on_settings,args=('llm',))
+    with st.expander('Avançado · análise visual, pesos e tratamento de falhas'):
+        vision_model=st.text_input('Modelo OpenAI com visão para referências',value=defaults.vision_model,key='director_vision_model_'+channel_id)
+        st.caption('Pesos editoriais: devem somar 100. Não representam probabilidade de viralização.')
+        weights={}
+        columns=st.columns(5)
+        for column,(name,label) in zip(columns,[('curiosity','Curiosidade'),('originality','Originalidade'),('thumbnail','Thumbnail'),('retention','Retenção'),('sources','Fontes verificáveis')]):
+            weights[name]=column.number_input(label,min_value=0,max_value=100,value=getattr(defaults.weights,name),key='director_weight_'+channel_id+'_'+name)
+        policy=st.selectbox('Quando um item falhar',['pause_queue','skip'],index=['pause_queue','skip'].index(defaults.on_failure),
+            format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
+        new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
+    st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo selecionado terá sua própria pesquisa e revisão. Chamadas de IA podem consumir saldo.')
+    save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
+    ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
+    submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
     if save or submit:
         try:
-            options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,
-                automatic_top_n=int(top_n),thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,
-                weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy)
+            options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,automatic_top_n=int(top_n),
+                thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy)
             if save:
-                repo.save_director_profile(channel_id,options)
-                st.success('Preferências salvas somente para este canal.')
+                repo.save_director_profile(channel_id,options);st.success('Preferências salvas somente para este canal.')
             if submit:
                 request=Request(title=title,reference_script=pasted if source_mode=='Colar texto' else reference_text(script_file),
                     thumbnails=images.upload([f.getvalue() for f in uploaded or []],max_mb=int(max_mb)),**options)
                 snapshot=editorial.prepare(profile)
                 batch,created=repo.create_director_batch(request,snapshot,new_version=new_version)
-                st.success('Lote de análise adicionado ao AUTOPILOT.' if created else 'Este lote já existe; nenhuma análise duplicada foi criada.')
-                if not repo.enabled():st.info('Ative o AUTOPILOT para executar a pesquisa e a análise.')
+                repo.set_enabled(True)
+                st.session_state['autopilot_worker_pending_enabled']=True
+                if autostart:worker.ensure_started()
+                st.success('Pesquisa enviada para execução. Acompanhe a seleção e a fila abaixo.' if created else 'Este lote já existe; acompanhe abaixo. Nenhuma análise duplicada foi criada.')
         except (ValueError,OSError) as exc:st.error(str(exc))
 
 
@@ -149,12 +217,24 @@ def _select(repo,batch,result):
                 st.rerun()
             except ValueError as exc:st.error(str(exc))
     else:
-        st.info('Seleção automática: '+', '.join(result['recommended_ids'][:request.automatic_top_n])+' · será enfileirada pelo AUTOPILOT ativo.')
+        st.info('Seleção automática: '+', '.join(result['recommended_ids'][:request.automatic_top_n])+' · será enfileirada automaticamente com a execução ativa neste bloco.')
 
 
 @st.fragment(run_every=3)
 def _batches(repo,autostart=True):
-    for batch in repo.director_batches(limit=10):
+    from webui.autopilot import render_worker_control
+    batches=repo.director_batches(limit=10)
+    section(5,'Ângulos e seleção')
+    pending_selection=[batch for batch in batches if batch['state']=='selection' and batch['analysis']]
+    if not pending_selection:st.caption('As propostas aparecerão aqui após a pesquisa e a revisão. No modo automático, a seleção é enviada à fila diretamente.')
+    for batch in pending_selection:
+        request=Request.model_validate_json(batch['request'])
+        with st.expander('Selecionar ângulos · '+request.title,expanded=True,key='director_selection_'+batch['batch_id']):
+            _select(repo,batch,json.loads(batch['analysis']))
+    section(6,'Fila e pacotes')
+    render_worker_control(repo,autostart=autostart)
+    if not batches:st.caption('Nenhum lote enviado. Comece pelas referências e pelo botão de pesquisa acima.')
+    for batch in batches:
         request=Request.model_validate_json(batch['request'])
         with st.expander(request.title+' · '+LABELS.get(batch['state'],batch['state']),key='director_batch_'+batch['batch_id']):
             st.caption('Lote '+batch['batch_id']+' · '+json.loads(batch['snapshot'])['channel']['name'])
@@ -163,7 +243,6 @@ def _batches(repo,autostart=True):
                 result=json.loads(batch['analysis'])
                 st.download_button('Exportar análise e IDs (.json)',json.dumps({'batch':batch,'analysis':result},ensure_ascii=False,indent=2),
                     file_name='historical-analysis-'+batch['batch_id']+'.json',mime='application/json',key='director_analysis_download_'+batch['batch_id'])
-                if batch['state']=='selection':_select(repo,batch,result)
             items=repo.director_items(batch['batch_id'])
             production_items=[i for i in items if i['role']=='production']
             completed=sum(i['state']=='completed' for i in production_items)
@@ -191,6 +270,9 @@ def _batches(repo,autostart=True):
                     except ValueError as exc:st.error(str(exc))
             for item in items:
                 _item(repo,item,batch)
+
+    from webui.autopilot import render_editorial_results
+    render_editorial_results(repo,director=True)
 
 
 def _item(repo,item,batch):

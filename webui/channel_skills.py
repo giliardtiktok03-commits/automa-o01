@@ -1,5 +1,6 @@
 """Channel skills controls; installing instructions does not activate them."""
 
+import json
 import streamlit as st
 
 from app.config import config
@@ -25,7 +26,8 @@ Defina as orientações editoriais desejadas.
 '''
 
 
-def render(panel, params, set_config, heading):
+def render(panel, params, set_config, heading, *, repository=None, autostart=True, on_settings=None):
+    worker_control_rendered = False
     settings = config.snapshot_config_with_pending(config.ui)
     if "channel_skills_pending_ids" in st.session_state:
         st.session_state["channel_skill_ids"] = st.session_state.pop("channel_skills_pending_ids")
@@ -82,6 +84,23 @@ def render(panel, params, set_config, heading):
                     st.caption(str(exc))
             st.session_state["active_channel_skill_snapshot"] = [item.model_dump() for item in params.skill_snapshot]
 
+            # Each Skill owns its workflow here; the shared worker remains the same.
+            from app.services.historical_director.library import SKILL_ID as DIRECTOR_ID
+            from app.services.autopilot.repository import Repository
+            import sqlite3
+            try:
+                journal = repository or Repository()
+                director_active = params.skills_enabled and DIRECTOR_ID in params.skill_ids
+                director_saved = bool(journal.director_batches(limit=1)) or any(
+                    any(item['skill_id']==DIRECTOR_ID for item in json.loads(job['snapshot']).get('skills',[]))
+                    for job in journal.editorial_jobs(limit=100))
+                if director_active or director_saved:
+                    from webui.historical_director import render as render_director
+                    worker_control_rendered = True
+                    render_director(params, journal, autostart=autostart, on_settings=on_settings)
+            except (sqlite3.Error, OSError, ValueError):
+                st.warning('Fila da Skill indisponível. O fluxo manual continua disponível; confira o armazenamento antes de retomar.')
+
             with st.expander("Instalar ou gerenciar SKILL.md", expanded=False):
                 uploaded = st.file_uploader("Carregar arquivo SKILL.md (UTF-8, até 24 KB)", type=["md"], key="channel_skill_upload")
                 skill_id = st.text_input("Identificador da nova skill", placeholder="meu-canal", key="channel_skill_new_id")
@@ -109,3 +128,5 @@ def render(panel, params, set_config, heading):
                         library.remove(editing)
                         st.session_state["channel_skills_pending_ids"] = [value for value in selected if value != editing]
                         st.rerun()
+
+    return worker_control_rendered

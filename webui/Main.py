@@ -9910,6 +9910,14 @@ def _render_application():
     if restore_applied or restore_succeeded:
         st.success(tr("Task Configuration Loaded"))
 
+    params = VideoParams(video_subject="")
+    params.match_materials_to_script = bool(
+        st.session_state.get("match_materials_to_script", False)
+    )
+    from webui.channel_skills import render as render_channel_skills
+    skills_panel = st.container(key="skills_workspace")
+    skill_worker_control = render_channel_skills(skills_panel, params, _set_runtime_config, _stage_heading, on_settings=_open_settings_dialog)
+
     with st.container(key="main_settings_grid"):
         panel = st.columns(4)
     left_panel = panel[0]
@@ -9917,12 +9925,6 @@ def _render_application():
     audio_panel = panel[2]
     right_panel = panel[3]
 
-    params = VideoParams(video_subject="")
-    params.match_materials_to_script = bool(
-        st.session_state.get("match_materials_to_script", False)
-    )
-    from webui.channel_skills import render as render_channel_skills
-    render_channel_skills(left_panel, params, _set_runtime_config, _stage_heading)
     _render_script_settings(left_panel, params)
 
     uploaded_files = _render_video_settings(middle_panel, params)
@@ -9935,7 +9937,7 @@ def _render_application():
     from webui.autopilot import render as render_autopilot
     import sqlite3
     try:
-        render_autopilot(params)
+        render_autopilot(params, worker_control=not skill_worker_control)
     except (sqlite3.Error, OSError, ValueError):
         st.warning("AUTOPILOT indisponível. Confira o diagnóstico antes de retomar. O fluxo manual continua disponível.")
 
