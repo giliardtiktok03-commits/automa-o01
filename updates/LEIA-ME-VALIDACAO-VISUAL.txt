@@ -1,0 +1,24 @@
+MPT - CORRECAO DE FALHA TECNICA NA VALIDACAO VISUAL
+
+Feche o servidor do MPT. Faça backup do código e de storage.
+Extraia este ZIP incremental na raiz do programa, substituindo apenas:
+app/services/visual_validation.py
+app/services/mixed_materials.py
+
+Reabra o MPT e RETOME O MESMO PROJETO que falhou.
+Preserve áudio, roteiro, planejamento, mixed-scenes.json e a pasta mixed.
+Não apague checkpoints. Não precisa gerar a narração novamente.
+
+A avaliação tenta no máximo duas chamadas em falhas recuperáveis. Não aprova
+vídeo sem parecer válido. Se a API continuar falhando e DeepInfra já estiver
+selecionado, o corte segue para o gerador de imagens, respeitando o limite salvo.
+PrunaAI P-Image será usado se esse for o modelo salvo do projeto.
+Autenticação inválida e HTTP 429 não são repetidos automaticamente.
+A correção não ativa outro gerador e não trata erro local de frames como falha API.
+
+Avisos aparecem no terminal; detalhes seguros ficam em:
+storage/tasks/<id>/mixed/visual-errors.json
+
+Não altera roteiro, áudio, buscas dos bancos, zoom ou layout.
+131 testes locais aprovados; nenhuma geração paga realizada neste ambiente.
+Detalhes: docs/CORRECAO_VALIDACAO_VISUAL.md.
