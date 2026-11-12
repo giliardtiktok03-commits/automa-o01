@@ -1,0 +1,28 @@
+MPT - PRUNAAI P-IMAGE NO DEEPINFRA EXISTENTE
+
+Feche o MPT. Faça backup dos três arquivos correspondentes antes de substituir.
+Extraia este ZIP incremental na raiz do programa, mesclando app e webui.
+
+Arquivos de execução desta atualização:
+app/models/schema.py
+app/services/deepinfra_image.py
+webui/deepinfra_settings.py
+
+Não há Main.py, configuração, banco de dados, Pexels, Pixabay, roteiro, narração,
+zoom ou montagem neste pacote. Não é necessário cadastrar outro provedor ou chave.
+
+Reabra o MPT, vá às configurações de materiais > DeepInfra e selecione
+PrunaAI P-Image. O ID usado é exatamente PrunaAI/p-image.
+O modelo padrão anterior e os demais modelos são preservados.
+
+Para o teste real escolhido no Windows:
+- Confira a chave DeepInfra já existente.
+- Selecione PrunaAI P-Image e clique Testar DeepInfra uma vez.
+- Confira a prévia e os detalhes: PrunaAI/p-image, 1024x576, PNG.
+- Use Baixar imagem de teste.
+O teste gera uma única imagem 16:9 e pode consumir saldo.
+Se houver DEEPINFRA_IMAGE_MODEL fixado no ambiente, ele continua prevalecendo.
+
+33 testes locais passaram. A API real não foi chamada neste ambiente sem chave.
+Erros e retomada utilizam o registro já existente; não há reenvio automático.
+Detalhes e localização dos registros: docs/DEEPINFRA_P_IMAGE.md.

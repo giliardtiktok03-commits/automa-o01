@@ -1,4 +1,4 @@
-"""DeepInfra image APIs: FLUX.1 Schnell and legacy SDXL, durable recovery, no retries."""
+"""DeepInfra image APIs: FLUX.1 Schnell, PrunaAI P-Image and legacy SDXL; no retries."""
 import base64
 import hashlib
 import io
@@ -19,8 +19,9 @@ from app.utils.atomic_files import write_bytes_atomic
 MODEL = 'stabilityai/sdxl-turbo'
 ENDPOINT = 'https://api.deepinfra.com/v1/inference/' + MODEL
 FLUX_MODEL = 'black-forest-labs/FLUX-1-schnell'
+P_IMAGE_MODEL = 'PrunaAI/p-image'
 FLUX_ENDPOINT = 'https://api.deepinfra.com/v1/openai/images/generations'
-MODELS = {FLUX_MODEL: 'DeepInfra — FLUX.1 Schnell', MODEL: 'DeepInfra — SDXL Turbo'}
+MODELS = {FLUX_MODEL: 'DeepInfra — FLUX.1 Schnell', MODEL: 'DeepInfra — SDXL Turbo', P_IMAGE_MODEL: 'PrunaAI P-Image'}
 MAX_RESPONSE = 36 * 1024 * 1024
 
 
@@ -41,7 +42,7 @@ def model(settings=None):
     settings = config.app if settings is None else settings
     selected = str(os.environ.get('DEEPINFRA_IMAGE_MODEL') or settings.get('deepinfra_image_model') or FLUX_MODEL).strip()
     if selected not in MODELS:
-        raise DeepInfraError('Modelo DeepInfra não suportado: selecione FLUX.1 Schnell ou SDXL Turbo')
+        raise DeepInfraError('Modelo DeepInfra não suportado: selecione FLUX.1 Schnell, SDXL Turbo ou PrunaAI P-Image')
     return selected
 
 
@@ -102,7 +103,7 @@ def _post(payload, key, timeout):
     path = _rate_file(key)
     with FileLock(str(path) + '.lock', timeout=0):
         _cooldown(key)
-        endpoint = FLUX_ENDPOINT if payload.get('model') == FLUX_MODEL else ENDPOINT
+        endpoint = FLUX_ENDPOINT if payload.get('model') in (FLUX_MODEL, P_IMAGE_MODEL) else ENDPOINT
         with requests.Session() as client:
             with client.post(endpoint, headers={'Authorization': 'Bearer ' + key}, json=payload,
                              timeout=(15, timeout), allow_redirects=False, stream=True) as response:
@@ -150,8 +151,8 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
     width, height = sizes[aspect]
     payload = dict(prompt=prompt, num_images=1, width=width, height=height,
                    num_inference_steps=params.deepinfra_steps, guidance_scale=0)
-    if params.deepinfra_model == FLUX_MODEL:
-        payload = dict(model=FLUX_MODEL, prompt=prompt, n=1, size=f'{width}x{height}', response_format='b64_json')
+    if params.deepinfra_model in (FLUX_MODEL, P_IMAGE_MODEL):
+        payload = dict(model=params.deepinfra_model, prompt=prompt, n=1, size=f'{width}x{height}', response_format='b64_json')
     spec = {'model': params.deepinfra_model, **payload}
     fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
     folder = Path(directory)
@@ -203,7 +204,7 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
                 state['status'] = 'refused'
                 save(state)
                 raise DeepInfraRefusal('DeepInfra sinalizou conteúdo recusado; nenhum novo pedido foi feito')
-            if params.deepinfra_model == FLUX_MODEL:
+            if params.deepinfra_model in (FLUX_MODEL, P_IMAGE_MODEL):
                 if not isinstance(data.get('data'), list) or len(data['data']) != 1:
                     raise ValueError()
                 item = data['data'][0]
@@ -233,7 +234,7 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
                 source.load()
                 out = io.BytesIO()
                 normalized = source.convert('RGB')
-                if params.deepinfra_model == FLUX_MODEL:
+                if params.deepinfra_model in (FLUX_MODEL, P_IMAGE_MODEL):
                     normalized = ImageOps.fit(normalized, (width, height), method=Image.Resampling.LANCZOS)
                 normalized.save(out, format='PNG')
             details = {'model': params.deepinfra_model, 'width': normalized.width, 'height': normalized.height,

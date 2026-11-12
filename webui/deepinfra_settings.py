@@ -11,7 +11,7 @@ from app.utils import utils
 def render(settings, set_config):
     def save(name, widget):
         set_config('app', name, st.session_state[widget])
-    st.markdown('**DeepInfra — FLUX.1 Schnell**')
+    st.markdown('**DeepInfra — Modelos de imagens**')
     key = st.text_input('Chave da API DeepInfra', value=deepinfra.api_key(settings), type='password',
                         key='deepinfra_image_api_key_input', on_change=save, args=('deepinfra_api_key','deepinfra_image_api_key_input')).strip()
     set_config('app','deepinfra_api_key',key)
@@ -30,7 +30,7 @@ def render(settings, set_config):
     timeout = st.number_input('Espera máxima por imagem DeepInfra (segundos)', min_value=30, max_value=1800, value=int(settings.get('deepinfra_timeout_seconds',180)), step=30, key='deepinfra_timeout_input')
     set_config('app','deepinfra_timeout_seconds',timeout)
     active = {**settings,'deepinfra_api_key':key,'deepinfra_image_model':selected,'deepinfra_timeout_seconds':timeout,'deepinfra_steps':steps}
-    st.caption('Uma imagem por solicitação. FLUX usa a API OpenAI-compatible da DeepInfra; SDXL conserva a API anterior. Resposta Base64 ou URL é validada e salva como PNG. O vídeo usa seu ajuste de quadro; thumbnails usam recorte central em 1280×720, sem esticar.')
+    st.caption('Uma imagem por solicitação. FLUX e PrunaAI P-Image usam a API OpenAI-compatible da DeepInfra; SDXL conserva a API anterior. Resposta Base64 ou URL é validada e salva como PNG. O vídeo usa seu ajuste de quadro; thumbnails usam recorte central em 1280×720, sem esticar.')
     prompt = st.text_area('Prompt do teste DeepInfra', value='Realistic documentary illustration of a submarine at sea, wide composition, no text.',key='deepinfra_test_prompt')
     job = st.session_state.get('deepinfra_test_job')
     start = st.button('Testar DeepInfra', disabled=not key or bool(job),key='deepinfra_test_start')
@@ -60,7 +60,7 @@ def render(settings, set_config):
     enabled=st.checkbox('Ativar geração de thumbnails DeepInfra',value=bool(settings.get('deepinfra_thumbnails_enabled',False)),key='deepinfra_thumbnails_enabled')
     set_config('app','deepinfra_thumbnails_enabled',enabled)
     if enabled:
-        st.markdown('**Thumbnail · DeepInfra — FLUX.1 Schnell / SDXL**')
+        st.markdown('**Thumbnail · DeepInfra**')
         thumb_prompt=st.text_area('Prompt da thumbnail',value='Documentary thumbnail background: a submarine beneath dramatic storm clouds, wide shot, no text.',key='deepinfra_thumbnail_prompt')
         thumb_job=st.session_state.get('deepinfra_thumbnail_job')
         create=st.button('Gerar 1 thumbnail DeepInfra',key='deepinfra_thumbnail_generate',disabled=not key or bool(thumb_job))
