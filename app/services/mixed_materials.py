@@ -431,6 +431,15 @@ def _stock(scene, params, directory, provider_order, used):
                 try:
                     accepted, verdict = visual_validation.inspect_clip(
                         path, scene, directory, config.app, params.mixed_vision_model, source_start=previous)
+                except visual_validation.VisualAPIError as exc:
+                    if params.mixed_image_provider != 'deepinfra':
+                        raise MixedError(str(exc), key='mixed.vision_failed') from exc
+                    scene['visual_validation_error'] = {'code':exc.code,'attempts':exc.attempts,
+                        'http_status':exc.status,'approved':False,'fallback':'deepinfra_image'}
+                    logger.warning('Cena {}: validação visual indisponível ({}); vídeo do banco não aprovado. '
+                                   'Seguindo para o DeepInfra selecionado, respeitando o limite de imagens.',
+                                   scene['id'],exc.code)
+                    return None, None
                 except visual_validation.VisualValidationError as exc:
                     raise MixedError(str(exc), key="mixed.vision_failed") from exc
                 logger.info("Visual validation: scene={}, candidate={}, accepted={}", scene["id"], examined, accepted)
