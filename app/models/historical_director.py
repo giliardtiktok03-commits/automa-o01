@@ -24,6 +24,24 @@ class ImageRef(Record):
     height: int = Field(ge=64, le=4096)
 
 
+class VideoProduction(Record):
+    mode: Literal['editorial', 'narration', 'video'] = 'editorial'
+    voice_name: str = Field(default='en-US-ChristopherNeural-Male', min_length=1, max_length=200)
+    voice_rate: float = Field(default=1, ge=0.5, le=2, allow_inf_nan=False)
+    subtitle_enabled: bool = True
+    subtitle_provider: Literal['edge', 'whisper'] = 'edge'
+    font_name: str = Field(default='STHeitiMedium.ttc', min_length=1, max_length=160, pattern=r'^[^/\\\x00]+$')
+    video_source: Literal['mixed', 'deepinfra_image'] = 'mixed'
+    deepinfra_model: Literal['stabilityai/sdxl-turbo', 'black-forest-labs/FLUX-1-schnell', 'PrunaAI/p-image'] = 'PrunaAI/p-image'
+    use_pexels: bool = True
+    use_pixabay: bool = True
+    image_limit: int = Field(default=120, ge=0, le=120)
+    deepinfra_unlimited: bool = False
+    visual_validation: bool = True
+    music_enabled: bool = False
+    music_volume: float = Field(default=0.15, ge=0, le=1, allow_inf_nan=False)
+
+
 class Request(Record):
     skill_enabled: Literal[True] = True
     title: str = Field(min_length=1, max_length=300)
@@ -41,6 +59,7 @@ class Request(Record):
     max_image_mb: int = Field(default=10, ge=1, le=20)
     on_failure: Literal['pause_queue', 'skip'] = 'pause_queue'
     publish_mode: Literal['off'] = 'off'  # Fail closed until media/YouTube QA is connected.
+    production: VideoProduction = Field(default_factory=VideoProduction)
 
     @model_validator(mode='after')
     def controls(self):

@@ -135,6 +135,8 @@ def deliverables(result,context):
               'scope':'editorial_package','published':False}), 'quality_report.json':encode(result['quality_report'])}
     if result['thumbnail_reference_analysis']['status']=='analyzed':
         data['thumbnail_reference_analysis.json']=encode(result['thumbnail_reference_analysis'])
+    if result.get('media'):
+        data['media_report.json']=encode(result['media'])
     return {name:text.encode('utf-8') for name,text in data.items()}
 
 
@@ -192,5 +194,10 @@ def run(job,repo,context):
     context_export.update(job_id=job['task_id'],language=snapshot.channel.language,channel_profile=snapshot.channel.model_dump(),
                           skill_hashes={s.skill_id:s.sha256 for s in snapshot.skills})
     result['deliverables']=ed.step(controlled,job['task_id'],'director_export',lambda:export(job['task_id'],result,context_export),remote=False)
+    if request.production.mode != 'editorial':
+        from app.services.historical_director import video_production
+        result['media']=video_production.run(job['task_id'],controlled,snapshot,result,request.production)
+        result['video_generated']=result['media']['video_generated']
+        result['deliverables']=ed.step(controlled,job['task_id'],'director_media_export',lambda:export(job['task_id'],result,context_export),remote=False)
     repo.check_director_control(job['task_id'])
     return result

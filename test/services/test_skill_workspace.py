@@ -140,3 +140,22 @@ def test_recovery_options_cannot_overwrite_skill_configuration(setup,monkeypatch
     assert not app.exception
     after={k:v for k,v in repo.channels()[0].items() if k!='version'}
     assert after=={**before,'deepinfra_unlimited':True,'auto_resume':True}
+
+
+def test_video_options_are_inside_skill_saved_per_channel_and_do_not_start_calls(setup,monkeypatch):
+    repo,_=setup;activate(monkeypatch)
+    paid=Mock();monkeypatch.setattr(editorial,'prepare',paid)
+    app=AppTest.from_string(script(repo)).run()
+    app.selectbox(key='director_output_history').select('video').run()
+    assert not app.exception
+    workspace=app.main.children[0]
+    assert any(w.key=='director_image_model_history' for w in workspace.get('selectbox'))
+    app.checkbox(key='director_image_unlimited_history').check()
+    app.text_input(key='director_voice_history').set_value('en-US-GuyNeural-Male')
+    app.button(key='director_save_profile_history').click().run()
+    assert not app.exception
+    saved=repo.director_profile('history')['production']
+    assert saved['mode']=='video' and saved['deepinfra_model']=='PrunaAI/p-image'
+    assert saved['deepinfra_unlimited'] and saved['voice_name']=='en-US-GuyNeural-Male'
+    paid.assert_not_called()
+    assert not repo.editorial_jobs()
