@@ -1,0 +1,19 @@
+ATUALIZAÇÃO — SKILL: NARRAÇÃO E VÍDEO
+
+Este pacote incremental pressupõe o MPT com Historical Documentary Director,
+interface organizada da Skill, PrunaAI P-Image e correção de validação visual
+já aplicados (branch codex/visual-validation-recovery).
+
+1. Pare o MPT e aguarde/paralise tarefas antes de substituir código.
+2. Faça uma cópia de segurança da instalação, especialmente storage.
+3. Extraia este ZIP na pasta do MPT que contém app, webui e resource,
+   aceitando substituir somente os arquivos de código incluídos.
+4. Reinicie o MPT com o comando que já utiliza.
+5. No bloco 00 da Skill, em 00.4 > Produção, escolha a entrega, a voz e
+   as opções de mídia. Salve e envie um NOVO lote de teste.
+
+Lotes antigos continuam editoriais. A opção de vídeo não é aplicada a um
+vídeo que já estava em andamento. Storage e config.toml não estão neste ZIP
+nem devem ser apagados. Não é necessário reinstalar dependências.
+
+A publicação continua desligada. Consulte docs/SKILL_PRODUCAO_VIDEO.md.

@@ -4,7 +4,7 @@ import json
 import time
 import streamlit as st
 from app.models.autopilot import ChannelProfile
-from app.models.historical_director import Request
+from app.models.historical_director import Request, VideoProduction
 from app.models.llm_provider import LLM_PROVIDER_REGISTRY
 from app.services.autopilot import editorial, worker
 from app.services.historical_director import images, production
@@ -36,7 +36,7 @@ def render(params,repository,*,autostart=True,on_settings=None):
     active=bool(params is not None and params.skills_enabled and SKILL_ID in params.skill_ids)
     with st.expander('Historical Documentary Director · Espaço da Skill',expanded=active,key='director_panel'):
         st.caption('Canal → referências → ângulos → pesquisa → seleção → fila e pacotes. Tudo neste bloco da Skill.')
-        st.caption('Entrega atual: pacotes editoriais. Narração, mídia, renderização e publicação ainda não estão conectadas.')
+        st.caption('Entrega por canal: pacote editorial, narração ou vídeo 16:9. Publicação permanece desligada.')
         if autostart and repository.enabled():worker.ensure_started()
         if active:
             profile=_channel_setup(repository,params)
@@ -153,13 +153,14 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
             format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
         new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
     st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo selecionado terá sua própria pesquisa e revisão. Chamadas de IA podem consumir saldo.')
+    production_options=_production_options(defaults.production,channel_id)
     save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
     ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
     submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
     if save or submit:
         try:
             options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,automatic_top_n=int(top_n),
-                thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy)
+                thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy,production=production_options)
             if save:
                 repo.save_director_profile(channel_id,options);st.success('Preferências salvas somente para este canal.')
             if submit:
@@ -172,6 +173,46 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
                 if autostart:worker.ensure_started()
                 st.success('Pesquisa enviada para execução. Acompanhe a seleção e a fila abaixo.' if created else 'Este lote já existe; acompanhe abaixo. Nenhuma análise duplicada foi criada.')
         except (ValueError,OSError) as exc:st.error(str(exc))
+
+
+def _production_options(defaults,channel_id):
+    from pathlib import Path
+    from app.utils import utils
+    with st.expander('Produção · narração, imagens, legendas e música',expanded=defaults.mode!='editorial'):
+        modes=['editorial','narration','video']
+        labels={'editorial':'Somente pacote editorial','narration':'Pacote + narração','video':'Pacote + narração + vídeo completo'}
+        mode=st.selectbox('Entrega de cada ângulo',modes,index=modes.index(defaults.mode),format_func=labels.get,key='director_output_'+channel_id)
+        st.caption('Estas opções ficam salvas por canal e congeladas no lote. Alterações valem para novos lotes. A geração começa depois da aprovação editorial automática.')
+        if mode=='editorial':return defaults.model_copy(update={'mode':mode}).model_dump()
+        voice=st.text_input('Voz da narração (identificador do MPT)',value=defaults.voice_name,key='director_voice_'+channel_id)
+        st.caption('Use o identificador de uma voz já configurada no MPT. Exemplo em inglês: en-US-ChristopherNeural-Male. Credenciais continuam nas configurações existentes.')
+        rate=st.number_input('Velocidade da voz',min_value=0.5,max_value=2.0,value=float(defaults.voice_rate),step=0.05,key='director_voice_rate_'+channel_id)
+        subtitles=st.checkbox('Gerar legendas',value=defaults.subtitle_enabled,key='director_subtitles_'+channel_id)
+        provider=st.selectbox('Temporização das legendas',['edge','whisper'],index=['edge','whisper'].index(defaults.subtitle_provider),key='director_subtitle_provider_'+channel_id)
+        st.caption('Edge usa a temporização retornada pela voz. Vozes sem essa temporização precisam do Whisper configurado no MPT.')
+        values={**defaults.model_dump(),'mode':mode,'voice_name':voice,'voice_rate':rate,'subtitle_enabled':subtitles,'subtitle_provider':provider}
+        if mode=='video':
+            source=st.selectbox('Origem das cenas',['mixed','deepinfra_image'],index=['mixed','deepinfra_image'].index(defaults.video_source),
+                format_func=lambda x:'Bancos de vídeo + DeepInfra quando necessário' if x=='mixed' else 'Somente imagens DeepInfra',key='director_media_source_'+channel_id)
+            pexels=st.checkbox('Usar Pexels',value=defaults.use_pexels,key='director_pexels_'+channel_id)
+            pixabay=st.checkbox('Usar Pixabay',value=defaults.use_pixabay,key='director_pixabay_'+channel_id)
+            models=['stabilityai/sdxl-turbo','black-forest-labs/FLUX-1-schnell','PrunaAI/p-image']
+            model=st.selectbox('Modelo DeepInfra da Skill',models,index=models.index(defaults.deepinfra_model),
+                format_func=lambda x:'PrunaAI P-Image' if x=='PrunaAI/p-image' else x,key='director_image_model_'+channel_id)
+            unlimited=st.checkbox('DeepInfra sem limite de imagens neste lote',value=defaults.deepinfra_unlimited,key='director_image_unlimited_'+channel_id)
+            limit=st.number_input('Limite TOTAL de imagens por vídeo',min_value=0,max_value=120,value=defaults.image_limit,disabled=unlimited,key='director_image_limit_'+channel_id)
+            st.caption('Sem limite pode consumir saldo para completar todas as cenas. Solicitações anteriores contam no limite de cada vídeo.')
+            validation=st.checkbox('Validar visualmente os vídeos dos bancos',value=defaults.visual_validation,key='director_visual_validation_'+channel_id)
+            fonts=sorted(p.name for p in Path(utils.font_dir()).iterdir() if p.suffix.lower() in {'.ttf','.ttc','.otf'})
+            if defaults.font_name not in fonts:fonts.insert(0,defaults.font_name)
+            font=st.selectbox('Fonte das legendas',fonts,index=fonts.index(defaults.font_name),key='director_font_'+channel_id)
+            music=st.checkbox('Usar música da biblioteca local do MPT',value=defaults.music_enabled,key='director_music_'+channel_id)
+            volume=st.number_input('Volume da música',min_value=0.0,max_value=1.0,value=float(defaults.music_volume),step=0.05,key='director_music_volume_'+channel_id)
+            st.caption('Saída 16:9. Zoom e montagem usam o fluxo existente. Esta fase usa música local e não gera efeitos sonoros ou thumbnail final; o pacote inclui os três briefings de thumbnail.')
+            values.update(video_source=source,use_pexels=pexels,use_pixabay=pixabay,deepinfra_model=model,
+                deepinfra_unlimited=unlimited,image_limit=int(limit),visual_validation=validation,
+                font_name=font,music_enabled=music,music_volume=volume)
+        return VideoProduction.model_validate(values).model_dump()
 
 
 def _select(repo,batch,result):
@@ -279,11 +320,13 @@ def _item(repo,item,batch):
     st.write(('**Análise**' if item['role']=='analysis' else f"**{item['position']}. {item['title']}**")+' · '+LABELS.get(item['state'],item['state']))
     stages=repo.stages(item['task_id'])
     current=next((s['name'] for s in stages.values() if s['state']=='running'),None)
-    if current:st.caption('Etapa: '+current+' · '+str(int(time.time()-item['created']))+' s desde o envio')
+    stage_labels={'director_narration':'Gerando narração e legendas','director_video':'Selecionando cenas e montando vídeo','director_media_export':'Salvando relatório de mídia'}
+    if current:st.caption('Etapa: '+stage_labels.get(current,current)+' · '+str(int(time.time()-item['created']))+' s desde o envio')
     if item['error']:st.warning(item['error'])
     if item['role']=='production' and item['state']=='completed' and item['result']:
         result=json.loads(item['result'])
         st.caption('Entregáveis: '+result['deliverables']['directory'])
+        _media_result(result,item['task_id'])
         try:
             st.download_button('Baixar pacote completo (.zip)',production.archive(result),file_name='historical-'+item['task_id']+'.zip',mime='application/zip',key='director_package_'+item['task_id'])
         except (ValueError,OSError) as exc:st.error(str(exc))
@@ -309,3 +352,22 @@ def _item(repo,item,batch):
                     refs=images.upload([f.getvalue() for f in uploaded or []],max_mb=request.max_image_mb)
                     repo.replace_director_references(item['task_id'],refs,enabled);st.rerun()
                 except (ValueError,OSError) as exc:st.error(str(exc))
+
+
+def _media_result(result,task_id):
+    media=result.get('media')
+    if not media:return
+    st.caption('Mídia salva em storage/tasks/'+task_id+' · publicação desligada')
+    if not st.checkbox('Mostrar prévia da mídia',key='director_media_preview_'+task_id):return
+    from app.services.historical_director import video_production as bridge
+    try:
+        folder=bridge.directory(task_id)
+        bridge.verify_receipts(folder,media['narration'])
+        st.audio(str(folder/'audio.mp3'))
+        if media.get('video_generated'):
+            final=media['video']
+            if bridge.receipt(folder,final['file'])!={k:final[k] for k in ('file','bytes','sha256')}:
+                raise ValueError('Vídeo final alterado')
+            st.video(str(folder/final['file']))
+            st.caption('Vídeo salvo em '+str(folder/final['file'])+' · decodificação verificada · não publicado')
+    except (ValueError,OSError) as exc:st.error(str(exc))
