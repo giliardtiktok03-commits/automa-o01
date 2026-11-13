@@ -168,7 +168,9 @@ def test_legacy_editorial_batch_identity_survives_new_default_options(setup):
     repo,snapshot=setup
     request=Request(title='Legacy documentary')
     old_request=request.model_dump(exclude={'production'})
-    expected=hashlib.sha256(json.dumps({'request':old_request,'snapshot':snapshot.model_dump()},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+    old_snapshot=snapshot.model_dump()
+    old_snapshot['channel'].pop('research_backend',None)
+    expected=hashlib.sha256(json.dumps({'request':old_request,'snapshot':old_snapshot},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     batch,created=repo.create_director_batch(request,snapshot)
     assert created and repo.director_batch(batch)['reference_id']==expected
     assert repo.create_director_batch(request,snapshot)==(batch,False)

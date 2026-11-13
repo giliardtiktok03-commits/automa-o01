@@ -235,3 +235,20 @@ def test_sdk_exception_does_not_leak_details_or_retry():
             story.analyze(TOPIC, app_config=SETTINGS)
         assert 'sensitive-provider-details' not in str(failed.value)
         assert call.call_count == 1
+
+
+@pytest.mark.parametrize('provider',['openai_codex','openai_chatgpt'])
+def test_explicit_autopilot_login_blueprint_uses_existing_oauth_adapter(provider,monkeypatch):
+    from unittest.mock import Mock
+    from app.services import codex_oauth,chatgpt_oauth
+    monkeypatch.setattr(codex_oauth,'account_status',lambda:True)
+    monkeypatch.setattr(chatgpt_oauth,'account_status',lambda:True)
+    output=model_output()
+    selected=codex_oauth if provider=='openai_codex' else chatgpt_oauth
+    generate=Mock(return_value=json.dumps(output));monkeypatch.setattr(selected,'generate_text',generate)
+    paid=Mock(side_effect=AssertionError('No OpenAI API key in login mode'));monkeypatch.setattr(llm,'OpenAI',paid)
+    bp=story.analyze(TOPIC,use_model=True,use_selected_provider=True,
+        app_config={'llm_provider':provider,provider+'_model_name':'configured-model','openai_api_key':''})
+    assert bp.analysis_provider==provider and bp.analysis_model=='configured-model'
+    assert generate.call_count==1
+    paid.assert_not_called()

@@ -51,7 +51,8 @@ def research_key():
 
 def prepare(channel, *, app_settings=None):
     channel = ChannelProfile.model_validate(channel)
-    research_key()  # Presence/host check only. No paid request or automatic provider fallback.
+    if channel.research_backend == 'openai':
+        research_key()  # Presence/host check only; legacy mode unchanged.
     settings = dict(config.snapshot_config_with_pending(config.app) if app_settings is None else app_settings)
     provider = channel.script_provider
     if provider == 'current':
@@ -59,6 +60,9 @@ def prepare(channel, *, app_settings=None):
     spec = get_llm_provider(provider)
     if spec is None:
         raise RecoveryBlocked('Selecione um provedor de texto válido nas configurações do MPT')
+    if channel.research_backend == 'public_login':
+        from app.services.autopilot.public_research import require_login
+        require_login(provider)
     model = spec.resolve_model_name(channel.script_model or settings.get(spec.config_key('model_name')))
     if not model:
         raise RecoveryBlocked('Configure o modelo de roteiro do provedor selecionado')
@@ -112,6 +116,8 @@ def step(repo, task_id, name, call, *, remote=True):
 
 
 def search(title, snapshot):
+    if snapshot.channel.research_backend != 'openai':
+        raise RecoveryBlocked('A pesquisa pública deve usar suas etapas persistidas; não houve chamada à API OpenAI')
     tool = {'type': 'web_search', 'search_context_size': 'medium'}
     if snapshot.channel.research_domains:
         tool['filters'] = {'allowed_domains': snapshot.channel.research_domains}
@@ -240,11 +246,14 @@ def plan(title, snapshot, report, retrieved):
         excerpt = '\n'.join(quotes)[:7800]
         evidence.append(Source(id=reference.id, title=reference.title, url=reference.url, excerpt=excerpt,
                                interpretation='documented', provenance='autopilot_retrieved').model_dump())
-    settings = dict(config.snapshot_config_with_pending(config.app))
-    settings['openai_api_key'] = research_key()
-    settings['openai_model_name'] = snapshot.channel.research_model
+    login = snapshot.channel.research_backend == 'public_login'
+    settings = settings_for(snapshot) if login else dict(config.snapshot_config_with_pending(config.app))
+    if not login:
+        settings['openai_api_key'] = research_key()
+        settings['openai_model_name'] = snapshot.channel.research_model
     settings['_channel_skill_snapshot'] = [s.model_dump() for s in snapshot.skills]
-    bp = story.analyze(title, duration=snapshot.channel.target_minutes, sources=evidence, use_model=True, app_config=settings)
+    kwargs={'use_selected_provider':True} if login else {}
+    bp = story.analyze(title, duration=snapshot.channel.target_minutes, sources=evidence, use_model=True, app_config=settings, **kwargs)
     if bp.editorial_memory_check.status in {'duplicate', 'overlap_requires_distinct_angle', 'insufficient_information'}:
         raise RecoveryBlocked('A memória da Skill exige revisão de originalidade antes deste roteiro')
     # Validate every quoted blueprint excerpt against the downloaded source too.
@@ -328,13 +337,20 @@ def package(title, snapshot, report, draft, skills):
     return result
 
 
+def research(repo, task_id, name, title, snapshot):
+    if snapshot.channel.research_backend == 'public_login':
+        from app.services.autopilot import public_research
+        return public_research.run(repo, task_id, name, title, snapshot)
+    return step(repo, task_id, name, lambda: search(title, snapshot))
+
+
 def run(job, repo):
     snapshot = EditorialSnapshot.model_validate_json(job['snapshot'])
     channel_skill_runtime.validate(snapshot.skills)
     task_id, title = job['task_id'], job['title']
-    searched = step(repo, task_id, 'search', lambda: search(title, snapshot))
+    searched = research(repo, task_id, 'search', title, snapshot)
     report = Research.model_validate(searched['report']).model_dump()
-    retrieved = step(repo, task_id, 'sources', lambda: read_sources(report, snapshot), remote=False)
+    retrieved = step(repo, task_id, 'sources', lambda: searched.get('retrieved') or read_sources(report, snapshot), remote=False)
     context = evidence_context(report, retrieved)
     checked = step(repo, task_id, 'evidence_review', lambda: approved_review(title, snapshot, context, what='downloaded evidence and title premise'))
     require_approval(checked)

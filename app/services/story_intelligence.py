@@ -190,12 +190,24 @@ def _provisional_beats():
     return [dict(new_information=a, why_it_matters=b, open_question=c, evidence_needed='Research task only: identify a specific source, relevant excerpt and competing evidence before narrating a historical claim.', confidence='needs_research', source_ids=[]) for a,b,c in tasks]
 
 
-def analyze(topic, *, duration=20, sources=None, distinct_angle='', use_model=None, app_config=None, fallback_reason=''):
+def analyze(topic, *, duration=20, sources=None, distinct_angle='', use_model=None, app_config=None, fallback_reason='', use_selected_provider=False):
     topic = str(topic).strip()
     if not topic or len(topic) > 1000:
         raise StoryError('Informe um tema ou título de até 1000 caracteres')
-    settings = openai_settings(app_config)
-    configured = model_status(settings)['configured']
+    if use_selected_provider:
+        # Explicit AUTOPILOT login mode only. Manual callers retain OpenAI behavior.
+        from app.models.llm_provider import get_llm_provider
+        from app.services.autopilot.public_research import require_login
+        settings = dict(app_config or {})
+        provider = settings.get('llm_provider')
+        require_login(provider)
+        spec = get_llm_provider(provider)
+        analysis_model = spec.resolve_model_name(settings.get(spec.config_key('model_name')))
+        configured = bool(analysis_model)
+    else:
+        settings = openai_settings(app_config)
+        configured = model_status(settings)['configured']
+        provider, analysis_model = 'openai', settings['openai_model_name']
     selected_model = configured if use_model is None else bool(use_model)
     inventory = memory()
     evidence = [Source.model_validate(row).model_dump() for row in (sources or [])]
@@ -294,8 +306,8 @@ def analyze(topic, *, duration=20, sources=None, distinct_angle='', use_model=No
         result.memory_digest = blueprint.memory_digest
         result.analysis_method = 'central_model'
         result.analysis_revision = 2
-        result.analysis_provider = 'openai'
-        result.analysis_model = settings['openai_model_name']
+        result.analysis_provider = provider
+        result.analysis_model = analysis_model
         result.fallback_reason = ''
         result.evidence_reviewed = result.distinct_angle_reviewed = result.approved_for_script = False
         # Local memory protects existing projects; it does not select the narrative engine.

@@ -20,9 +20,10 @@ def analyze(job,repo,context):
     ed.channel_skill_runtime.validate(snapshot.skills)
     controlled=production.ControlledStages(repo,job['task_id'])
     step=lambda name,fn,remote=True:ed.step(controlled,job['task_id'],name,fn,remote=remote)
-    searched=step('director_research',lambda:ed.search(request.title,snapshot))
+    check_research_options(request,snapshot)
+    searched=ed.research(controlled,job['task_id'],'director_research',request.title,snapshot)
     report=searched['report']
-    retrieved=step('director_sources',lambda:ed.read_sources(report,snapshot),remote=False)
+    retrieved=step('director_sources',lambda:searched.get('retrieved') or ed.read_sources(report,snapshot),remote=False)
     step('director_evidence_review',lambda:ed.approved_review(request.title,snapshot,ed.evidence_context(report,retrieved),what='independent historical evidence, not the reference script'))
     visual_report=step('director_visual',lambda:analysis.visual(request),remote=bool(request.thumbnail_reference_enabled and request.thumbnails))
     if request.angle_enabled:
@@ -41,9 +42,16 @@ def analyze(job,repo,context):
 
 def run(job,repo,item):
     context=json.loads(item['context'])
+    check_research_options(Request.model_validate(context['request']),EditorialSnapshot.model_validate_json(job['snapshot']))
     if item['role']=='analysis':return analyze(job,repo,context)
     if context.get('visual_override'):
         request=Request.model_validate(context['request'])
         controlled=production.ControlledStages(repo,job['task_id'])
         context['visual_report']=ed.step(controlled,job['task_id'],'director_visual_override',lambda:analysis.visual(request),remote=bool(request.thumbnail_reference_enabled and request.thumbnails))
     return production.run(job,repo,context)
+
+
+def check_research_options(request,snapshot):
+    if snapshot.channel.research_backend=='public_login' and request.thumbnail_reference_enabled and request.thumbnails:
+        from app.services.autopilot.recovery import RecoveryBlocked
+        raise RecoveryBlocked('A análise visual de referências exige API OpenAI. Desative essa análise para usar pesquisa por login sem chave OpenAI')
