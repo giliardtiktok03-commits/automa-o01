@@ -159,3 +159,17 @@ def test_video_options_are_inside_skill_saved_per_channel_and_do_not_start_calls
     assert saved['deepinfra_unlimited'] and saved['voice_name']=='en-US-GuyNeural-Male'
     paid.assert_not_called()
     assert not repo.editorial_jobs()
+
+
+def test_login_research_setting_saved_inside_skill_without_starting_calls(setup,monkeypatch):
+    repo,_=setup;activate(monkeypatch)
+    paid=Mock();monkeypatch.setattr(editorial,'prepare',paid)
+    app=AppTest.from_string(script(repo)).run()
+    app.selectbox(key='director_research_backend_history').select('public_login')
+    app.selectbox(key='director_channel_provider_history').select('openai_codex')
+    next(b for b in app.button if b.label=='Salvar canal desta Skill').click().run()
+    assert not app.exception
+    stored=repo.channels()[0]
+    assert stored['research_backend']=='public_login' and stored['script_provider']=='openai_codex'
+    paid.assert_not_called()
+    assert not repo.editorial_jobs()

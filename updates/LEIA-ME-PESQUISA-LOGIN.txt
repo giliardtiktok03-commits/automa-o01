@@ -1,0 +1,26 @@
+MPT — PESQUISA PÚBLICA + CHATGPT/CODEX POR LOGIN
+
+Este ZIP inclui esta fase e os arquivos da fase anterior de narração/vídeo.
+Pré-requisito: sua versão com Historical Documentary Director, bloco da Skill
+organizado, PrunaAI P-Image e correção de validação visual já instalados.
+Serve também se você já aplicou o ZIP de narração/vídeo anterior.
+
+1. Pare o MPT e aguarde/paralise a geração antes de substituir código.
+2. Faça backup, principalmente de storage e config.toml.
+3. Extraia na pasta do MPT que contém app, webui e resource, substituindo
+   somente o código incluído. Não apague storage nem config.toml.
+4. Reinicie pelo comando que já utiliza. Não há dependência nova.
+5. Conecte ChatGPT/Codex no provedor existente.
+6. Na Skill > 00.1 > Configurar canal > Avançado, escolha o modo
+   Pesquisa pública + ChatGPT/Codex por login E o provedor OAuth conectado.
+   Configure o modelo do roteiro ou herde o modelo do provedor. Salve.
+7. Para o primeiro teste, selecione Somente pacote editorial e desligue
+   Analisar thumbnails de referência. Envie um NOVO lote com um título.
+
+O modo atual com API continua disponível. Lotes anteriores não mudam.
+O novo modo dispensa API KEY OpenAI na parte editorial; usa descoberta
+pública MediaWiki e o conector de login existente, sujeito aos limites da conta.
+Não significa uso ilimitado ou gratuito de voz/imagens. A análise visual
+(thumbnails/bancos) ainda depende da API OpenAI. Publicação desligada.
+
+Leia docs/PESQUISA_PUBLICA_LOGIN.md e docs/SKILL_PRODUCAO_VIDEO.md.

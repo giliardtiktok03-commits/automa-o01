@@ -1,5 +1,6 @@
 """Versioned, credential-free channel settings for the first Autopilot delivery."""
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal
 
 
 class ChannelProfile(BaseModel):
@@ -16,6 +17,7 @@ class ChannelProfile(BaseModel):
     auto_editorial: bool = False
     target_minutes: int = Field(default=20, ge=3, le=30)
     research_model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=160)
+    research_backend: Literal['openai', 'public_login'] = 'openai'
     research_domains: list[str] = Field(default_factory=list, max_length=30)
     script_provider: str = Field(default="current", max_length=80)
     script_model: str = Field(default="", max_length=160)

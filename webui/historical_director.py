@@ -75,19 +75,22 @@ def _channel_setup(repo,params):
             permission=st.checkbox('Autorizar pesquisa e roteiro automáticos para este canal',value=profile.auto_editorial,key='director_channel_permission_'+selected)
             st.caption('Salvar esta autorização não inicia chamadas de IA. O botão de pesquisar ou de retomar a fila inicia a execução e pode consumir saldo.')
             with st.expander('Avançado · modelos e fontes da pesquisa'):
+                backends=['openai','public_login']
+                backend=st.selectbox('Modo de pesquisa',backends,index=backends.index(profile.research_backend),
+                    format_func=lambda x:'API OpenAI com busca web (modo atual)' if x=='openai' else 'Pesquisa pública + ChatGPT/Codex por login',key='director_research_backend_'+selected)
                 research_model=st.text_input('Modelo OpenAI para pesquisa e Blueprint',value=profile.research_model,key='director_channel_research_model_'+selected)
                 domains=st.text_area('Restringir pesquisa a estes domínios (opcional, um por linha)',value='\n'.join(profile.research_domains),key='director_channel_domains_'+selected)
                 providers=['current',*[p.provider_id for p in LLM_PROVIDER_REGISTRY]]
                 provider=st.selectbox('Provedor do roteiro',providers,index=providers.index(profile.script_provider) if profile.script_provider in providers else 0,
                     format_func=lambda x:'Usar provedor atual do MPT' if x=='current' else next(p.default_label for p in LLM_PROVIDER_REGISTRY if p.provider_id==x),key='director_channel_provider_'+selected)
                 model=st.text_input('Modelo do roteiro (vazio usa o configurado no provedor)',value=profile.script_model,key='director_channel_script_model_'+selected)
-                st.caption('A pesquisa usa a chave da API oficial OpenAI configurada no MPT. O roteiro usa o provedor escolhido. Credenciais globais continuam em Settings/Configurações.')
+                st.caption('No modo público, a descoberta usa o índice da Wikipédia e lê referências externas; pesquisa e texto usam ChatGPT/Codex por login, sem chave OpenAI. Exige provedor por login conectado e está sujeito aos limites da conta. A análise visual de thumbnails ainda exige API e fica bloqueada nesse modo. O campo de modelo OpenAI só vale no modo API.')
             save=st.form_submit_button('Salvar canal desta Skill')
         if save:
             try:
                 update=dict(channel_id=identifier.strip(),name=name,language=language,niche=niche,target_minutes=int(minutes),
                     skill_ids=list(params.skill_ids) if sync else profile.skill_ids,auto_editorial=permission,
-                    research_model=research_model,research_domains=[d.strip() for d in domains.splitlines() if d.strip()],script_provider=provider,script_model=model)
+                    research_model=research_model,research_backend=backend,research_domains=[d.strip() for d in domains.splitlines() if d.strip()],script_provider=provider,script_model=model)
                 updated=ChannelProfile.model_validate({**profile.model_dump(),**update})
                 repo.save_channel(updated,expected_version=old['version'] if old else 0)
                 st.session_state['director_pending_channel']=updated.channel_id
@@ -152,8 +155,8 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
         policy=st.selectbox('Quando um item falhar',['pause_queue','skip'],index=['pause_queue','skip'].index(defaults.on_failure),
             format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
         new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
-    st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo selecionado terá sua própria pesquisa e revisão. Chamadas de IA podem consumir saldo.')
-    production_options=_production_options(defaults.production,channel_id)
+    st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo terá sua própria pesquisa e revisão. Modo do canal: '+('pesquisa pública + login ChatGPT/Codex (limites da conta)' if profile.research_backend=='public_login' else 'API OpenAI (pode consumir saldo)')+'.')
+    production_options=_production_options(defaults.production,channel_id,login_mode=profile.research_backend=='public_login')
     save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
     ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
     submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
@@ -167,6 +170,8 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
                 request=Request(title=title,reference_script=pasted if source_mode=='Colar texto' else reference_text(script_file),
                     thumbnails=images.upload([f.getvalue() for f in uploaded or []],max_mb=int(max_mb)),**options)
                 snapshot=editorial.prepare(profile)
+                from app.services.historical_director.runner import check_research_options
+                check_research_options(request,snapshot)
                 batch,created=repo.create_director_batch(request,snapshot,new_version=new_version)
                 repo.set_enabled(True)
                 st.session_state['autopilot_worker_pending_enabled']=True
@@ -175,7 +180,7 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
         except (ValueError,OSError) as exc:st.error(str(exc))
 
 
-def _production_options(defaults,channel_id):
+def _production_options(defaults,channel_id,*,login_mode=False):
     from pathlib import Path
     from app.utils import utils
     with st.expander('Produção · narração, imagens, legendas e música',expanded=defaults.mode!='editorial'):
@@ -203,6 +208,8 @@ def _production_options(defaults,channel_id):
             limit=st.number_input('Limite TOTAL de imagens por vídeo',min_value=0,max_value=120,value=defaults.image_limit,disabled=unlimited,key='director_image_limit_'+channel_id)
             st.caption('Sem limite pode consumir saldo para completar todas as cenas. Solicitações anteriores contam no limite de cada vídeo.')
             validation=st.checkbox('Validar visualmente os vídeos dos bancos',value=defaults.visual_validation,key='director_visual_validation_'+channel_id)
+            if login_mode:
+                st.info('A pesquisa por login dispensa a chave OpenAI na parte editorial. A validação visual dos bancos continua usando API OpenAI. Para produzir vídeo sem essa chave, escolha somente imagens DeepInfra e desative a validação visual. O DeepInfra mantém seu próprio consumo.')
             fonts=sorted(p.name for p in Path(utils.font_dir()).iterdir() if p.suffix.lower() in {'.ttf','.ttc','.otf'})
             if defaults.font_name not in fonts:fonts.insert(0,defaults.font_name)
             font=st.selectbox('Fonte das legendas',fonts,index=fonts.index(defaults.font_name),key='director_font_'+channel_id)
