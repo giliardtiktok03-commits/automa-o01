@@ -486,6 +486,14 @@ LLM_PROVIDER_REGISTRY = (
         default_base_url="https://openrouter.ai/api/v1",
     ),
     LLMProviderSpec(
+        "coarena",
+        "Coarena",
+        api_key_url="https://coarena.ai/account/api",
+        default_model="claude-fable-5",
+        default_base_url="https://coarena.ai/api/v1",
+        model_docs_url="https://coarena.ai/docs",
+    ),
+    LLMProviderSpec(
         "api_route",
         "API Route",
         api_key_url="https://www.api-route.com",

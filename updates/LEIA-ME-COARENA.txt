@@ -1,0 +1,27 @@
+MPT — PROVEDOR COARENA
+
+Este ZIP inclui Coarena e as fases anteriores de pesquisa pública por login
+mais narração/vídeo. Pré-requisito: MPT com Historical Documentary Director,
+bloco da Skill organizado, PrunaAI P-Image e correção de validação visual.
+Se você já instalou os ZIPs mais recentes, também pode aplicar este pacote.
+
+1. Pare o MPT e aguarde/paralise a geração antes de substituir código.
+2. Faça backup, especialmente de storage e config.toml.
+3. Extraia na pasta do MPT que contém app, webui e resource, aceitando
+   substituir os arquivos de código incluídos. Não apague storage/config.toml.
+4. Reinicie com o comando que já utiliza. Não há dependência nova para instalar.
+5. Em Configurações > Provedores/LLM, escolha Coarena:
+   API Key = sua chave Coarena (preencha SOMENTE na instalação local)
+   Base URL = https://coarena.ai/api/v1
+   Model Name = claude-fable-5 (ou outro ID disponível para sua conta)
+6. Para usar também a pesquisa da Skill com Coarena, no canal escolha
+   Pesquisa pública + Coarena (API) e Provedor do roteiro = Coarena.
+   Salve e teste um NOVO lote com somente pacote editorial e um ângulo.
+   Mantenha a análise visual de thumbnails de referência desligada.
+
+Os comandos export ANTHROPIC_* são para clientes Anthropic. No MPT esta
+integração usa o protocolo OpenAI-compatible documentado pela Coarena,
+com a MESMA chave; por isso a Base URL termina em /api/v1.
+Nenhum provedor existente foi substituído. Publicação continua desligada.
+
+Consulte docs/COARENA_MPT.md. Não envie sua chave pelo chat.
