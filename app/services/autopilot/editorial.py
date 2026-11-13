@@ -60,9 +60,9 @@ def prepare(channel, *, app_settings=None):
     spec = get_llm_provider(provider)
     if spec is None:
         raise RecoveryBlocked('Selecione um provedor de texto válido nas configurações do MPT')
-    if channel.research_backend == 'public_login':
-        from app.services.autopilot.public_research import require_login
-        require_login(provider)
+    if channel.research_backend != 'openai':
+        from app.services.autopilot.public_research import require_backend
+        require_backend(channel.research_backend,provider,settings)
     model = spec.resolve_model_name(channel.script_model or settings.get(spec.config_key('model_name')))
     if not model:
         raise RecoveryBlocked('Configure o modelo de roteiro do provedor selecionado')
@@ -246,7 +246,7 @@ def plan(title, snapshot, report, retrieved):
         excerpt = '\n'.join(quotes)[:7800]
         evidence.append(Source(id=reference.id, title=reference.title, url=reference.url, excerpt=excerpt,
                                interpretation='documented', provenance='autopilot_retrieved').model_dump())
-    login = snapshot.channel.research_backend == 'public_login'
+    login = snapshot.channel.research_backend != 'openai'
     settings = settings_for(snapshot) if login else dict(config.snapshot_config_with_pending(config.app))
     if not login:
         settings['openai_api_key'] = research_key()
@@ -338,7 +338,7 @@ def package(title, snapshot, report, draft, skills):
 
 
 def research(repo, task_id, name, title, snapshot):
-    if snapshot.channel.research_backend == 'public_login':
+    if snapshot.channel.research_backend != 'openai':
         from app.services.autopilot import public_research
         return public_research.run(repo, task_id, name, title, snapshot)
     return step(repo, task_id, name, lambda: search(title, snapshot))

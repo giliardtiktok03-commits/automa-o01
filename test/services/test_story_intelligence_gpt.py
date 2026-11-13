@@ -252,3 +252,15 @@ def test_explicit_autopilot_login_blueprint_uses_existing_oauth_adapter(provider
     assert bp.analysis_provider==provider and bp.analysis_model=='configured-model'
     assert generate.call_count==1
     paid.assert_not_called()
+
+
+def test_explicit_public_coarena_blueprint_preserves_model_and_source_guards(monkeypatch):
+    from unittest.mock import Mock
+    output=model_output()
+    generate=Mock(return_value=json.dumps(output));monkeypatch.setattr(llm,'_generate_response',generate)
+    bp=story.analyze(TOPIC,use_model=True,use_selected_provider=True,app_config={
+        'llm_provider':'coarena','coarena_api_key':'simulated-key','coarena_model_name':'claude-fable-5'})
+    assert bp.analysis_provider=='coarena' and bp.analysis_model=='claude-fable-5'
+    assert not bp.approved_for_script and not bp.evidence_reviewed
+    assert generate.call_args.kwargs['app_config']['llm_provider']=='coarena'
+    assert generate.call_args.kwargs['max_retries']==0

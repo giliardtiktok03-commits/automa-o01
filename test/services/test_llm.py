@@ -707,6 +707,7 @@ class TestLiteLLMProvider(unittest.TestCase):
                 "aimlapi",
                 "evolink",
                 "openrouter",
+                "coarena",
                 "api_route",
                 "fluxionai",
                 "cheaperinference",

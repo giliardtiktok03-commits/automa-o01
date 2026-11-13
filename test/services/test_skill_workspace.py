@@ -173,3 +173,17 @@ def test_login_research_setting_saved_inside_skill_without_starting_calls(setup,
     assert stored['research_backend']=='public_login' and stored['script_provider']=='openai_codex'
     paid.assert_not_called()
     assert not repo.editorial_jobs()
+
+
+def test_coarena_research_can_be_selected_inside_skill_without_requests(setup,monkeypatch):
+    repo,_=setup;activate(monkeypatch)
+    call=Mock();monkeypatch.setattr(editorial,'prepare',call)
+    app=AppTest.from_string(script(repo)).run()
+    app.selectbox(key='director_research_backend_history').select('public_coarena')
+    app.selectbox(key='director_channel_provider_history').select('coarena')
+    next(b for b in app.button if b.label=='Salvar canal desta Skill').click().run()
+    assert not app.exception
+    channel=repo.channels()[0]
+    assert channel['research_backend']=='public_coarena' and channel['script_provider']=='coarena'
+    assert not repo.editorial_jobs()
+    call.assert_not_called()

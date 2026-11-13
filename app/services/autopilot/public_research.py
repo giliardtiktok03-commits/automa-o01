@@ -1,4 +1,4 @@
-"""Public source discovery + existing OAuth text connectors, without an OpenAI key.
+"""Public source discovery + explicitly selected text provider, without an OpenAI key.
 
 Wikimedia is a discovery index, not verification. Only downloaded source text
 can support a claim; there is no search-engine scraping or account automation.
@@ -41,6 +41,28 @@ def require_login(provider):
         raise RecoveryBlocked('Pesquisa por login exige selecionar OpenAI - Codex ou OpenAI - ChatGPT (Native OAuth) como provedor do canal')
     if not connected:
         raise RecoveryBlocked('Conecte a conta ChatGPT/Codex nas configurações do MPT antes de pesquisar por login')
+
+
+def require_text_provider(provider, settings=None):
+    if provider == 'coarena':
+        if settings is None:
+            from app.config import config
+            settings=config.snapshot_config_with_pending(config.app)
+        if not str(settings.get('coarena_api_key') or '').strip():
+            raise RecoveryBlocked('Configure a API key Coarena nas configurações de provedores do MPT')
+    else:
+        require_login(provider)
+
+
+def require_backend(backend,provider,settings=None):
+    if backend=='public_coarena':
+        if provider!='coarena':
+            raise RecoveryBlocked('Pesquisa pública Coarena exige selecionar Coarena como provedor do canal')
+        require_text_provider(provider,settings)
+    elif backend=='public_login':
+        require_login(provider)
+    else:
+        raise RecoveryBlocked('Modo de pesquisa pública inválido')
 
 
 def query_plan(title, snapshot):
@@ -154,7 +176,7 @@ def synthesize(title,snapshot,retrieved):
     return {'report':report.model_dump()}
 
 
-def validate(synthesized,retrieved,domains):
+def validate(synthesized,retrieved,domains,backend='public_login'):
     report=Research.model_validate(synthesized['report'])
     if not report.ready or report.gaps:
         raise RecoveryBlocked('Pesquisa pública insuficiente para sustentar o título e duração. Revise o tema ou as fontes antes de gerar roteiro')
@@ -175,16 +197,16 @@ def validate(synthesized,retrieved,domains):
             cited.add(quote.source_id)
     if len({urlsplit(used[i]['resolved_url']).hostname.removeprefix('www.') for i in cited})<2:
         raise RecoveryBlocked('As afirmações precisam de evidências em dois domínios lidos')
-    return {'report':report.model_dump(),'retrieved':used,'research_backend':'public_login',
+    return {'report':report.model_dump(),'retrieved':used,'research_backend':backend,
         'discovery_index':'wikimedia_mediawiki','searched_at':datetime.now(timezone.utc).isoformat()}
 
 
 def run(repo,task_id,name,title,snapshot):
-    require_login(snapshot.script_provider)
+    require_backend(snapshot.channel.research_backend,snapshot.script_provider,ed.settings_for(snapshot))
     step=lambda suffix,fn,remote=True:ed.step(repo,task_id,name+suffix,fn,remote=remote)
     planned=step('_queries',lambda:query_plan(title,snapshot))
     discovered=step('_discovery',lambda:discover(planned,snapshot.channel.research_domains),remote=False)
     selected=step('_selection',lambda:select(title,snapshot,discovered))
     retrieved=step('_pages',lambda:read(selected,snapshot.channel.research_domains),remote=False)
     report=step('_dossier',lambda:synthesize(title,snapshot,retrieved))
-    return step('',lambda:validate(report,retrieved,snapshot.channel.research_domains),remote=False)
+    return step('',lambda:validate(report,retrieved,snapshot.channel.research_domains,snapshot.channel.research_backend),remote=False)

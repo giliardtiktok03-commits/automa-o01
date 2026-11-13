@@ -55,8 +55,8 @@ def render(params=None, *, repository=None, autostart=True, worker_control=True)
                     st.caption("Painel 00: " + (" → ".join(panel_ids) if panel_ids else "nenhuma Skill ativa"))
                     st.caption("Skills salvas no canal: " + (" → ".join(defaults["skill_ids"]) if defaults["skill_ids"] else "padrão do MPT"))
                 minutes = st.number_input("Duração desejada (minutos)", min_value=3, max_value=30, value=defaults["target_minutes"])
-                backend = st.selectbox('Modo de pesquisa', ['openai','public_login'], index=['openai','public_login'].index(defaults['research_backend']),
-                    format_func=lambda x:'API OpenAI com busca web' if x=='openai' else 'Pesquisa pública + ChatGPT/Codex por login')
+                backend = st.selectbox('Modo de pesquisa', ['openai','public_login','public_coarena'], index=['openai','public_login','public_coarena'].index(defaults['research_backend']),
+                    format_func=lambda x:{'openai':'API OpenAI com busca web','public_login':'Pesquisa pública + ChatGPT/Codex por login','public_coarena':'Pesquisa pública + Coarena (API)'}[x])
                 research_model = st.text_input("Modelo OpenAI para pesquisa e Blueprint", value=defaults["research_model"])
                 domains = st.text_area("Restringir pesquisa a estes domínios (opcional, um por linha)", value="\n".join(defaults["research_domains"]))
                 providers = ["current", *[p.provider_id for p in LLM_PROVIDER_REGISTRY]]
@@ -64,7 +64,7 @@ def render(params=None, *, repository=None, autostart=True, worker_control=True)
                                        format_func=lambda x: "Usar provedor atual do MPT" if x == "current" else next(p.default_label for p in LLM_PROVIDER_REGISTRY if p.provider_id == x))
                 script_model = st.text_input("Modelo do roteiro (vazio usa o configurado no provedor)", value=defaults["script_model"])
                 auto_editorial = st.checkbox("Autorizar pesquisa e roteiro automáticos para este canal", value=defaults["auto_editorial"])
-                st.caption("Modo API: pesquisa OpenAI pode consumir saldo. Modo público: descoberta pela Wikipédia, leitura de referências externas e texto pelo provedor ChatGPT/Codex por login, sujeito aos limites da conta. O Blueprint passa por revisão automática. O campo de modelo OpenAI só vale no modo API.")
+                st.caption("Modo API: pesquisa OpenAI pode consumir saldo. Modo público: descoberta pela Wikipédia, leitura de referências externas e texto por ChatGPT/Codex por login ou pela API Coarena, conforme o modo e provedor selecionados, sujeito aos limites da conta. O Blueprint passa por revisão automática. O campo de modelo OpenAI só vale no modo API.")
                 save = st.form_submit_button("Salvar canal")
             if save:
                 try:

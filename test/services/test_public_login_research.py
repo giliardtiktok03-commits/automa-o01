@@ -125,10 +125,13 @@ def test_visual_analysis_is_blocked_before_any_research_request(login):
     ed.OpenAI.assert_not_called()
 
 
-def test_end_to_end_original_angle_export_without_openai_key(setup,report,monkeypatch):
+@pytest.mark.parametrize('provider,backend',[('openai_codex','public_login'),('coarena','public_coarena')])
+def test_end_to_end_original_angle_export_without_openai_key(setup,report,monkeypatch,provider,backend):
     repo,snapshot=setup
-    snapshot.channel.research_backend='public_login'
-    snapshot.script_provider='openai_codex'
+    snapshot.channel.research_backend=backend
+    snapshot.script_provider=provider
+    from app.config import config
+    monkeypatch.setitem(config.app,'coarena_api_key','simulated-key')
     repo.save_channel(snapshot.channel,expected_version=1)
     monkeypatch.setattr(codex_oauth,'account_status',lambda:True)
     monkeypatch.setattr(ed,'OpenAI',Mock(side_effect=AssertionError('No API calls')))
@@ -138,7 +141,7 @@ def test_end_to_end_original_angle_export_without_openai_key(setup,report,monkey
     calls=[]
     def text(prompt,frozen,*,output=Review,**kwargs):
         calls.append(output.__name__)
-        assert frozen.script_provider=='openai_codex'
+        assert frozen.script_provider==provider
         if output==public.Queries:return public.Queries(queries=['Specific historical event'])
         if output==public.Selection:return public.Selection(candidate_ids=[1,2])
         if output==Research:return Research.model_validate(report)

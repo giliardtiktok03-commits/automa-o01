@@ -52,6 +52,6 @@ def run(job,repo,item):
 
 
 def check_research_options(request,snapshot):
-    if snapshot.channel.research_backend=='public_login' and request.thumbnail_reference_enabled and request.thumbnails:
+    if snapshot.channel.research_backend!='openai' and request.thumbnail_reference_enabled and request.thumbnails:
         from app.services.autopilot.recovery import RecoveryBlocked
-        raise RecoveryBlocked('A análise visual de referências exige API OpenAI. Desative essa análise para usar pesquisa por login sem chave OpenAI')
+        raise RecoveryBlocked('A análise visual de referências exige API OpenAI. Desative essa análise para usar pesquisa pública sem chave OpenAI')

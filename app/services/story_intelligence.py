@@ -195,12 +195,12 @@ def analyze(topic, *, duration=20, sources=None, distinct_angle='', use_model=No
     if not topic or len(topic) > 1000:
         raise StoryError('Informe um tema ou título de até 1000 caracteres')
     if use_selected_provider:
-        # Explicit AUTOPILOT login mode only. Manual callers retain OpenAI behavior.
+        # Explicit public-research modes only. Manual callers retain OpenAI behavior.
         from app.models.llm_provider import get_llm_provider
-        from app.services.autopilot.public_research import require_login
+        from app.services.autopilot.public_research import require_text_provider
         settings = dict(app_config or {})
         provider = settings.get('llm_provider')
-        require_login(provider)
+        require_text_provider(provider,settings)
         spec = get_llm_provider(provider)
         analysis_model = spec.resolve_model_name(settings.get(spec.config_key('model_name')))
         configured = bool(analysis_model)
