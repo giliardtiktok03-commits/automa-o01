@@ -35,20 +35,24 @@ def prepare_legacy(task_id,params,script,duration,subtitle,terms,fallback):
     directory=Path(utils.task_dir(task_id))
     outputs=[];existing=None
     for index,scene in enumerate(units):
-        if service.active():source,provenance=service.select(scene,terms)
-        else:source,provenance=None,None
-        if source:
+        source,provenance=None,None
+        if params.video_source in {'pexels','pixabay','coverr'}:
+            if existing is None:existing=fallback()
+            if existing:source=existing[index%len(existing)]
+        if source is None and service.active():source,provenance=service.select(scene,terms)
+        if source and provenance:
             source=visual_source(source,scene,params,service)
             render_settings=render_params(params,service)
-        else:
+        elif source is None:
             if existing is None:existing=fallback()
             if not existing:return None
             source=existing[index%len(existing)]
             provenance=None
             render_settings=params
+        else:render_settings=params
         output=directory/f'archive-scene-{scene["id"]:03d}.mp4'
         mixed.render(source,output,scene['end_frame']-scene['start_frame'],render_settings)
-        service.mark_used(provenance)
+        service.mark_used(provenance,output=output,params=render_settings)
         outputs.append(str(output))
     params.historical_archive_prepared=True
     return outputs

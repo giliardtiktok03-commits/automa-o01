@@ -1,0 +1,59 @@
+{
+  "scope": "Wikimedia Commons license, attribution and final-media reconciliation",
+  "tested_base_commit": "6e055edec60b5904ccb94442f9392c3d586264aa",
+  "python_tests": {
+    "passed": 332,
+    "skipped": 3,
+    "subtests_passed": 4,
+    "note": "Focused regression: Commons, historical archives, stock ordering, mixed resume, P-Image, visual recovery, upload gates and Skill production."
+  },
+  "known_preexisting_general_task_test_failures": {
+    "count": 6,
+    "reproduced_on_previous_checkout": true,
+    "cases": [
+      "test_start_marks_pipeline_failures (audio/materials/video subtests)",
+      "test_start_records_unexpected_pipeline_exception",
+      "test_start_rejects_missing_sonilo_key_before_costly_pipeline_steps",
+      "test_start_stops_before_materials_when_term_provider_fails"
+    ],
+    "cause_observed": "Returned state snapshot differs from final state after generation_phase_seconds is added by the existing timing scope. The same failures occur before these Commons changes. Timing behavior was not changed."
+  },
+  "live_test": {
+    "query": "World War II aircraft 1943",
+    "state": "completed",
+    "clip": {
+      "file": "commons-test-clip.mp4",
+      "sha256": "7f0d613daf72a1ef3b9f1667fa360461161018a828c01b89ff519ad1e791711e",
+      "bytes": 138481,
+      "duration": 3.97,
+      "width": 1920,
+      "height": 1080,
+      "decode_verified": true
+    },
+    "audited_files": 14,
+    "used_files": 1,
+    "classifications": [
+      "AUTO_APPROVED",
+      "NEEDS_REVIEW"
+    ],
+    "credit_heading_present": true,
+    "publication_status": "ready_for_manual_publication",
+    "automatic_publication": false
+  },
+  "browser_test": {
+    "engine": "Chromium/Playwright",
+    "errors": 0,
+    "clip_visible": true,
+    "audit_download_visible": true,
+    "description_download_visible": true
+  },
+  "publication_tests": "HTTP transport mocked. Verified no upload request on pending/missing/changed credits; verified fully reconciled English credits in the manual YouTube request payload.",
+  "preserved": "No changes to Pexels/Pixabay/Coverr/AI service clients, narration adapters or documentary-source research.",
+  "limitations": [
+    "Metadata-based conservative risk policy, not legal clearance.",
+    "Legacy or externally edited videos without matching render evidence require review.",
+    "Space policy counts UTF-8 bytes; mandatory credits and SEO are never silently truncated."
+  ],
+  "published": false,
+  "merged_into_main": false
+}

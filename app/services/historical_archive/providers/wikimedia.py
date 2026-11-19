@@ -29,11 +29,20 @@ class WikimediaProvider:
             original=info.get('url','')
             raster_preview=info.get('mime') in {'image/svg+xml','application/pdf','image/vnd.djvu'} and bool(info.get('thumburl'))
             credit='; '.join(filter(None,[title,artist,val('Credit'),val('LicenseShortName'),source]))
+            # Commons often repeats "Public domain" in both license fields.
+            # Keep every distinct restriction; don't change the shared rights policy.
+            rights=[]
+            seen_rights=set()
+            for value in [val('LicenseShortName'),val('UsageTerms'),val('Restrictions')]:
+                key=' '.join(value.split()).casefold()
+                if key and key not in seen_rights:
+                    seen_rights.add(key)
+                    rights.append(' '.join(value.split()))
             result.append(ArchiveCandidate(provider=self.name,record_id=str(page.get('pageid','')),title=title,
                 description=val('ImageDescription'),date_created=val('DateTimeOriginal'),creator=artist,
                 institution=val('Institution') or 'Wikimedia Commons',media_type=kind,
                 thumbnail_url=info.get('thumburl',''),source_url=source,download_url=info.get('thumburl') if raster_preview else original,
-                rights_statement='; '.join(filter(None,[val('LicenseShortName'),val('UsageTerms'),val('Restrictions')])),
+                rights_statement='; '.join(rights),
                 license_url=val('LicenseUrl'),attribution=credit,metadata={'record':page,'width':info.get('width',0),'height':info.get('height',0),
                 'download_variant':'API raster preview (first page for documents)' if raster_preview else 'original',
                 'original_file_url':original,'authenticity':'repository_record_unverified','ai_generated':bool(re.search(r'ai[- ]generated|midjourney|dall[- ]?e|stable diffusion',json.dumps(page,ensure_ascii=False),re.I))}))

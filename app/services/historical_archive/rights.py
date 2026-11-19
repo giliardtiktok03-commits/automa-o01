@@ -4,6 +4,10 @@ from urllib.parse import urlparse
 
 
 def assess(candidate):
+    if candidate.provider=='wikimedia':
+        from .commons_license import classify,MAPPING
+        decision=classify(candidate)
+        return MAPPING[decision['classification']],decision['reason']
     text = ' '.join([candidate.rights_statement, candidate.license_url]).lower()
     if re.search(r'all rights reserved|todos os direitos|noncommercial|non-commercial|no derivatives|no.derivatives|by-nc|by-nd|by-nc-nd|not (?:in the )?public domain|permission required|\brestricted\b', text):
         return 'restricted', 'Restrição incompatível com reutilização automática em canal monetizado'

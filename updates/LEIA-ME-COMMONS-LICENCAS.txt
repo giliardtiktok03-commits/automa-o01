@@ -1,0 +1,129 @@
+MPT — GERENCIAMENTO DE LICENÇAS E CRÉDITOS DO WIKIMEDIA COMMONS
+
+REQUISITO
+Instalação customizada deste MoneyPrinterTurbo com Historical Archive Finder.
+Para a opção dentro da Skill, Historical Documentary Director já deve estar
+instalada. Não depende da Coarena e não inclui mudanças nos clientes de Pexels,
+Pixabay, Coverr ou IA. Não há dependência nova para instalar.
+
+INSTALAR
+1. Feche o MPT e faça backup da instalação, principalmente storage/config.toml.
+2. Extraia o ZIP na pasta que contém app, webui e resource, substituindo os
+   arquivos de código incluídos. Não apague projetos ou configurações.
+3. Reinicie pelo comando/atalho que já utiliza.
+
+PRIMEIRO TESTE — SEM PUBLICAÇÃO
+1. Em 02 / Configurações de vídeo, abra Wikimedia Commons · Teste independente.
+2. Deixe: World War II aircraft 1943
+3. Clique Testar Wikimedia Commons e aguarde a atualização automática.
+4. Confira o clipe e baixe:
+   - commons-test.json
+   - commons-license-audit.json
+   - commons-publication-review.json
+   - youtube-description-with-credits.txt
+5. Nos arquivos deve aparecer somente a imagem realmente usada no clipe,
+   junto do bloco Historical Image Credits. CC BY-SA deve ficar NEEDS_REVIEW
+   tanto no teste como na avaliação de produção.
+
+Não é preciso ativar a pesquisa histórica global para esse teste. Nenhum
+roteiro, narração, banco de vídeo, gerador IA ou publicador é chamado por ele.
+Ele usa uma imagem estática em um clipe de aproximadamente 4 segundos/1080p.
+
+USAR NA SKILL / PRODUÇÃO
+Na Historical Documentary Director, abra 00.4 > Produção, escolha entrega com
+vídeo e origem mista, e marque "Usar Wikimedia Commons após os bancos, antes
+da IA". Salve e envie um NOVO lote. As opções de projetos anteriores continuam
+congeladas. Os bancos precisam das respectivas chaves já configuradas; não
+se ativa um serviço sem configuração. Coverr é usado quando está configurado.
+
+No fluxo manual, use o Historical Archive Finder já existente para habilitar
+Commons. Bancos configurados são tentados primeiro: Pexels, Pixabay, Coverr.
+Depois vêm os arquivos Commons elegíveis; outros acervos, se explicitamente
+habilitados, permanecem disponíveis. A IA configurada só entra por último.
+O modo de origem explicitamente escolhido continua limitando quais bancos
+estão habilitados. Fontes e pesquisas documentais do roteiro não são alteradas.
+
+POLÍTICA CONSERVADORA DO COMMONS
+AUTO_APPROVED: elegível pela política de licenciamento, sem pendências
+reconhecidas nos metadados. O uso ainda exige contexto, pontuação e arquivo
+válidos. Prioriza CC0 explícita, domínio público com metadados consistentes e
+CC BY com autor, fonte e atribuição completos.
+NEEDS_REVIEW: CC BY-SA, avisos especiais, ausência/contradição de informações,
+URL não confirmada, condição adicional ou obrigação não reconhecida.
+REJECTED: licença explicitamente não comercial, sem derivados ou outra
+restrição incompatível com a reutilização comercial automática.
+
+Estar no Commons não aprova o arquivo. Domínio público exige declaração
+explícita consistente nos campos originais; não se infere pelos termos do título.
+Avisos retornados em metadados e categorias sobre personalidade, marcas,
+permissões e procedência bloqueiam a aprovação automática. Direitos externos
+que não aparecem nos metadados não podem ser garantidos por este sistema.
+A classificação reduz risco; não é garantia jurídica de liberação.
+
+Arquivos pendentes/rejeitados não são usados automaticamente. O seletor tenta
+outros candidatos e, sem imagem elegível, continua o fallback configurado.
+Não existe botão para ignorar a política e aprovar CC BY-SA silenciosamente.
+
+AUDITORIA, EDIÇÃO E CRÉDITOS
+Cada arquivo Commons analisado fica no JSON, inclusive rejeitados fora da lista
+curta: licença/URL, autor/titular indicado, crédito especial, avisos, fonte,
+exigência de atribuição, horário e metadados originais. Informações ausentes
+permanecem ausentes; não se inventam autores ou URLs de licença.
+
+O uso só é marcado após renderizar a cena. São registrados conversão RGB,
+movimento, enquadramento/recorte ou preenchimento e proporção solicitados.
+O pipeline atual não solicita correção de cor adicional. Alterações externas
+posteriores não são presumidas aprovadas: os hashes do arquivo são conferidos.
+
+A montagem vincula os arquivos realmente utilizados ao vídeo final e aos seus
+hashes. O bloco Historical Image Credits é produzido em inglês americano,
+somente para imagens usadas naquele vídeo. Inclui créditos especiais, fonte,
+licença e alterações. No pacote da Skill, ele é acrescentado à descrição que
+já contém SEO e referências históricas. O ponto de upload manual também faz
+a conferência e acrescenta o bloco antes de qualquer envio externo.
+
+Nenhum texto SEO ou crédito obrigatório é truncado. A política de espaço usa
+um teto conservador de 5.000 bytes UTF-8 para a descrição com créditos. Se não
+couber, grava NEEDS_REVIEW e impede o upload. Um bloco gerado pelo sistema
+pode ser atualizado sem duplicação; um bloco preexistente editado/divergente
+exige revisão, sem apagar silenciosamente o conteúdo.
+
+PUBLICAÇÃO
+Vídeos com uso Commons não são enfileirados para publicação automática por
+esta atualização, mesmo se o publicador global já estiver configurado.
+Nenhum vídeo foi publicado durante o desenvolvimento/testes. Não foi feito
+merge na main. A publicação manual só pode passar se a lista, os arquivos,
+os direitos e os créditos estiverem reconciliados. Uma revisão pendente ou
+arquivo alterado/ausente bloqueia o pedido antes de enviar a mídia.
+Preferências e funcionamento dos demais provedores não foram substituídos.
+
+PROJETOS ANTIGOS
+Os arquivos e imagens antigos não são apagados. Projetos sem comprovantes de
+uso/renderização não são automaticamente declarados prontos para publicar.
+Nesses casos o sistema bloqueia a publicação e grava o relatório de revisão.
+Isso vale também para saídas montadas fora do caminho rastreado, inclusive
+montagens externas ou capítulos finais que não tenham um vínculo verificável.
+Para o primeiro teste após instalar, sempre inicie um novo teste/lote.
+
+ONDE CONFERIR
+storage/tasks/<ID>/historical_archive/
+- commons-license-audit.json: decisões e informações de todos os itens.
+- commons-final-media.json: vínculo entre cenas/imagens e cada vídeo final.
+- commons-publication-review.json: verificação e motivo de eventual bloqueio.
+- historical-image-credits.txt: bloco em inglês.
+- youtube-description-with-credits.txt: descrição e créditos reconciliados.
+- manifest.json / sources_and_credits.json: registros de uso e origem.
+
+O horário indica a avaliação local dos metadados retornados pela API/cache.
+A última conferência verifica novamente os arquivos e a política sobre esses
+metadados; não é uma declaração de investigação jurídica externa em tempo real.
+Os nomes de licença e URLs são mantidos conforme a evidência disponível. Um
+registro de domínio público pode não informar URL separada de licença.
+
+VALIDAÇÃO
+Veja VALIDACAO-COMMONS-LICENCAS.json neste pacote/repositório. Inclui testes
+Python, consulta/download reais ao Commons, clipe 1080p com decodificação,
+créditos finais e conferência da interface. Nenhuma chamada paga ou upload real.
+
+Se precisar de ajuda, envie os JSONs de auditoria/revisão e o TXT da descrição.
+Não envie config.toml ou chaves de API.

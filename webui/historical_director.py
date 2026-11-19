@@ -75,9 +75,12 @@ def _channel_setup(repo,params):
             permission=st.checkbox('Autorizar pesquisa e roteiro automáticos para este canal',value=profile.auto_editorial,key='director_channel_permission_'+selected)
             st.caption('Salvar esta autorização não inicia chamadas de IA. O botão de pesquisar ou de retomar a fila inicia a execução e pode consumir saldo.')
             with st.expander('Avançado · modelos e fontes da pesquisa'):
-                backends=['openai','public_login','public_coarena']
-                backend=st.selectbox('Modo de pesquisa',backends,index=backends.index(profile.research_backend),
-                    format_func=lambda x:{'openai':'API OpenAI com busca web (modo atual)','public_login':'Pesquisa pública + ChatGPT/Codex por login','public_coarena':'Pesquisa pública + Coarena (API)'}[x],key='director_research_backend_'+selected)
+                backend=None
+                if 'research_backend' in ChannelProfile.model_fields:
+                    backends=['openai','public_login']
+                    if any(p.provider_id=='coarena' for p in LLM_PROVIDER_REGISTRY):backends.append('public_coarena')
+                    backend=st.selectbox('Modo de pesquisa',backends,index=backends.index(getattr(profile,'research_backend','openai')),
+                        format_func=lambda x:{'openai':'API OpenAI com busca web (modo atual)','public_login':'Pesquisa pública + ChatGPT/Codex por login','public_coarena':'Pesquisa pública + Coarena (API)'}[x],key='director_research_backend_'+selected)
                 research_model=st.text_input('Modelo OpenAI para pesquisa e Blueprint',value=profile.research_model,key='director_channel_research_model_'+selected)
                 domains=st.text_area('Restringir pesquisa a estes domínios (opcional, um por linha)',value='\n'.join(profile.research_domains),key='director_channel_domains_'+selected)
                 providers=['current',*[p.provider_id for p in LLM_PROVIDER_REGISTRY]]
@@ -91,6 +94,7 @@ def _channel_setup(repo,params):
                 update=dict(channel_id=identifier.strip(),name=name,language=language,niche=niche,target_minutes=int(minutes),
                     skill_ids=list(params.skill_ids) if sync else profile.skill_ids,auto_editorial=permission,
                     research_model=research_model,research_backend=backend,research_domains=[d.strip() for d in domains.splitlines() if d.strip()],script_provider=provider,script_model=model)
+                if backend is None:update.pop('research_backend',None)
                 updated=ChannelProfile.model_validate({**profile.model_dump(),**update})
                 repo.save_channel(updated,expected_version=old['version'] if old else 0)
                 st.session_state['director_pending_channel']=updated.channel_id
@@ -155,8 +159,8 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
         policy=st.selectbox('Quando um item falhar',['pause_queue','skip'],index=['pause_queue','skip'].index(defaults.on_failure),
             format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
         new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
-    st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo terá sua própria pesquisa e revisão. Modo do canal: '+{'public_login':'pesquisa pública + login ChatGPT/Codex (limites da conta)','public_coarena':'pesquisa pública + Coarena (cota/API Coarena)','openai':'API OpenAI (pode consumir saldo)'}[profile.research_backend]+'.')
-    production_options=_production_options(defaults.production,channel_id,login_mode=profile.research_backend!='openai')
+    st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo terá sua própria pesquisa e revisão. Modo do canal: '+{'public_login':'pesquisa pública + login ChatGPT/Codex (limites da conta)','public_coarena':'pesquisa pública + Coarena (cota/API Coarena)','openai':'API OpenAI (pode consumir saldo)'}[getattr(profile,'research_backend','openai')]+'.')
+    production_options=_production_options(defaults.production,channel_id,login_mode=getattr(profile,'research_backend','openai')!='openai')
     save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
     ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
     submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
@@ -170,8 +174,8 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
                 request=Request(title=title,reference_script=pasted if source_mode=='Colar texto' else reference_text(script_file),
                     thumbnails=images.upload([f.getvalue() for f in uploaded or []],max_mb=int(max_mb)),**options)
                 snapshot=editorial.prepare(profile)
-                from app.services.historical_director.runner import check_research_options
-                check_research_options(request,snapshot)
+                from app.services.historical_director import runner as director_runner
+                if hasattr(director_runner,'check_research_options'):director_runner.check_research_options(request,snapshot)
                 batch,created=repo.create_director_batch(request,snapshot,new_version=new_version)
                 repo.set_enabled(True)
                 st.session_state['autopilot_worker_pending_enabled']=True
@@ -199,6 +203,8 @@ def _production_options(defaults,channel_id,*,login_mode=False):
         if mode=='video':
             source=st.selectbox('Origem das cenas',['mixed','deepinfra_image'],index=['mixed','deepinfra_image'].index(defaults.video_source),
                 format_func=lambda x:'Bancos de vídeo + DeepInfra quando necessário' if x=='mixed' else 'Somente imagens DeepInfra',key='director_media_source_'+channel_id)
+            commons=st.checkbox('Usar Wikimedia Commons após os bancos, antes da IA',value=defaults.use_wikimedia,key='director_commons_'+channel_id)
+            st.caption('Com Commons: Pexels → Pixabay → Coverr → Commons → IA, usando apenas bancos configurados. Créditos e auditoria são gerados com o vídeo; publicação automática permanece desligada.')
             pexels=st.checkbox('Usar Pexels',value=defaults.use_pexels,key='director_pexels_'+channel_id)
             pixabay=st.checkbox('Usar Pixabay',value=defaults.use_pixabay,key='director_pixabay_'+channel_id)
             models=['stabilityai/sdxl-turbo','black-forest-labs/FLUX-1-schnell','PrunaAI/p-image']
@@ -216,7 +222,7 @@ def _production_options(defaults,channel_id,*,login_mode=False):
             music=st.checkbox('Usar música da biblioteca local do MPT',value=defaults.music_enabled,key='director_music_'+channel_id)
             volume=st.number_input('Volume da música',min_value=0.0,max_value=1.0,value=float(defaults.music_volume),step=0.05,key='director_music_volume_'+channel_id)
             st.caption('Saída 16:9. Zoom e montagem usam o fluxo existente. Esta fase usa música local e não gera efeitos sonoros ou thumbnail final; o pacote inclui os três briefings de thumbnail.')
-            values.update(video_source=source,use_pexels=pexels,use_pixabay=pixabay,deepinfra_model=model,
+            values.update(video_source=source,use_wikimedia=commons,use_pexels=pexels,use_pixabay=pixabay,deepinfra_model=model,
                 deepinfra_unlimited=unlimited,image_limit=int(limit),visual_validation=validation,
                 font_name=font,music_enabled=music,music_volume=volume)
         return VideoProduction.model_validate(values).model_dump()

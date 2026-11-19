@@ -33,6 +33,7 @@ class VideoProduction(Record):
     font_name: str = Field(default='STHeitiMedium.ttc', min_length=1, max_length=160, pattern=r'^[^/\\\x00]+$')
     video_source: Literal['mixed', 'deepinfra_image'] = 'mixed'
     deepinfra_model: Literal['stabilityai/sdxl-turbo', 'black-forest-labs/FLUX-1-schnell', 'PrunaAI/p-image'] = 'PrunaAI/p-image'
+    use_wikimedia: bool = False
     use_pexels: bool = True
     use_pixabay: bool = True
     image_limit: int = Field(default=120, ge=0, le=120)

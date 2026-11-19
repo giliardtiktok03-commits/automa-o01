@@ -198,6 +198,11 @@ def run(job,repo,context):
         from app.services.historical_director import video_production
         result['media']=video_production.run(job['task_id'],controlled,snapshot,result,request.production)
         result['video_generated']=result['media']['video_generated']
+        if result['video_generated']:
+            from app.services.historical_archive.commons_credits import prepare_description
+            video=Path(utils.task_dir(job['task_id']))/result['media']['video']['file']
+            try:result['metadata']['description']=prepare_description(video,result['metadata']['description'])
+            except ValueError as exc:raise RecoveryBlocked(str(exc)) from None
         result['deliverables']=ed.step(controlled,job['task_id'],'director_media_export',lambda:export(job['task_id'],result,context_export),remote=False)
     repo.check_director_control(job['task_id'])
     return result

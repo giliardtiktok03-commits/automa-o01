@@ -88,6 +88,7 @@ class HistoricalArchiveService:
             data=manifest.read(folder)
             key=self.key(scene['id'])
             query=build(scene,settings,terms)
+            query['commons_policy_version']=1
             signature=hashlib.sha256(json.dumps([query,settings.model_dump()],sort_keys=True).encode()).hexdigest()
             old=data['scenes'].get(key)
             # Previously approved/downloaded assets are preserved. Search results are stable on resume.
@@ -117,22 +118,44 @@ class HistoricalArchiveService:
                         parsed=urlparse(candidate.download_url)
                         canonical=urlunparse(parsed._replace(query='',fragment=''))
                         identity=candidate.provider+':'+candidate.record_id
-                        if identity in seen or (canonical and canonical in seen):continue
+                        if identity in seen:continue
+                        if canonical and canonical in seen:
+                            if candidate.provider=='wikimedia':
+                                from .commons_license import classify,update_audit
+                                license_data=classify(candidate)
+                                duplicate_id=hashlib.sha256(identity.encode()).hexdigest()[:24]
+                                update_audit(data,key,{'id':duplicate_id,'candidate':candidate.to_dict(),'commons_license':license_data})
+                                for previous in entry['candidates']:
+                                    old_url=urlparse(previous['candidate']['download_url'])
+                                    if urlunparse(old_url._replace(query='',fragment=''))==canonical and previous.get('commons_license') and previous['commons_license']['classification']!=license_data['classification']:
+                                        previous['commons_license'].update(classification='NEEDS_REVIEW',reason='Metadados de licenciamento divergentes para o mesmo arquivo')
+                                        previous.update(rights_status='needs_review',rights_reason=previous['commons_license']['reason'],classification='NEEDS_REVIEW',state='skipped_unknown_rights')
+                                        self.report('wikimedia','rights','NEEDS_REVIEW',candidate_id=previous['id'],classification='NEEDS_REVIEW',reason=previous['rights_reason'])
+                                        update_audit(data,key,previous)
+                            continue
                         seen.update([identity,canonical])
                         status,reason=assess(candidate)
                         score,explanation=rank(candidate,query,status)
                         if candidate.metadata.get('ai_generated'):
                             status,reason='needs_review','Item sinalizado como IA; não tratar como arquivo histórico autêntico'
                         cid=hashlib.sha256(identity.encode()).hexdigest()[:24]
-                        self.report(candidate.provider,'rights',status,candidate_id=cid,classification=status,reason=reason,score=score)
+                        license_data=None
+                        if candidate.provider=='wikimedia':
+                            from .commons_license import classify
+                            license_data=classify(candidate)
+                        self.report(candidate.provider,'rights',license_data['classification'] if license_data else status,candidate_id=cid,classification=license_data['classification'] if license_data else status,reason=reason,score=score)
                         entry['candidates'].append({'id':cid,'candidate':candidate.to_dict(),'state':'skipped_unknown_rights' if status=='needs_review' else status,'rights_status':status,
                             'rights_reason':reason,'score':score,'score_explanation':explanation,'used':False})
+                        if license_data:
+                            item=entry['candidates'][-1];item['commons_license']=license_data;item['classification']=license_data['classification']
+                            from .commons_license import update_audit
+                            update_audit(data,key,item)
                 # Provider order defines tie preference, while all selected sources can contribute.
             # Do not let a high-scoring but unusable record crowd out a legally usable match.
             def eligible(item):
                 relevance=item['score_explanation']
                 return item['rights_status']=='rights_cleared' and item['score']>=settings.min_score and relevance.get('event',0)>=.15 and not relevance.get('conflicting_context')
-            entry['candidates'].sort(key=lambda c:(eligible(c),c['score']),reverse=True)
+            entry['candidates'].sort(key=lambda c:(eligible(c),c['candidate']['provider']=='wikimedia',-c.get('commons_license',{}).get('license_priority',2),c['score']),reverse=True)
             entry['candidates']=entry['candidates'][:settings.candidates_per_scene]
             if self.active():
                 for item in entry['candidates']:
@@ -163,6 +186,13 @@ class HistoricalArchiveService:
             used_records={(c['candidate']['provider'],c['candidate']['record_id']) for scene_key,s in data['scenes'].items() if scene_key!=key for c in s.get('candidates',[]) if c.get('used')}
             rejection_reasons=[]
             for item in entry['candidates']:
+                if item['candidate']['provider']=='wikimedia':
+                    from .commons_license import classify,MAPPING,update_audit
+                    item['commons_license']=classify(ArchiveCandidate(**item['candidate']))
+                    item['rights_status']=MAPPING[item['commons_license']['classification']]
+                    item['rights_reason']=item['commons_license']['reason']
+                    item['classification']=item['commons_license']['classification']
+                    update_audit(data,key,item)
                 if (item['candidate']['provider'],item['candidate']['record_id']) in used_records:
                     rejection_reasons.append('registro já utilizado em outra cena');continue
                 if candidate_id and item['id']!=candidate_id:continue
@@ -227,11 +257,17 @@ class HistoricalArchiveService:
         scene=self.snapshot()['scenes'][self.key(scene_id)]
         return self.select({'id':scene_id,'text':scene['text']},candidate_id=candidate_id,use_saved=True)
 
-    def mark_used(self,provenance):
+    def mark_used(self,provenance,*,output=None,params=None):
         if not provenance or provenance.get('provider')!='historical_archive':return
         with FileLock(str(self.folder/'manifest.lock'),timeout=60):
             data=manifest.read(self.folder)
             for item in data['scenes'].get(provenance['archive_scene_key'],{}).get('candidates',[]):
-                if item['id']==provenance['archive_candidate_id']:item['used']=True
+                if item['id']==provenance['archive_candidate_id']:
+                    item['used']=True
+                    if item['candidate']['provider']=='wikimedia':
+                        from .commons_license import classify
+                        from .commons_credits import record_use
+                        item['commons_license']=classify(ArchiveCandidate(**item['candidate']))
+                        item['commons_render_use']=record_use(self.folder,item,output,params)
             manifest.save(self.folder,data)
             manifest.credits(self.folder,data)

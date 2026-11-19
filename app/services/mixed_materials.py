@@ -626,7 +626,13 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 _context_card(scene, params, scene_dir)
                 _save(manifest_file, manifest)
             source, provenance = None, None
-            if archive_service is not None and archive_service.active() and not scene.get("image_request_started"):
+            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or images_unlimited(params) or archive_service is not None) and not scene.get("image_file") and not scene.get("image_request_started"):
+                history = records or params.mixed_previous_sources
+                scene["previous_identity"] = history[-1].get("source_identity") if history else None
+                rotation = 0 if archive_service is not None else stock_turn % len(available)
+                source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
+                stock_turn += 1
+            if source is None and archive_service is not None and archive_service.active() and not scene.get("image_request_started"):
                 try:
                     source, provenance = archive_service.select(scene, params.video_terms)
                     if source:
@@ -637,12 +643,6 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                 except (ArchiveError,material.OpenAIImagePaidResultError) as exc:
                     archive_service.report('pipeline','material_delivery','failed',scene_id=scene['id'],reason='Arquivo histórico não pôde ser preparado: '+str(exc)[:300])
                     source,provenance=None,None
-            if source is None and available and (scene["source"] == "stock" or params.mixed_select_sources or images_unlimited(params) or archive_service is not None) and not scene.get("image_file") and not scene.get("image_request_started"):
-                history = records or params.mixed_previous_sources
-                scene["previous_identity"] = history[-1].get("source_identity") if history else None
-                rotation = stock_turn % len(available)
-                source, provenance = _stock(scene, params, scene_dir, available[rotation:] + available[:rotation], used)
-                stock_turn += 1
             if source is None and params.mixed_image_provider == "none" and not scene.get("image_file") and not scene.get("ai33_job") and not scene.get("runware_job") and not scene.get("grok_job") and not scene.get("google_flow_job") and not scene.get("deepinfra_job"):
                 if archive_service is not None:
                     reason=archive_service.explain(scene['id'])
@@ -780,7 +780,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
             render(source, output, scene["end_frame"] - scene["start_frame"], render_settings,
                    start_time=params.mixed_timeline_offset + scene["start_frame"] / FPS,
                    source_start=provenance.get("source_start", 0))
-            if archive_service is not None: archive_service.mark_used(provenance)
+            if archive_service is not None: archive_service.mark_used(provenance,output=output,params=render_settings)
             scene["sha256"] = _hash(output)
             scene["provenance"] = {**provenance, "scene_id": scene["id"],
                                    "start": scene["start_frame"] / FPS, "end": scene["end_frame"] / FPS}

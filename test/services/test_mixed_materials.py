@@ -929,7 +929,7 @@ def test_deepinfra_keeps_stock_first_and_audits_image_budget(setup, monkeypatch)
     assert provider.call_count==count
 
 
-def test_archives_are_tried_before_stock_and_credits_only_after_render(setup,monkeypatch):
+def test_stock_is_tried_before_archives_and_credits_only_after_render(setup,monkeypatch):
     folder,subtitles,params,_,search,_,_=setup
     from app.services.historical_archive import settings
     monkeypatch.setattr(settings,'mapping',lambda:{'historical_archive_enabled':True})
@@ -943,8 +943,9 @@ def test_archives_are_tried_before_stock_and_credits_only_after_render(setup,mon
     monkeypatch.setattr(mixed,'HistoricalArchiveService',lambda *a:service)
     mixed.prepare('job',params,SCRIPT,30,str(subtitles))
     manifest=json.loads((folder/'mixed-scenes.json').read_text())
-    assert manifest['scenes'][0]['provenance']['provider']=='historical_archive'
-    assert all(call.args[2]!='coffee scene 1' for call in search.call_args_list)
+    assert manifest['scenes'][0]['provenance']['provider']=='pexels'
+    assert any(call.args[2]=='coffee scene 1' for call in search.call_args_list)
+    service.select.assert_not_called()
     assert service.mark_used.call_count==3
 
 
@@ -970,7 +971,7 @@ def test_archive_without_cleared_assets_uses_stock_then_ai_without_approval(setu
     provider=Mock(side_effect=generate)
     monkeypatch.setattr(mixed.deepinfra_image,'generate',provider)
     mixed.prepare('job',params,SCRIPT,30,str(subtitles))
-    assert events[0]=='archive' and events.index('stock')<events.index('ai')
+    assert events[0]=='stock' and events.index('stock')<events.index('archive')<events.index('ai')
     data=json.loads((folder/'mixed-scenes.json').read_text())
     assert data['image_requests']==provider.call_count
     assert all(scene['provenance']['illustration'] for scene in data['scenes'])

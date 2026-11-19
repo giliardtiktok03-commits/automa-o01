@@ -256,7 +256,7 @@ def test_provider_normalization_and_original_metadata():
         'url':'https://upload.wikimedia.org/a.jpg','descriptionurl':'https://commons.wikimedia.org/wiki/File:K-129.jpg','width':1000,
         'extmetadata':{'LicenseShortName':{'value':'CC BY-SA 4.0'},'LicenseUrl':{'value':'https://creativecommons.org/licenses/by-sa/4.0/'},'Artist':{'value':'<b>Photographer</b>'}}}]}}}}
     commons=WikimediaProvider(api).search('K-129',['photograph'],3)[0]
-    assert commons.creator=='Photographer' and assess(commons)[0]=='rights_cleared'
+    assert commons.creator=='Photographer' and assess(commons)[0]=='needs_review'
     assert commons.metadata['record']['pageid']==4
     assert NARAProvider(api).health_check()=={'status':'needs_api_key'}
 
@@ -442,10 +442,10 @@ def test_legacy_archive_adapter_assembles_timed_scenes_without_approvals(setup,t
     monkeypatch.setattr(pipeline,'HistoricalArchiveService',lambda *a:service)
     monkeypatch.setattr(mixed.VideoAspect,'to_resolution',lambda self:(160,90))
     params=VideoParams(video_subject='K-129',video_source='pexels',video_aspect='16:9',image_motion=ImageMotion.static)
-    fallback=Mock()
+    fallback=Mock(return_value=[])
     outputs=pipeline.prepare_legacy('project1',params,SCENE['text'],.4,'',[],fallback)
     assert params.historical_archive_prepared and len(outputs)==1
-    fallback.assert_not_called()
+    fallback.assert_called_once()
     combined=tmp_path/'combined.mp4'
     mixed.join(outputs,combined)
     with VideoFileClip(str(combined)) as clip:
@@ -510,7 +510,8 @@ def test_uncertain_high_score_does_not_crowd_out_a_cleared_match(setup):
     provider.search.return_value=[candidate(rights_statement='')]
     usable=Mock();usable.name='wikimedia'
     usable.search.return_value=[candidate(provider='wikimedia',record_id='clear',title='K-129 submarine',description='',
-        download_url='https://upload.wikimedia.org/submarine.jpg')]
+        download_url='https://upload.wikimedia.org/submarine.jpg',source_url='https://commons.wikimedia.org/wiki/File:Submarine.jpg',
+        metadata={'record':{'imageinfo':[{'extmetadata':{'LicenseShortName':{'value':'Public domain'},'UsageTerms':{'value':'Public domain'},'License':{'value':'pd'},'Copyrighted':{'value':'False'}}}]}})]
     factory.return_value=[provider,usable]
     result=service.search_scene(SCENE)
     assert len(result['candidates'])==1

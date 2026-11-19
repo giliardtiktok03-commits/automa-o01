@@ -13,6 +13,12 @@ def read(folder):
 
 def save(folder,data):
     folder.mkdir(parents=True,exist_ok=True)
+    from .commons_license import update_audit,VERSION
+    for key,scene in data['scenes'].items():
+        for item in scene.get('candidates',[]):
+            if item.get('commons_license'):update_audit(data,key,item)
+    if data.get('commons_license_audit'):
+        write_bytes_atomic(folder/'commons-license-audit.json',json.dumps({'policy_version':VERSION,'updated_at':now(),'files':list(data['commons_license_audit'].values())},ensure_ascii=False,indent=2).encode())
     write_bytes_atomic(folder/'manifest.json',json.dumps(data,ensure_ascii=False,indent=2).encode())
     credits(folder,data)
     write_bytes_atomic(folder/'search_log.json',json.dumps({'providers':data['providers'],'scenes':{

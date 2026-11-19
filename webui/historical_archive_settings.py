@@ -13,6 +13,8 @@ from app.utils.atomic_files import write_bytes_atomic
 
 
 def render(set_config):
+    from webui.commons_probe import render as render_commons_probe
+    render_commons_probe()
     cfg=settings.load()
     def save(name,value):set_config('app',settings.PREFIX+name,value)
     with st.expander('Historical Archive Finder · '+('Ativado' if st.session_state.get('haf_enabled',cfg.enabled) else 'Desativado'),expanded=False):
@@ -25,15 +27,15 @@ def render(set_config):
             save(name+'_enabled',value)
         st.checkbox('Europeana — fase pendente',value=False,disabled=True,key='haf_europeana_pending')
         st.checkbox('Internet Archive — fase pendente',value=False,disabled=True,key='haf_ia_pending')
-        modes={'historical_plus_stock':'Automático: acervos → bancos → IA habilitada',
+        modes={'historical_plus_stock':'Automático: bancos → Commons/acervos → IA habilitada',
                'historical_research_only':'Somente pesquisa (sem gerar vídeo)'}
         mode=st.selectbox('Modo de pesquisa histórica',list(modes),index=list(modes).index(cfg.mode),format_func=modes.get,key='haf_mode',disabled=not active)
         save('mode',mode)
         for name,label in [('photographs','Fotografias históricas'),('documents','Documentos e registros desclassificados'),('maps','Mapas e diagramas'),('footage','Filmagens de arquivo'),('auto_download_rights_cleared','Baixar automaticamente somente itens com direitos liberados'),('preserve_aspect','Preservar a proporção original'),('show_credits','Mostrar relatório de fontes e créditos'),('llm_queries','Usar modelo central para elaborar consultas em inglês (pode ter custo)')]:
             value=st.checkbox(label,value=getattr(cfg,name),key='haf_'+name,disabled=not active)
             save(name,value)
-        st.caption('Automático: itens incertos/restritos são ignorados. Sem material histórico, continua nos bancos e na IA habilitada, respeitando o limite de imagens.')
-        st.caption('Nenhuma aprovação manual é solicitada. Os créditos de materiais utilizados são preservados no manifesto.')
+        st.caption('Automático: itens incertos/restritos são ignorados. Os bancos são tentados primeiro; sem material elegível, continua nos acervos e na IA habilitada, respeitando o limite de imagens.')
+        st.caption('Itens pendentes não são usados automaticamente. Commons usa política conservadora e créditos vinculados ao vídeo; imagens com condições especiais exigem revisão. Publicação automática de vídeos com Commons permanece desligada.')
         for name,label,minimum,maximum in [('candidates_per_scene','Candidatos por cena',1,20),('max_downloads_per_video','Máximo de downloads históricos por vídeo',1,300),('max_file_mb','Tamanho máximo por arquivo (MB)',1,500)]:
             value=st.number_input(label,min_value=minimum,max_value=maximum,value=getattr(cfg,name),step=1,key='haf_'+name,disabled=not active)
             save(name,value)
@@ -131,7 +133,7 @@ def render(set_config):
                     with st.expander(candidate['title']+' · '+item['state'],expanded=False):
                         st.write({'Instituição':candidate['institution'],'Data':candidate['date_created'],'Tipo':candidate['media_type'],
                                   'Direitos':candidate['rights_statement'],'Licença':candidate['license_url'],'Crédito':candidate['attribution'],
-                                  'Pontuação':item['score'],'Motivo':item['rights_reason'],'Classificação':item['score_explanation']})
+                                  'Pontuação':item['score'],'Motivo':item['rights_reason'],'Classificação':item.get('classification',item['rights_status']),'Relevância':item['score_explanation']})
                         try:st.link_button('Abrir fonte',safe_url(candidate['source_url']))
                         except ValueError:st.caption('URL da fonte não validada; revise o registro original.')
                         if candidate['provider']=='loc':
@@ -154,7 +156,7 @@ def render(set_config):
                             else:st.warning('Arquivo não baixado; confira os direitos, limites e erros no manifesto.')
                             st.rerun()
             if cfg.show_credits:
-                for name in ('diagnostic-report.json','diagnostic-report.md','sources_and_credits.md','sources_and_credits.json','manifest.json','search_log.json'):
+                for name in ('diagnostic-report.json','diagnostic-report.md','sources_and_credits.md','sources_and_credits.json','manifest.json','search_log.json','commons-license-audit.json','commons-final-media.json','commons-publication-review.json','historical-image-credits.txt','youtube-description-with-credits.txt'):
                     path=folder/name
                     if path.is_file():st.download_button('Baixar '+name,data=path.read_bytes(),file_name=name,key='haf_export_'+name)
             context=task_dir/'historical-archive-resume.json'

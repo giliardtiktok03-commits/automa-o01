@@ -54,7 +54,7 @@ def parameters(snapshot, result, options):
         video_count=1, match_materials_to_script=True, mixed_select_sources=True,
         mixed_use_pexels=options.use_pexels and options.video_source=='mixed',
         mixed_use_pixabay=options.use_pixabay and options.video_source=='mixed',
-        mixed_use_coverr=False, mixed_use_deepinfra=True, mixed_image_provider='deepinfra',
+        mixed_use_coverr=options.use_wikimedia and options.video_source=='mixed', mixed_use_deepinfra=True, mixed_image_provider='deepinfra',
         deepinfra_model=options.deepinfra_model, mixed_max_images=options.image_limit,
         mixed_deepinfra_unlimited=options.deepinfra_unlimited, mixed_grok_unlimited=False,
         mixed_use_grok=False, mixed_use_ai33=False, mixed_use_google_flow=False,
@@ -70,7 +70,10 @@ def runtime(snapshot, params, options):
     settings = webui_task.capture_settings()
     settings['app'] = ed.settings_for(snapshot)
     settings['app']['subtitle_provider'] = options.subtitle_provider
-    settings['app']['historical_archive_enabled'] = False
+    settings['app']['historical_archive_enabled'] = options.use_wikimedia
+    if options.use_wikimedia:
+        settings['app'].update(historical_archive_wikimedia_enabled=True, historical_archive_loc_enabled=False,
+            historical_archive_nara_enabled=False,historical_archive_mode='historical_plus_stock',historical_archive_llm_queries=False)
     settings.setdefault('ui', {})
     for source in ('pexels','pixabay','coverr','deepinfra','grok','ai33','google_flow'):
         settings['ui']['mixed_use_'+source] = getattr(params,'mixed_use_'+source)

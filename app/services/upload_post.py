@@ -203,6 +203,22 @@ class UploadPostService:
                 logger.error(error)
                 return {"success": False, "error": error}
 
+        # Reconcile Commons files/credits before opening or uploading any video.
+        from app.services.historical_archive.commons_credits import prepare_description,locate,has_commons
+        try:
+            commons_folder=locate(video_path)
+            if commons_folder is not None:
+                if has_youtube:
+                    original_description=(youtube_extra or {}).get('youtube_description',title)
+                    credited_description=prepare_description(video_path,original_description)
+                    if credited_description!=original_description:
+                        youtube_extra=dict(youtube_extra or {})
+                        youtube_extra['youtube_description']=credited_description
+                else:
+                    title=prepare_description(video_path,title,limit=2200)
+        except ValueError as exc:
+            return {'success':False,'error':str(exc),'needs_review':True}
+
         logger.info(f"Cross-posting video to {', '.join(platforms)} via Upload-Post...")
 
         # Generate the remote handle before POST: a lost response does not

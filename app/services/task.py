@@ -1222,6 +1222,8 @@ def generate_final_videos(
                 }
             )
 
+        from app.services.historical_archive.commons_credits import bind_final
+        bind_final(task_id,final_video_path,downloaded_videos)
         final_video_paths.append(final_video_path)
         combined_video_paths.append(combined_video_path)
         _progress += 50 / params.video_count / 2
@@ -2023,6 +2025,11 @@ def _run_pipeline(
         list(upload_post.upload_post_service.platforms) if cross_post_enabled else []
     )
     should_cross_post = cross_post_enabled and bool(platforms)
+    # Commons remains a manual-publication workflow; never auto-enqueue an upload.
+    from app.services.historical_archive.commons_credits import locate,has_commons
+    commons_folder=locate(final_video_paths[0]) if final_video_paths else None
+    if commons_folder is not None and has_commons(commons_folder):
+        should_cross_post=False
     if cross_post_enabled and not platforms:
         logger.warning(
             f"skip cross-post because no platforms are configured, task_id: {task_id}"

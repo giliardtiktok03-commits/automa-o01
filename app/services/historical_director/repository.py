@@ -64,9 +64,11 @@ class DirectorRepositoryMixin:
         from app.models.historical_director import VideoProduction
         if request.production == VideoProduction():
             identity_request.pop('production')
+        elif not request.production.use_wikimedia:
+            identity_request['production'].pop('use_wikimedia',None)
         identity_snapshot=snapshot.model_dump()
-        if snapshot.channel.research_backend=='openai':
-            identity_snapshot['channel'].pop('research_backend')
+        if getattr(snapshot.channel,'research_backend','openai')=='openai':
+            identity_snapshot['channel'].pop('research_backend',None)
         payload=json.dumps({'request':identity_request,'snapshot':identity_snapshot},sort_keys=True,ensure_ascii=False)
         identity=hashlib.sha256(payload.encode()).hexdigest()
         if new_version:identity=hashlib.sha256((identity+str(uuid4())).encode()).hexdigest()
