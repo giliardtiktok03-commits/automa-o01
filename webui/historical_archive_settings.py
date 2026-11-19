@@ -13,6 +13,8 @@ from app.utils.atomic_files import write_bytes_atomic
 
 
 def render(set_config):
+    from webui.commons_probe import render as render_commons_probe
+    render_commons_probe()
     cfg=settings.load()
     def save(name,value):set_config('app',settings.PREFIX+name,value)
     with st.expander('Historical Archive Finder · '+('Ativado' if st.session_state.get('haf_enabled',cfg.enabled) else 'Desativado'),expanded=False):

@@ -1,0 +1,59 @@
+MPT — TESTE INDEPENDENTE DO WIKIMEDIA COMMONS
+
+Este pacote serve para testar no seu MPT do Windows. Não depende da Coarena,
+OpenAI, roteiro, voz, legenda, Pexels, Pixabay, Coverr ou gerador de imagens.
+Requer a instalação do MPT deste projeto com o módulo Historical Archive Finder.
+Não inclui o gerenciador completo de licenças/atribuição para produção.
+
+COMO INSTALAR
+1. Feche o MPT e faça uma cópia de segurança da pasta do aplicativo.
+2. Extraia este ZIP na pasta que contém app, webui e resource.
+3. Aceite substituir os arquivos incluídos. Não apague storage ou config.toml.
+4. Reinicie o MPT com o comando/atalho que já utiliza. Não há dependência nova.
+
+COMO TESTAR
+1. Abra o bloco 02 / Video Settings / Configurações de vídeo, na tela principal.
+2. Abra "Wikimedia Commons · Teste independente".
+3. Deixe a consulta: World War II aircraft 1943
+4. Mantenha "Gerar clipe de teste em 16:9" marcado.
+5. Clique "Testar Wikimedia Commons" e aguarde a atualização automática.
+6. O resultado mostra os arquivos analisados, a prévia do clipe e os botões
+   para baixar commons-test.json, o MP4 e os relatórios/arquivos de créditos.
+
+Não precisa ativar "Ativar pesquisa em arquivos históricos". O teste não muda
+suas preferências de produção nem dispara publicação. Se fechar o aplicativo,
+os relatórios concluídos permanecem salvos; para um teste interrompido, inicie
+um novo teste pelo botão. Nunca é necessário informar manualmente um ID.
+
+PASTA DOS RESULTADOS
+storage/tasks/commons-test-<ID>/historical_archive/
+
+RESULTADOS PRINCIPAIS
+- commons-test.json: consulta, horário, candidatos, decisões do teste e clipe.
+- commons-test-clip.mp4: aproximadamente 4 segundos, 1920x1080, sem narração.
+- diagnostic-report.json: respostas HTTP, etapas e erros reais.
+- manifest.json e search_log.json: pesquisa, metadados, direitos e seleção.
+- sources_and_credits.json/.md: somente o arquivo efetivamente usado no clipe.
+
+ESCOPO E LIMITES
+- Correção: remove duplicações de campos de direitos do Commons, preservando
+  todas as restrições distintas e o registro original da API.
+- No teste independente, CC BY-SA, avisos especiais e metadados incertos não
+  são escolhidos automaticamente. A classificação ELIGIBLE_FOR_TEST não é
+  uma aprovação jurídica ou uma autorização para publicação comercial.
+- Se nenhuma fotografia passar, o teste registra "requer revisão"; tente uma
+  consulta mais específica e confira o JSON. Não há fallback para IA/outros bancos.
+- Este pacote não muda a ordem dos provedores em vídeos de produção, não
+  injeta créditos na descrição do YouTube e não implementa o bloqueio final
+  de publicação previsto na especificação completa. Essas etapas seguem pendentes.
+- Não altera outros provedores, configuração de zoom ou processos de produção.
+- Não liga publicação automática nem faz merge na main.
+
+VALIDAÇÃO
+114 testes Python passaram; 3 foram ignorados pelas condições existentes das
+suítes. Consulta real ao Commons, download, conversão para PNG, clipe 1080p
+com decodificação completa por FFmpeg e leitura do resultado na interface.
+O teste do clipe usa enquadramento estático somente dentro do diagnóstico.
+
+Se houver erro, baixe commons-test.json e diagnostic-report.json e envie esses
+arquivos para análise. Não envie config.toml nem chaves de API.
