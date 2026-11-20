@@ -1,0 +1,44 @@
+MPT — RECUPERAR IMAGEM DEEPINFRA APÓS ERRO HTTP
+
+Esta atualização permite autorizar manualmente uma nova solicitação para uma
+cena com HTTP 429, 500, 502, 503 ou 504. Não corrige o servidor DeepInfra;
+permite continuar o projeto quando o serviço voltar a aceitar os pedidos.
+
+INSTALAÇÃO
+Feche o MPT, faça backup dos arquivos substituídos e extraia o ZIP na pasta
+principal, mantendo app e webui. Reinicie o MPT.
+Aplicar sobre a versão com narração AI33PRO e correção do catálogo instalada.
+Não inclui nem substitui config.toml, chaves, áudio, imagens ou tarefas salvas.
+
+RECUPERAR O PROJETO DO TESTE
+1. Abra o bloco de recuperação/retomada de projeto misto já existente.
+2. Informe o ID: d2ce1b5f-6510-4797-a3b5-28d9859d3710
+3. Selecione um limite total que inclua a nova solicitação ou, com DeepInfra
+   selecionado, marque DeepInfra sem limite de imagens nesta retomada.
+4. Abra DeepInfra · Recuperar imagem com erro HTTP. A cena 21 deve aparecer,
+   se o registro ainda corresponder à falha enviada no log.
+5. Confira o histórico de consumo na DeepInfra. HTTP 500 não garante que o
+   pedido anterior deixou de ser processado/cobrado.
+6. Marque Autorizar uma única nova solicitação desta imagem e clique em
+   Liberar nova tentativa desta cena. Isso só salva a autorização, sem API.
+7. Clique em Verificar projeto salvo e depois Retomar projeto salvo.
+   Não clique no botão de criar um vídeo novo.
+8. O MPT usa o áudio e as cenas prontas do mesmo projeto; a tentativa da imagem
+   usa o modelo, prompt e proporção originais. Novas solicitações contam no teto.
+
+COMPORTAMENTO
+A autorização vale uma vez e para aquele pedido/cena. O histórico anterior
+permanece no JSON. Se ocorrer novo erro elegível, outra autorização explícita
+é necessária. Timeout, resultado desconhecido, recusa de conteúdo e erros de
+credenciais não ganham reenvio automático. Não apague os registros para forçar
+novas tentativas. Não há mudança nos outros provedores ou na API de voz.
+
+Se continuar retornando HTTP 500, o serviço externo ainda está falhando:
+aguarde e confira o painel DeepInfra antes de autorizar outro pedido.
+Não é necessário gerar novamente o roteiro ou a narração AI33PRO.
+
+VALIDAÇÃO
+Testes locais com respostas HTTP simuladas, base64 de imagem real e pipeline
+de montagem. Conferidos: autorização única, retomada, contabilização de
+pedidos, preservação do áudio e cenas prontas, falha repetida e timeout.
+Nenhuma geração paga real feita aqui; nenhum vídeo publicado; sem merge main.

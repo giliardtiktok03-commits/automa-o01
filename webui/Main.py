@@ -9346,6 +9346,8 @@ def _render_mixed_resume():
         limit = st.number_input(tr("Mixed Resume Limit"), disabled=unlimited or deepinfra_unlimited, min_value=0, max_value=120, value=24,
                                 step=1, key="mixed_resume_limit")
         apply_style = st.checkbox("Aplicar o estilo atual das legendas ao retomar", value=True, key="mixed_resume_apply_subtitle_style")
+        from webui.deepinfra_recovery import render as render_deepinfra_recovery
+        render_deepinfra_recovery(resume_id,limit,deepinfra_unlimited=deepinfra_unlimited,grok_unlimited=unlimited)
         check = st.button(tr("Mixed Resume Check"), key="mixed_resume_check")
         resume = st.button(tr("Mixed Resume Start"), key="mixed_resume_start", disabled=_flow_test_running())
         if check or resume:

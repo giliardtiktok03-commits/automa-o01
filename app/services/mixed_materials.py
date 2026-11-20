@@ -693,9 +693,15 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                     # An interrupted attempt without a ledger is ambiguous; never repost.
                     if (resuming_deepinfra or resuming_ai33 or resuming_runware or resuming_grok or resuming_flow) and not (job_dir / ("flow-image.json" if provider == "google_flow" else provider + "-image.json")).is_file():
                         raise MixedError("Image attempt has no checkpoint; reconcile before another paid request")
+                    if resuming_deepinfra and not images_unlimited(params) and manifest['image_requests'] >= params.mixed_max_images:
+                        checkpoint=json.loads((job_dir/'deepinfra-image.json').read_text(encoding='utf-8'))
+                        if checkpoint.get('status')=='retry_authorized':
+                            raise MixedError('Aumente o limite total de imagens para incluir a nova tentativa DeepInfra')
                     prompt = image_prompt(scene)
                     try:
                         def mark_submitted():
+                            if provider == 'deepinfra' and not images_unlimited(params) and manifest['image_requests'] >= params.mixed_max_images:
+                                raise MixedError('Limite total de imagens atingido; aumente o teto antes de uma nova solicitação DeepInfra')
                             manifest["image_requests"] += 1
                             scene["image_request_started"] = True
                             scene[provider + "_job"] = f"{provider}-{scene['id']:03d}"

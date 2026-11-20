@@ -1,4 +1,4 @@
-"""DeepInfra image APIs: FLUX.1 Schnell, PrunaAI P-Image and legacy SDXL; no retries."""
+"""DeepInfra image APIs; no automatic retries, single-use explicit recovery."""
 import base64
 import hashlib
 import io
@@ -23,6 +23,7 @@ P_IMAGE_MODEL = 'PrunaAI/p-image'
 FLUX_ENDPOINT = 'https://api.deepinfra.com/v1/openai/images/generations'
 MODELS = {FLUX_MODEL: 'DeepInfra — FLUX.1 Schnell', MODEL: 'DeepInfra — SDXL Turbo', P_IMAGE_MODEL: 'PrunaAI P-Image'}
 MAX_RESPONSE = 36 * 1024 * 1024
+RETRYABLE_HTTP = {429, 500, 502, 503, 504}
 
 
 class DeepInfraError(ValueError):
@@ -169,14 +170,23 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
                 raise DeepInfraRefusal('DeepInfra sinalizou conteúdo recusado; nenhum novo pedido foi feito')
             if image.is_file() and hashlib.sha256(image.read_bytes()).hexdigest() == state.get('sha256'):
                 return image, state.get('details', {})
-            if not raw.is_file():
+            if not raw.is_file() and state.get('status') != 'retry_authorized':
                 raise DeepInfraError('Resultado DeepInfra não confirmado; confira o painel. Sem novo envio automático')
         else:
             if existing_only:
                 raise DeepInfraError('Registro DeepInfra ausente; geração não será reenviada')
-            _cooldown(api_key(settings))
             state = dict(version=2, model=params.deepinfra_model, provider='deepinfra_image', fingerprint=fingerprint,
                          status='submission_unconfirmed', request_id=str(uuid4()))
+        if not raw.is_file():
+            _cooldown(api_key(settings))
+            if state.get('status') == 'retry_authorized':
+                if state.get('http_status') not in RETRYABLE_HTTP or state.get('retry_for') != state.get('request_id'):
+                    raise DeepInfraError('Autorização de nova tentativa DeepInfra inválida')
+                previous={key:state[key] for key in ('request_id','http_status','retry_authorized_at') if key in state}
+                state['attempt_history']=[*state.get('attempt_history',[]),previous]
+                state.update(status='submission_unconfirmed',request_id=str(uuid4()))
+                for key in ('retry_for','retry_authorized_at','http_status','retry_after_seconds'):
+                    state.pop(key,None)
             save(state)
             if before_submit:
                 before_submit()
