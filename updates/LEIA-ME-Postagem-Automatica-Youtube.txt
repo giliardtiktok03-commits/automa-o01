@@ -1,0 +1,83 @@
+POSTAGEM AUTOMATICA YOUTUBE - PRIMEIRA ETAPA
+
+INSTALACAO WINDOWS
+1. Feche o MPT e o terminal.
+2. Extraia este ZIP na raiz do MPT, substituindo os arquivos app e webui incluidos.
+   Atualizacao incremental para a versao com Commons, correcao de creditos e diagnostico LOC.
+   Nao apague storage nem config.toml.
+3. Execute INSTALAR-YOUTUBE.bat para instalar a dependencia OAuth no ambiente virtual
+   do proprio MPT (.venv ou venv). O script precisa de acesso a internet.
+4. Inicie o MPT. O bloco 05 - Postagem automatica youtube aparece abaixo do AUTOPILOT.
+   A fila de producao passa a ser numerada como 06.
+
+CONFIGURACAO GOOGLE - UMA VEZ POR CANAL
+1. Cadastre o canal no AUTOPILOT, caso ainda nao exista.
+2. No Google Cloud Console, crie ou selecione um projeto seu.
+3. Ative YouTube Data API v3.
+4. Configure Google Auth Platform / tela de consentimento. Em modo de teste,
+   adicione a conta que controla seu canal como usuario de teste.
+5. Crie um cliente OAuth do tipo Aplicativo para computador (Desktop app).
+6. Baixe o JSON desse cliente, selecione o canal do MPT e carregue o arquivo no bloco 05.
+7. Clique Conectar canal ao Google e depois Autorizar canal no Google.
+8. Escolha a conta/canal correto e conceda o consentimento. O navegador deve estar
+   no mesmo computador Windows que executa o MPT, pois a resposta usa 127.0.0.1.
+9. Volte ao MPT e clique Atualizar conexao. Confira o nome e o ID real do YouTube.
+
+PRIMEIRO TESTE - PRIVADO E MANUAL
+1. Mantenha Enviar automaticamente desativado.
+2. Preencha titulo, descricao completa com fontes/hashtags, tags e thumbnail.
+3. Selecione Privado. Declare se o conteudo e feito para criancas.
+4. Selecione um video final salvo, confirme a revisao e clique Preparar postagem - sem enviar.
+5. No historico, abra a postagem e clique Enviar / retomar postagem.
+6. Confira o resultado e o link. A validacao local nao faz upload sem esse comando
+   ou sem a opcao automatica ser explicitamente ativada.
+
+ENVIO APOS NOVA GERACAO
+- Apos validar o primeiro teste, salve as configuracoes do canal com a opcao automatica.
+- O destino e capturado para cada nova tarefa; alterar o canal depois nao troca o destino.
+- O titulo vem da nova geracao. Descricao, tags e thumbnail sao as configuradas neste bloco:
+  revise-as para cada video. Esta entrega nao gera esses metadados por IA.
+- Projetos antigos, recuperacoes e a fila editorial/angulos do AUTOPILOT nao passam
+  a publicar automaticamente nesta primeira etapa.
+- Videos que usam Commons continuam bloqueados no envio automatico: revise e prepare
+  manualmente. Os creditos sao reconciliados antes de qualquer envio.
+- Para YouTube, use somente uma automacao de envio: este modulo ou Upload-Post.
+
+INTEGRIDADE, RETOMADA E CUSTOS
+- Verificacao de arquivo, hash, duracao e decodificacao de audio/video antes do envio.
+  Isso nao substitui a revisao editorial, historica ou juridica pelo responsavel.
+- O video sobe primeiro como privado. Thumbnail e anexada antes de solicitar
+  a visibilidade publica/nao listada escolhida.
+- O ID e salvo antes da thumbnail: falha nessa etapa nao cria outro upload.
+- A mesma imagem de video (hash) no mesmo canal e identificada para evitar duplicacao.
+- Se fechar o computador, volte ao historico e use Enviar / retomar postagem.
+- Uma resposta perdida no inicio, sem URL de sessao confirmada, bloqueia novo upload:
+  confira o YouTube Studio; nao crie outra tarefa para contornar a revisao.
+- Falta de cota pausa o envio ate o proximo dia do Pacifico. Limites do proprio canal
+  podem ser diferentes; o horario e apenas o minimo de espera local.
+- OAuth em modo de teste pode exigir reconexao apos 7 dias. Revogacao tambem exige reconectar.
+- Projetos API nao auditados podem ter uploads restritos a privados. Este modulo nao
+  remove restricoes Google. Consulte as cotas reais do seu projeto no Cloud Console.
+- O escopo youtube.force-ssl e exigido pela API para atualizar a privacidade. O modulo
+  nao oferece exclusao de videos.
+- O Upload-Post e os provedores de midia foram preservados. Nenhum merge na main.
+
+ARQUIVOS LOCAIS
+storage/youtube_publish/connections: preferencias e identificacao publica do canal.
+storage/youtube_publish/jobs: historico duravel, sem tokens ou URLs privadas de sessao.
+storage/youtube_publish/private: tokens OAuth e sessoes privadas. Nao compartilhe essa pasta.
+storage/youtube_publish/thumbnails: thumbnails carregadas pelo usuario.
+
+DOCUMENTACAO OFICIAL
+https://developers.google.com/youtube/v3/guides/auth/installed-apps
+https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol
+https://developers.google.com/youtube/v3/docs/videos/update
+https://developers.google.com/youtube/v3/determine_quota_cost
+
+VALIDACAO
+153 testes distintos aprovados (30 testes do novo modulo e regressoes existentes).
+Testes automatizados de OAuth simulado, upload em partes, retomada apos perda de rede,
+resposta final perdida, cota, thumbnail, privacidade, bloqueio Commons e interface.
+O MP4 de teste enviado pelo usuario foi decodificado localmente (63,16 s).
+Nenhuma conta Google foi autorizada neste ambiente e nenhum video foi enviado/publicado.
+O primeiro upload real depende da configuracao e autorizacao Google no Windows.

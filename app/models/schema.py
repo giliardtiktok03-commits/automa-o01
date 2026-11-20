@@ -110,6 +110,8 @@ class VideoParams(BaseModel):
     """
 
     video_subject: str
+    # Explicit direct-YouTube settings captured per new task; disabled for old projects.
+    youtube_publication: dict = Field(default_factory=dict)
     skills_enabled: bool = False
     skill_ids: list[str] = Field(default_factory=list, max_length=8)
     skill_snapshot: list[ChannelSkillSnapshot] = Field(default_factory=list, max_length=8)

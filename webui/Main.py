@@ -9282,7 +9282,7 @@ def _render_production_queue():
     if not ids:
         return
     with st.container(border=True, key="production_queue"):
-        _stage_heading(5, tr("Production Queue"), "#0f766e")
+        _stage_heading(6, tr("Production Queue"), "#0f766e")
         st.caption(tr("Production Help"))
         waiting = 0
         for task_id in ids[-100:]:
@@ -9940,6 +9940,12 @@ def _render_application():
         render_autopilot(params, worker_control=not skill_worker_control)
     except (sqlite3.Error, OSError, ValueError):
         st.warning("AUTOPILOT indisponível. Confira o diagnóstico antes de retomar. O fluxo manual continua disponível.")
+
+    from webui.youtube_publish import render as render_youtube_publish
+    try:
+        render_youtube_publish(params, _stage_heading)
+    except (OSError, ValueError, sqlite3.Error):
+        st.warning("Postagem automática youtube indisponível. A geração de vídeos continua disponível.")
 
     generation_submitted = _render_generation_controls(
         params,

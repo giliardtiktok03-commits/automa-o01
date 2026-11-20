@@ -2081,6 +2081,17 @@ def _run_pipeline(
             kwargs["cross_post_error"] = scheduling_error
             kwargs["cross_post_owner"] = None
 
+    # Optional direct publisher: never change generation completion or the legacy queue.
+    if publish and getattr(params, "youtube_publication", {}).get("auto_upload"):
+        try:
+            from app.services.youtube_publish.service import after_generation
+            kwargs["youtube_publication"] = after_generation(params, final_video_paths)
+            sm.state.update_task(task_id, state=const.TASK_STATE_COMPLETE, progress=100,
+                                 youtube_publication=kwargs["youtube_publication"])
+        except Exception:
+            logger.warning("Direct YouTube publishing could not be scheduled; the rendered video is preserved")
+            kwargs["youtube_publication"] = {"state": "needs_review", "error": "Confira o módulo Postagem automática youtube"}
+
     return kwargs
 
 
