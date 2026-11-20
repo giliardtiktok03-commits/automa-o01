@@ -23,13 +23,18 @@ st.session_state['chosen']=value
     assert not app.exception
     catalog.assert_not_called()
     app.button(key='ai33_voice_load').click().run()
-    catalog.assert_called_once_with('English',1)
+    catalog.assert_called_once_with('English',1,provider='elevenlabs')
     assert app.session_state['chosen']=='ai33:elevenlabs_first'
-    app.selectbox(key='ai33_voice_voice_1').set_value('minimax_second').run()
+    next(x for x in app.selectbox if str(x.key).startswith('ai33_voice_voice_')).set_value('minimax_second').run()
     assert not app.exception
     assert app.session_state['chosen']=='ai33:minimax_second'
     assert app.session_state['saved_ai33_tts_voice_id']=='minimax_second'
     assert catalog.call_count==1
+    app.selectbox(key='ai33_voice_provider').set_value('minimax').run()
+    assert catalog.call_count==1
+    assert not any(str(x.key).startswith('ai33_voice_voice_') for x in app.selectbox)
+    app.button(key='ai33_voice_load').click().run()
+    assert catalog.call_args.kwargs=={'provider':'minimax'}
 
 
 def test_skill_narration_retains_fixed_voice_without_google(monkeypatch):

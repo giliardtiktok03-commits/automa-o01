@@ -4,7 +4,7 @@ import streamlit as st
 from app.config import config
 from app.services.ai33.provider import api_key
 from app.services.ai33.client import AI33Error
-from app.services.ai33.tts import SpeechClient,voice_id,PREFIX
+from app.services.ai33.tts import SpeechClient,voice_id,PREFIX,VOICE_PROVIDERS
 
 
 def save_local(group,key,value):
@@ -21,8 +21,16 @@ def render(set_config,*,key_prefix='ai33_voice',default_voice='',set_default=Tru
         # One existing AI33 key serves images and narration; don't add a second credential.
         set_config('app','ai33_api_key',key.strip())
         st.caption('Reutiliza a chave AI33PRO existente. A conta precisa permitir API e ter créditos. Consultar vozes não solicita narração; gerar voz pode consumir saldo.')
+        saved=str(default_voice or settings.get('ai33_tts_voice_id') or '').removeprefix(PREFIX)
+        initial=saved.split('_',1)[0]
+        labels={'elevenlabs':'ElevenLabs','minimax':'MiniMax','clone':'Vozes clonadas da sua conta',
+                'edge':'Edge','kokoro':'Kokoro','vbee':'Vbee','fishaudio':'Fish Audio'}
+        provider=st.selectbox('Catálogo de vozes na AI33PRO',VOICE_PROVIDERS,
+            index=VOICE_PROVIDERS.index(initial) if initial in VOICE_PROVIDERS else 0,
+            format_func=labels.get,key=key_prefix+'_provider')
+        st.caption('Escolhe a biblioteca dentro da AI33PRO. A autenticação e a geração continuam pela API AI33PRO.')
         search=st.text_input('Buscar voz por nome, idioma ou ID',value='English',key=key_prefix+'_search')
-        scope=hashlib.sha256((key.strip()+'\n'+search).encode()).hexdigest()
+        scope=hashlib.sha256((key.strip()+'\n'+provider+'\n'+search).encode()).hexdigest()
         if st.session_state.get(key_prefix+'_scope')!=scope:
             st.session_state[key_prefix+'_scope']=scope
             st.session_state.pop(key_prefix+'_catalog',None)
@@ -35,19 +43,19 @@ def render(set_config,*,key_prefix='ai33_voice',default_voice='',set_default=Tru
             try:
                 page=st.session_state.get(key_prefix+'_page',1)+(1 if next_page else 0)
                 if load:page=1
-                result=SpeechClient(key.strip()).voices(search,page)
+                result=SpeechClient(key.strip()).voices(search,page,provider=provider)
                 st.session_state[key_prefix+'_catalog']=result;st.session_state[key_prefix+'_page']=page
                 catalog=result;st.success('Catálogo consultado. Nenhuma narração foi solicitada.')
+                if not result.get('voices'):st.info('Nenhuma voz encontrada neste catálogo. Tente outro nome ou deixe a busca vazia.')
             except AI33Error as exc:st.error(str(exc))
         rows=catalog.get('voices',[])
-        saved=str(default_voice or settings.get('ai33_tts_voice_id') or '').removeprefix(PREFIX)
         selected=saved
         if rows:
             options=[r['voice_id'] for r in rows]
             labels={r['voice_id']:r['name']+' · '+r['language']+' · '+r['voice_id'] for r in rows}
             if saved and saved not in options:options.insert(0,saved);labels[saved]=saved+' · voz salva'
             selected=st.selectbox('Voz AI33PRO',options,index=options.index(saved) if saved in options else 0,
-                format_func=lambda k:labels.get(k,k),key=key_prefix+'_voice_'+str(st.session_state.get(key_prefix+'_page',1)))
+                format_func=lambda k:labels.get(k,k),key=key_prefix+'_voice_'+scope[:12]+'_'+str(st.session_state.get(key_prefix+'_page',1)))
         manual=st.text_input('Voice ID AI33PRO — pode colar o ID do painel',value=selected,key=key_prefix+'_manual_'+hashlib.sha256(selected.encode()).hexdigest()[:12],placeholder='elevenlabs_... ou minimax_...')
         st.caption('O ID precisa incluir o prefixo retornado pela API. A voz escolhida na Skill é salva por canal. Não há escolha aleatória automática nesta etapa.')
         limit=st.number_input('Teto local de caracteres por nova solicitação',min_value=100,max_value=1_000_000,

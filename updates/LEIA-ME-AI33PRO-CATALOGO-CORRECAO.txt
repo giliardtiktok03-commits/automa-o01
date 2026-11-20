@@ -1,0 +1,31 @@
+CORREÇÃO — CATÁLOGO DE VOZES AI33PRO (HTTP 400)
+
+Aplicar após MPT-AI33PRO-Narracao-Windows.zip.
+Feche o MPT, faça backup e extraia este ZIP na pasta principal, preservando
+as pastas app e webui. Substitua os dois arquivos de código e reinicie.
+Nenhuma chave, configuração, tarefa ou arquivo de áudio é incluído/substituído.
+
+Causa identificada: GET /v3/voices exige o parâmetro provider. A versão
+anterior enviava busca e paginação, mas omitia esse parâmetro obrigatório.
+
+COMO TESTAR
+1. No bloco AI33PRO, mantenha sua chave configurada localmente.
+2. Escolha Catálogo de vozes na AI33PRO: ElevenLabs ou MiniMax, por exemplo.
+   São bibliotecas dentro da AI33PRO; não precisam de outras chaves.
+3. Busque English e clique em Carregar vozes AI33PRO.
+4. Se não houver resultados, deixe a busca vazia e clique novamente.
+5. Escolha a voz e salve as preferências para o canal.
+6. Só depois faça uma prévia curta de narração, que pode consumir créditos.
+
+Mudar o catálogo limpa a lista anterior e reinicia a paginação. A consulta
+ocorre apenas ao clicar; não solicita geração de áudio. A voz salva continua
+disponível pelo seu ID, mesmo que seja de outra biblioteca.
+
+Validado com testes locais do transporte HTTP e da interface Streamlit,
+incluindo o parâmetro obrigatório em todos os sete catálogos documentados.
+Não foi usada uma chave real de usuário nem feita geração paga nesta correção.
+Não modifica outros provedores, geração do roteiro, narração ou publicação.
+Sem merge na main e sem publicação de vídeos.
+
+Referência: documentação oficial AI33PRO, seção Voice Library (v3),
+https://ai33.pro/api-docs — GET /v3/voices, provider obrigatório.

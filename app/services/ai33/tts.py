@@ -22,6 +22,7 @@ from .provider import api_key
 from .images import _public_https
 
 PREFIX='ai33:'
+VOICE_PROVIDERS=('elevenlabs','minimax','clone','edge','kokoro','vbee','fishaudio')
 TYPES={'tts','v3_tts','edge_tts','elevenlabs_tts','minimax_tts','kokoro_tts','fishaudio_tts','vbee_tts'}
 
 
@@ -33,8 +34,9 @@ def voice_id(value):
 
 
 class SpeechClient(AI33Client):
-    def voices(self,search='',page=1):
-        data=self._request('GET','/v3/voices',params={'search':search[:200],'page':page,'page_size':100})
+    def voices(self,search='',page=1,*,provider='elevenlabs'):
+        if provider not in VOICE_PROVIDERS:raise AI33Error('Selecione um catálogo de vozes AI33PRO válido')
+        data=self._request('GET','/v3/voices',params={'provider':provider,'search':search[:200],'page':page,'page_size':100})
         rows=data.get('data')
         if data.get('success') is not True or not isinstance(rows,list):raise AI33Error('Catálogo de vozes AI33 inválido')
         result=[]

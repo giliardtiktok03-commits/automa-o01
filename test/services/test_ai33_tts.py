@@ -171,3 +171,25 @@ def test_download_never_forwards_api_key(tmp_path,monkeypatch):
     with patch.object(tts.requests,'get',return_value=response) as get:
         tts.download('https://cdn.ai33.pro/audio.mp3',tmp_path/'a.bin',100)
     assert 'headers' not in get.call_args.kwargs and get.call_args.kwargs['allow_redirects'] is False
+
+
+@pytest.mark.parametrize('provider',tts.VOICE_PROVIDERS)
+def test_voice_catalog_sends_required_provider_without_generating_audio(provider):
+    client=tts.SpeechClient('test-key')
+    response=Mock(status_code=200,headers={})
+    response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False)
+    response.json.return_value={'success':True,'data':[{'voice_id':provider+'_example','name':'Example','language':'English'}],
+                                'pagination':{'has_more':True}}
+    with patch('app.services.ai33.client.requests.request',return_value=response) as request:
+        result=client.voices('English',2,provider=provider)
+    request.assert_called_once()
+    assert request.call_args.args==('GET','https://api.ai33.pro/v3/voices')
+    assert request.call_args.kwargs['params']=={'provider':provider,'search':'English','page':2,'page_size':100}
+    assert result['voices'][0]['voice_id']==provider+'_example' and result['has_more']
+
+
+def test_unknown_catalog_is_rejected_before_request():
+    client=tts.SpeechClient('test-key')
+    with patch.object(client,'_request') as request:
+        with pytest.raises(AI33Error,match='catálogo'):client.voices(provider='unknown')
+        request.assert_not_called()
