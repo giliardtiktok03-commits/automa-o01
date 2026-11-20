@@ -1,0 +1,27 @@
+MPT - MENUS RECOLHIVEIS NA COLUNA DE VIDEO
+
+1. Feche o MPT e o terminal.
+2. Extraia este ZIP na pasta principal do MPT e substitua webui/Main.py.
+3. Reinicie o aplicativo. Nao precisa instalar dependencias.
+
+Atualizacao para a interface com paineis lado a lado ja instalada.
+A escolha Fonte do Video continua visivel. No modo misto, as opcoes ficam em:
+- Como funciona o modo misto
+- Fontes e gerador de imagens
+- Validacao e limites de imagens
+- Formato e montagem do video
+
+Esses menus comecam recolhidos. Clique no titulo para abrir ou recolher.
+Na geracao exclusiva de imagens, ha tambem Ajustes da geracao de imagens.
+No modo de arquivos locais, o menu de montagem inicia aberto para mostrar o upload.
+Os controles e valores continuam ativos mesmo com o menu fechado.
+Avisos e confirmacoes de cobranca dos provedores de video existentes foram preservados.
+
+Conferencia no navegador: quatro menus recolhidos por padrao, altura da coluna de
+video aproximadamente 644px no desktop de teste, selecoes preservadas ao abrir/fechar,
+sem erros Streamlit nem rolagem horizontal no celular de 390px.
+Verificacao AST: nenhuma alteracao na logica dos controles ao remover os novos
+conteineres de apresentacao.
+Regressoes: 27 testes passaram; um teste legado de image_motion/openai_image falhou
+tambem na versao anterior, sem esta alteracao. Nao foram alterados outros provedores.
+Nenhuma chamada paga, geracao de video ou publicacao durante a validacao.

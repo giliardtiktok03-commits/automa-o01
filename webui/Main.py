@@ -6235,410 +6235,416 @@ def _render_video_settings(panel, params):
             )
             _set_runtime_config("app", "video_source", params.video_source)
             if params.video_source == "mixed":
-                st.info(tr("Mixed Materials Help"))
-                params.mixed_select_sources = True
-                st.write(tr("Mixed Sources"))
-                for source in ("pexels", "pixabay", "coverr", "deepinfra", "grok", "google_flow", "ai33"):
-                    key = "mixed_use_" + source
-                    labels = {"deepinfra": "DeepInfra — FLUX.1 Schnell", "pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "grok": "Grok · Imagens IA", "google_flow": "Google Flow · Imagens no navegador", "ai33": "AI33.Pro · Imagens IA (opcional)"}
-                    if config.ui.get("image_source_policy") != "grok-v1" and source == "grok":
-                        st.session_state[key] = True
-                        _set_runtime_config("ui", key, True)
-                    if config.ui.get("image_source_policy") != "grok-v1" and source == "ai33":
-                        st.session_state[key] = False
-                        _set_runtime_config("ui", key, False)
-                    value = st.checkbox(labels[source], value=config.ui.get(key, source not in {"ai33", "google_flow", "deepinfra"}), key=key)
-                    setattr(params, key, value)
-                    _set_runtime_config("ui", key, value)
-                if params.mixed_use_deepinfra:
-                    st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois o modelo DeepInfra configurado. Permite gerar sem limite de quantidade ao marcar a opção abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
-                elif params.mixed_use_google_flow:
-                    st.info("Flow selecionado: bancos primeiro; envia os prompts ao Chrome conforme o modo configurado. Grok/AI33 não são acionados automaticamente em falhas. Configure e teste uma imagem em Fontes de material → Google Flow.")
-                _set_runtime_config("ui", "image_source_policy", "grok-v1")
-                st.caption("Prioriza Pexels, Pixabay e Coverr. O gerador selecionado produz imagens quando faltar material adequado. Prioridade entre geradores marcados: DeepInfra, Flow, Grok, AI33. DeepInfra e AI33 ficam desmarcadas por padrão. Não troca de gerador automaticamente em falhas.")
-                params.mixed_variable_pacing = st.checkbox(
-                    tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
-                st.caption(tr("Mixed Pacing Help"))
-                st.caption("Vídeos longos: planejamento automático em lotes, até 720 cortes. O limite de imagens IA configurado continua valendo.")
-                params.mixed_visual_validation = st.checkbox(
-                    tr("Mixed Visual Validation"), value=True, key="mixed_visual_validation")
-                st.caption(tr("Mixed Vision Help"))
-                if params.mixed_visual_validation:
-                    params.mixed_vision_model = st.text_input(
-                        tr("Mixed Vision Model"), value="gpt-4.1-mini", key="mixed_vision_model")
-                    params.mixed_max_candidates = st.number_input(
-                        tr("Mixed Candidates"), min_value=1, max_value=6, value=3,
-                        step=1, key="mixed_max_candidates")
-                params.mixed_deepinfra_unlimited = st.checkbox(
-                    "DeepInfra sem limite de imagens", value=config.ui.get("mixed_deepinfra_unlimited", False),
-                    key="mixed_deepinfra_unlimited", disabled=not params.mixed_use_deepinfra)
-                _set_runtime_config("ui", "mixed_deepinfra_unlimited", params.mixed_deepinfra_unlimited)
-                if params.mixed_use_deepinfra and params.mixed_deepinfra_unlimited:
-                    st.caption("Consulta os bancos primeiro. Se nenhum vídeo passar na validação, gera com DeepInfra sem teto de quantidade até concluir as cenas. Novas imagens consomem saldo DeepInfra; materiais salvos são reaproveitados.")
-                params.mixed_grok_unlimited = st.checkbox(
-                    "Grok sem limite de imagens", value=config.ui.get("mixed_grok_unlimited", True),
-                    key="mixed_grok_unlimited", disabled=not params.mixed_use_grok or params.mixed_use_deepinfra)
-                _set_runtime_config("ui", "mixed_grok_unlimited", params.mixed_grok_unlimited)
-                if params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_google_flow and not params.mixed_use_deepinfra:
-                    st.caption("Consulta Pexels, Pixabay e Coverr antes. Sem material aprovado, gera pelo Grok até concluir as cenas faltantes, sem limite de quantidade. Cada nova imagem pode consumir saldo xAI; pedidos já enviados não são repetidos automaticamente.")
-                params.mixed_max_images = st.number_input(
-                    tr("Mixed Image Limit"), disabled=(params.mixed_use_deepinfra and params.mixed_deepinfra_unlimited) or (params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_deepinfra), min_value=0, max_value=120,
-                    value=12, step=1, key="mixed_max_images",
-                )
-                params.mixed_scene_duration = st.slider(
-                    tr("Mixed Scene Duration"), min_value=5, max_value=30,
-                    value=10, key="mixed_scene_duration",
-                )
-                from app.services import mixed_materials
-                mixed_materials.configure_sources(params, config.snapshot_config_with_pending(config.app))
+                with st.expander("Como funciona o modo misto", expanded=False, key="video_mixed_help_menu"):
+                    st.info(tr("Mixed Materials Help"))
+                with st.expander("Fontes e gerador de imagens", expanded=False, key="video_mixed_sources_menu"):
+                    params.mixed_select_sources = True
+                    st.write(tr("Mixed Sources"))
+                    for source in ("pexels", "pixabay", "coverr", "deepinfra", "grok", "google_flow", "ai33"):
+                        key = "mixed_use_" + source
+                        labels = {"deepinfra": "DeepInfra — FLUX.1 Schnell", "pexels": "Pexels", "pixabay": "Pixabay", "coverr": "Coverr", "grok": "Grok · Imagens IA", "google_flow": "Google Flow · Imagens no navegador", "ai33": "AI33.Pro · Imagens IA (opcional)"}
+                        if config.ui.get("image_source_policy") != "grok-v1" and source == "grok":
+                            st.session_state[key] = True
+                            _set_runtime_config("ui", key, True)
+                        if config.ui.get("image_source_policy") != "grok-v1" and source == "ai33":
+                            st.session_state[key] = False
+                            _set_runtime_config("ui", key, False)
+                        value = st.checkbox(labels[source], value=config.ui.get(key, source not in {"ai33", "google_flow", "deepinfra"}), key=key)
+                        setattr(params, key, value)
+                        _set_runtime_config("ui", key, value)
+                    if params.mixed_use_deepinfra:
+                        st.info("DeepInfra selecionada para novas imagens: bancos primeiro, depois o modelo DeepInfra configurado. Permite gerar sem limite de quantidade ao marcar a opção abaixo. Não troca para Grok/Flow/AI33 automaticamente em falhas.")
+                    elif params.mixed_use_google_flow:
+                        st.info("Flow selecionado: bancos primeiro; envia os prompts ao Chrome conforme o modo configurado. Grok/AI33 não são acionados automaticamente em falhas. Configure e teste uma imagem em Fontes de material → Google Flow.")
+                    _set_runtime_config("ui", "image_source_policy", "grok-v1")
+                    st.caption("Prioriza Pexels, Pixabay e Coverr. O gerador selecionado produz imagens quando faltar material adequado. Prioridade entre geradores marcados: DeepInfra, Flow, Grok, AI33. DeepInfra e AI33 ficam desmarcadas por padrão. Não troca de gerador automaticamente em falhas.")
+                with st.expander("Validação e limites de imagens", expanded=False, key="video_mixed_limits_menu"):
+                    params.mixed_variable_pacing = st.checkbox(
+                        tr("Mixed Variable Pacing"), value=True, key="mixed_variable_pacing")
+                    st.caption(tr("Mixed Pacing Help"))
+                    st.caption("Vídeos longos: planejamento automático em lotes, até 720 cortes. O limite de imagens IA configurado continua valendo.")
+                    params.mixed_visual_validation = st.checkbox(
+                        tr("Mixed Visual Validation"), value=True, key="mixed_visual_validation")
+                    st.caption(tr("Mixed Vision Help"))
+                    if params.mixed_visual_validation:
+                        params.mixed_vision_model = st.text_input(
+                            tr("Mixed Vision Model"), value="gpt-4.1-mini", key="mixed_vision_model")
+                        params.mixed_max_candidates = st.number_input(
+                            tr("Mixed Candidates"), min_value=1, max_value=6, value=3,
+                            step=1, key="mixed_max_candidates")
+                    params.mixed_deepinfra_unlimited = st.checkbox(
+                        "DeepInfra sem limite de imagens", value=config.ui.get("mixed_deepinfra_unlimited", False),
+                        key="mixed_deepinfra_unlimited", disabled=not params.mixed_use_deepinfra)
+                    _set_runtime_config("ui", "mixed_deepinfra_unlimited", params.mixed_deepinfra_unlimited)
+                    if params.mixed_use_deepinfra and params.mixed_deepinfra_unlimited:
+                        st.caption("Consulta os bancos primeiro. Se nenhum vídeo passar na validação, gera com DeepInfra sem teto de quantidade até concluir as cenas. Novas imagens consomem saldo DeepInfra; materiais salvos são reaproveitados.")
+                    params.mixed_grok_unlimited = st.checkbox(
+                        "Grok sem limite de imagens", value=config.ui.get("mixed_grok_unlimited", True),
+                        key="mixed_grok_unlimited", disabled=not params.mixed_use_grok or params.mixed_use_deepinfra)
+                    _set_runtime_config("ui", "mixed_grok_unlimited", params.mixed_grok_unlimited)
+                    if params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_google_flow and not params.mixed_use_deepinfra:
+                        st.caption("Consulta Pexels, Pixabay e Coverr antes. Sem material aprovado, gera pelo Grok até concluir as cenas faltantes, sem limite de quantidade. Cada nova imagem pode consumir saldo xAI; pedidos já enviados não são repetidos automaticamente.")
+                    params.mixed_max_images = st.number_input(
+                        tr("Mixed Image Limit"), disabled=(params.mixed_use_deepinfra and params.mixed_deepinfra_unlimited) or (params.mixed_use_grok and params.mixed_grok_unlimited and not params.mixed_use_deepinfra), min_value=0, max_value=120,
+                        value=12, step=1, key="mixed_max_images",
+                    )
+                    params.mixed_scene_duration = st.slider(
+                        tr("Mixed Scene Duration"), min_value=5, max_value=30,
+                        value=10, key="mixed_scene_duration",
+                    )
+                    from app.services import mixed_materials
+                    mixed_materials.configure_sources(params, config.snapshot_config_with_pending(config.app))
 
-            if params.video_source == "google_flow":
-                params.mixed_use_google_flow = True
-                params.mixed_use_grok = params.mixed_use_ai33 = False
-                st.info("Flow: geração por navegador Chrome visível, com login inicial manual. Configure o perfil e o projeto em Fontes de material → Google Flow. Teste uma imagem antes de iniciar vídeos longos.")
-                params.image_motion = ImageMotion.static
-            if params.video_source in {"ai33_image", "grok_image", "deepinfra_image"}:
-                provider_name = "DeepInfra" if params.video_source == "deepinfra_image" else "Grok" if params.video_source == "grok_image" else "AI33.Pro"
-                st.info(f"Todas as cenas usarão imagens {provider_name}. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
-                if params.video_source == "grok_image":
-                    params.mixed_grok_unlimited = st.checkbox("Grok sem limite de imagens", value=True, key="grok_only_unlimited")
-                    st.caption("Novas imagens podem consumir saldo xAI. O modo misto prioriza bancos antes de gerar.")
-                if params.video_source == "deepinfra_image":
-                    params.mixed_deepinfra_unlimited = st.checkbox("DeepInfra sem limite de imagens", value=False, key="deepinfra_only_unlimited")
-                params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit", disabled=(params.video_source == "grok_image" and params.mixed_grok_unlimited) or (params.video_source == "deepinfra_image" and params.mixed_deepinfra_unlimited))
-                params.mixed_variable_pacing = st.checkbox(tr("Mixed Variable Pacing"), value=True, key="ai33_only_pacing")
-                params.mixed_scene_duration = st.slider(tr("Mixed Scene Duration"), min_value=5, max_value=30, value=10, key="ai33_only_duration")
+            if params.video_source in {"google_flow", "ai33_image", "grok_image", "deepinfra_image"}:
+                with st.expander("Ajustes da geração de imagens", expanded=False, key="video_image_options_menu"):
+                    if params.video_source == "google_flow":
+                        params.mixed_use_google_flow = True
+                        params.mixed_use_grok = params.mixed_use_ai33 = False
+                        st.info("Flow: geração por navegador Chrome visível, com login inicial manual. Configure o perfil e o projeto em Fontes de material → Google Flow. Teste uma imagem antes de iniciar vídeos longos.")
+                        params.image_motion = ImageMotion.static
+                    if params.video_source in {"ai33_image", "grok_image", "deepinfra_image"}:
+                        provider_name = "DeepInfra" if params.video_source == "deepinfra_image" else "Grok" if params.video_source == "grok_image" else "AI33.Pro"
+                        st.info(f"Todas as cenas usarão imagens {provider_name}. O modo misto prioriza os bancos de vídeo e costuma consumir menos créditos.")
+                        if params.video_source == "grok_image":
+                            params.mixed_grok_unlimited = st.checkbox("Grok sem limite de imagens", value=True, key="grok_only_unlimited")
+                            st.caption("Novas imagens podem consumir saldo xAI. O modo misto prioriza bancos antes de gerar.")
+                        if params.video_source == "deepinfra_image":
+                            params.mixed_deepinfra_unlimited = st.checkbox("DeepInfra sem limite de imagens", value=False, key="deepinfra_only_unlimited")
+                        params.mixed_max_images = st.number_input(f"Máximo de imagens {provider_name} neste vídeo", min_value=0, max_value=120, value=12, step=1, key="ai33_only_image_limit", disabled=(params.video_source == "grok_image" and params.mixed_grok_unlimited) or (params.video_source == "deepinfra_image" and params.mixed_deepinfra_unlimited))
+                        params.mixed_variable_pacing = st.checkbox(tr("Mixed Variable Pacing"), value=True, key="ai33_only_pacing")
+                        params.mixed_scene_duration = st.slider(tr("Mixed Scene Duration"), min_value=5, max_value=30, value=10, key="ai33_only_duration")
 
-            loomloom_video_capability = None
-            if params.video_source == "loomloom":
-                # 尽早读取缓存，使下方画面比例控件直接受当前 Profile 约束。
-                # 首次输入 Key 后 Streamlit 会 rerun，此处随即加载一次。
-                loomloom_video_capability = _load_loomloom_video_capability(
-                    _effective_loomloom_api_token()
+            with st.expander("Formato e montagem do vídeo", expanded=params.video_source == "local", key="video_assembly_menu"):
+                loomloom_video_capability = None
+                if params.video_source == "loomloom":
+                    # 尽早读取缓存，使下方画面比例控件直接受当前 Profile 约束。
+                    # 首次输入 Key 后 Streamlit 会 rerun，此处随即加载一次。
+                    loomloom_video_capability = _load_loomloom_video_capability(
+                        _effective_loomloom_api_token()
+                    )
+
+                if params.video_source == "infistar":
+                    st.caption(tr("Infistar AI Video Help"))
+                    selected_infistar_model = _render_infistar_model_selector()
+                if params.video_source == "jalapeno":
+                    st.caption(tr("Jalapeno Cloud Video Help"))
+                    snapshot = config.snapshot_config_with_pending(config.app)
+                    st.caption(tr("Jalapeno Cloud Video Specification").format(
+                        model=str(snapshot.get("jalapeno_video_model", "") or jalapeno_video.DEFAULT_MODEL),
+                        resolution=str(snapshot.get("jalapeno_video_resolution", "") or jalapeno_video.DEFAULT_RESOLUTION),
+                    ))
+                if params.video_source == "wavespeed":
+                    st.caption(tr("WaveSpeed AI Video Help"))
+                if params.video_source == "volcengine_seedance":
+                    st.caption(tr("Volcano Engine Seedance Help"))
+                if params.video_source == "ofox":
+                    st.caption(f"[OfoxAI]({OFOX_REFERRAL_URL}) · {tr('OFox AI Video Help')}")
+                if params.video_source == "metaso_minimax":
+                    st.caption(tr("Metaso MiniMax H3 Help"))
+                if params.video_source == "muapi":
+                    st.caption(tr("MuAPI AI Video Help"))
+                if params.video_source == "local":
+                    # Streamlit 的文件类型校验对扩展名大小写敏感，这里同时放行大小写两种形式。
+                    local_file_types = sorted(
+                        extension.removeprefix(".")
+                        for extension in LOCAL_MATERIAL_EXTENSIONS
+                    )
+                    uploaded_files = st.file_uploader(
+                        tr("Upload Local Files"),
+                        type=local_file_types
+                        + [file_type.upper() for file_type in local_file_types],
+                        accept_multiple_files=True,
+                        key="local_video_materials_uploader",
+                    )
+
+                # 文案顺序匹配会从关键词生成到最终合成全程保持叙事顺序，因此开启时
+                # 顺序拼接是唯一符合实际执行逻辑的选项。同步控件值可避免界面仍显示
+                # “随机拼接”，同时保留用户原选择，关闭后自动恢复。
+                if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"}:
+                    st.session_state.setdefault("mixed_previous_match", st.session_state.get("match_materials_to_script", False))
+                    st.session_state["match_materials_to_script"] = True
+                elif "mixed_previous_match" in st.session_state:
+                    st.session_state["match_materials_to_script"] = st.session_state.pop("mixed_previous_match")
+                sync_script_order_concat_mode()
+                selected_concat_mode = stable_selectbox(
+                    tr("Video Concat Mode"),
+                    options=[value for _, value in video_concat_modes],
+                    default_value=_saved_ui_choice(
+                        "video_concat_mode",
+                        [value for _, value in video_concat_modes],
+                        VideoConcatMode.random.value,
+                    ),
+                    key="video_concat_mode_select",
+                    format_func=lambda value: dict(
+                        (v, label) for label, v in video_concat_modes
+                    )[value],
+                    disabled=bool(st.session_state.get("match_materials_to_script", False)),
                 )
+                params.video_concat_mode = VideoConcatMode(selected_concat_mode)
 
-            if params.video_source == "infistar":
-                st.caption(tr("Infistar AI Video Help"))
-                selected_infistar_model = _render_infistar_model_selector()
-            if params.video_source == "jalapeno":
-                st.caption(tr("Jalapeno Cloud Video Help"))
-                snapshot = config.snapshot_config_with_pending(config.app)
-                st.caption(tr("Jalapeno Cloud Video Specification").format(
-                    model=str(snapshot.get("jalapeno_video_model", "") or jalapeno_video.DEFAULT_MODEL),
-                    resolution=str(snapshot.get("jalapeno_video_resolution", "") or jalapeno_video.DEFAULT_RESOLUTION),
-                ))
-            if params.video_source == "wavespeed":
-                st.caption(tr("WaveSpeed AI Video Help"))
-            if params.video_source == "volcengine_seedance":
-                st.caption(tr("Volcano Engine Seedance Help"))
-            if params.video_source == "ofox":
-                st.caption(f"[OfoxAI]({OFOX_REFERRAL_URL}) · {tr('OFox AI Video Help')}")
-            if params.video_source == "metaso_minimax":
-                st.caption(tr("Metaso MiniMax H3 Help"))
-            if params.video_source == "muapi":
-                st.caption(tr("MuAPI AI Video Help"))
-            if params.video_source == "local":
-                # Streamlit 的文件类型校验对扩展名大小写敏感，这里同时放行大小写两种形式。
-                local_file_types = sorted(
-                    extension.removeprefix(".")
-                    for extension in LOCAL_MATERIAL_EXTENSIONS
+                params.match_materials_to_script = st.checkbox(
+                    tr("Match Materials to Script Order"),
+                    help=tr("Match Materials to Script Order Help"),
+                    key="match_materials_to_script",
+                    disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
+                    on_change=sync_script_order_concat_mode,
                 )
-                uploaded_files = st.file_uploader(
-                    tr("Upload Local Files"),
-                    type=local_file_types
-                    + [file_type.upper() for file_type in local_file_types],
-                    accept_multiple_files=True,
-                    key="local_video_materials_uploader",
-                )
-
-            # 文案顺序匹配会从关键词生成到最终合成全程保持叙事顺序，因此开启时
-            # 顺序拼接是唯一符合实际执行逻辑的选项。同步控件值可避免界面仍显示
-            # “随机拼接”，同时保留用户原选择，关闭后自动恢复。
-            if params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"}:
-                st.session_state.setdefault("mixed_previous_match", st.session_state.get("match_materials_to_script", False))
-                st.session_state["match_materials_to_script"] = True
-            elif "mixed_previous_match" in st.session_state:
-                st.session_state["match_materials_to_script"] = st.session_state.pop("mixed_previous_match")
-            sync_script_order_concat_mode()
-            selected_concat_mode = stable_selectbox(
-                tr("Video Concat Mode"),
-                options=[value for _, value in video_concat_modes],
-                default_value=_saved_ui_choice(
-                    "video_concat_mode",
-                    [value for _, value in video_concat_modes],
-                    VideoConcatMode.random.value,
-                ),
-                key="video_concat_mode_select",
-                format_func=lambda value: dict(
-                    (v, label) for label, v in video_concat_modes
-                )[value],
-                disabled=bool(st.session_state.get("match_materials_to_script", False)),
-            )
-            params.video_concat_mode = VideoConcatMode(selected_concat_mode)
-
-            params.match_materials_to_script = st.checkbox(
-                tr("Match Materials to Script Order"),
-                help=tr("Match Materials to Script Order Help"),
-                key="match_materials_to_script",
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
-                on_change=sync_script_order_concat_mode,
-            )
-            _set_runtime_config(
-                "app",
-                "match_materials_to_script",
-                params.match_materials_to_script,
-            )
-            # 顺序匹配开启时，sequential 是派生出的强制值，不应覆盖用户在关闭
-            # 该功能时选择的拼接偏好；关闭后仍能恢复此前的 random/sequential。
-            if not params.match_materials_to_script:
                 _set_runtime_config(
-                    "ui", "video_concat_mode", params.video_concat_mode.value
+                    "app",
+                    "match_materials_to_script",
+                    params.match_materials_to_script,
                 )
+                # 顺序匹配开启时，sequential 是派生出的强制值，不应覆盖用户在关闭
+                # 该功能时选择的拼接偏好；关闭后仍能恢复此前的 random/sequential。
+                if not params.match_materials_to_script:
+                    _set_runtime_config(
+                        "ui", "video_concat_mode", params.video_concat_mode.value
+                    )
 
-            # 视频转场模式
-            video_transition_modes = [
-                (tr("None"), VideoTransitionMode.none.value),
-                (tr("Shuffle"), VideoTransitionMode.shuffle.value),
-                (tr("FadeIn"), VideoTransitionMode.fade_in.value),
-                (tr("FadeOut"), VideoTransitionMode.fade_out.value),
-                (tr("SlideIn"), VideoTransitionMode.slide_in.value),
-                (tr("SlideOut"), VideoTransitionMode.slide_out.value),
-                (tr("ZoomIn"), VideoTransitionMode.zoom_in.value),
-                (tr("ZoomOut"), VideoTransitionMode.zoom_out.value),
-            ]
-            selected_transition_mode = stable_selectbox(
-                tr("Video Transition Mode"),
-                options=[value for _, value in video_transition_modes],
-                default_value=_saved_ui_choice(
-                    "video_transition_mode",
-                    [value for _, value in video_transition_modes],
-                    VideoTransitionMode.none.value,
-                ),
-                key="video_transition_mode_select",
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
-                format_func=lambda value: dict(
-                    (v, label) for label, v in video_transition_modes
-                )[value],
-            )
-            params.video_transition_mode = VideoTransitionMode(selected_transition_mode)
-            _set_runtime_config(
-                "ui",
-                "video_transition_mode",
-                params.video_transition_mode.value,
-            )
-
-            video_aspect_ratios = [
-                (tr("Portrait"), VideoAspect.portrait.value),
-                (tr("Landscape"), VideoAspect.landscape.value),
-            ]
-            if loomloom_video_capability is not None:
-                ratio_labels = {value: label for label, value in video_aspect_ratios}
-                video_aspect_ratios = [
-                    (ratio_labels[value], value)
-                    for value in loomloom_video_capability.aspect_ratios
+                # 视频转场模式
+                video_transition_modes = [
+                    (tr("None"), VideoTransitionMode.none.value),
+                    (tr("Shuffle"), VideoTransitionMode.shuffle.value),
+                    (tr("FadeIn"), VideoTransitionMode.fade_in.value),
+                    (tr("FadeOut"), VideoTransitionMode.fade_out.value),
+                    (tr("SlideIn"), VideoTransitionMode.slide_in.value),
+                    (tr("SlideOut"), VideoTransitionMode.slide_out.value),
+                    (tr("ZoomIn"), VideoTransitionMode.zoom_in.value),
+                    (tr("ZoomOut"), VideoTransitionMode.zoom_out.value),
                 ]
-            # Coverr 库 99% 是 16:9 横屏,默认竖屏会让画面被大量黑边包围。
-            # 用 source-specific widget key 让每个 source 各自记忆 aspect 选择:
-            #   - 首次切到 coverr → 默认 Landscape(index=1)
-            #   - 其他 source 沿用 Portrait(index=0)
-            #   - 用户在某 source 下手动改过 aspect,session_state 会记住,
-            #     下次回到同一 source 时尊重用户选择,不会再被强制覆盖。
-            default_aspect_index = 1 if params.video_source == "coverr" else 0
-            video_aspect_values = [value for _, value in video_aspect_ratios]
-            video_aspect_config_key = f"video_aspect_{params.video_source}"
-            selected_aspect_ratio = stable_selectbox(
-                tr("Video Ratio"),
-                options=video_aspect_values,
-                default_value=_saved_ui_choice(
-                    video_aspect_config_key,
-                    video_aspect_values,
-                    video_aspect_ratios[default_aspect_index][1],
-                ),
-                key=f"video_aspect_for_{params.video_source}",
-                format_func=lambda value: dict(
-                    (v, label) for label, v in video_aspect_ratios
-                )[value],
-            )
-            params.video_aspect = VideoAspect(selected_aspect_ratio)
-            _set_runtime_config(
-                "ui", video_aspect_config_key, params.video_aspect.value
-            )
+                selected_transition_mode = stable_selectbox(
+                    tr("Video Transition Mode"),
+                    options=[value for _, value in video_transition_modes],
+                    default_value=_saved_ui_choice(
+                        "video_transition_mode",
+                        [value for _, value in video_transition_modes],
+                        VideoTransitionMode.none.value,
+                    ),
+                    key="video_transition_mode_select",
+                    disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
+                    format_func=lambda value: dict(
+                        (v, label) for label, v in video_transition_modes
+                    )[value],
+                )
+                params.video_transition_mode = VideoTransitionMode(selected_transition_mode)
+                _set_runtime_config(
+                    "ui",
+                    "video_transition_mode",
+                    params.video_transition_mode.value,
+                )
 
-            video_fit_modes = [
-                (tr("Fill and Crop"), VideoFitMode.cover.value),
-                (tr("Fit with Black Bars"), VideoFitMode.contain.value),
-            ]
-            selected_fit_mode = stable_selectbox(
-                tr("Video Fit Mode"),
-                options=[value for _, value in video_fit_modes],
-                default_value=_saved_ui_choice(
-                    "video_fit_mode",
-                    [value for _, value in video_fit_modes],
-                    VideoFitMode.cover.value,
-                ),
-                key="video_fit_mode_select",
-                format_func=lambda value: dict(
-                    (v, label) for label, v in video_fit_modes
-                )[value],
-                help=tr("Video Fit Mode Help"),
-            )
-            params.video_fit_mode = VideoFitMode(selected_fit_mode)
-            _set_runtime_config(
-                "ui", "video_fit_mode", params.video_fit_mode.value
-            )
+                video_aspect_ratios = [
+                    (tr("Portrait"), VideoAspect.portrait.value),
+                    (tr("Landscape"), VideoAspect.landscape.value),
+                ]
+                if loomloom_video_capability is not None:
+                    ratio_labels = {value: label for label, value in video_aspect_ratios}
+                    video_aspect_ratios = [
+                        (ratio_labels[value], value)
+                        for value in loomloom_video_capability.aspect_ratios
+                    ]
+                # Coverr 库 99% 是 16:9 横屏,默认竖屏会让画面被大量黑边包围。
+                # 用 source-specific widget key 让每个 source 各自记忆 aspect 选择:
+                #   - 首次切到 coverr → 默认 Landscape(index=1)
+                #   - 其他 source 沿用 Portrait(index=0)
+                #   - 用户在某 source 下手动改过 aspect,session_state 会记住,
+                #     下次回到同一 source 时尊重用户选择,不会再被强制覆盖。
+                default_aspect_index = 1 if params.video_source == "coverr" else 0
+                video_aspect_values = [value for _, value in video_aspect_ratios]
+                video_aspect_config_key = f"video_aspect_{params.video_source}"
+                selected_aspect_ratio = stable_selectbox(
+                    tr("Video Ratio"),
+                    options=video_aspect_values,
+                    default_value=_saved_ui_choice(
+                        video_aspect_config_key,
+                        video_aspect_values,
+                        video_aspect_ratios[default_aspect_index][1],
+                    ),
+                    key=f"video_aspect_for_{params.video_source}",
+                    format_func=lambda value: dict(
+                        (v, label) for label, v in video_aspect_ratios
+                    )[value],
+                )
+                params.video_aspect = VideoAspect(selected_aspect_ratio)
+                _set_runtime_config(
+                    "ui", video_aspect_config_key, params.video_aspect.value
+                )
 
-            if params.video_source in {"local", "google_flow", "ai33_image", "grok_image", "mixed", "deepinfra_image"}:
-                image_motion_labels = {
-                    ImageMotion.static.value: tr("Static Image"),
-                    ImageMotion.zoom.value: tr("Slow Zoom"),
-                }
-                params.image_motion = ImageMotion(
-                    stable_selectbox(
-                        tr("Image Motion"),
-                        options=list(image_motion_labels),
+                video_fit_modes = [
+                    (tr("Fill and Crop"), VideoFitMode.cover.value),
+                    (tr("Fit with Black Bars"), VideoFitMode.contain.value),
+                ]
+                selected_fit_mode = stable_selectbox(
+                    tr("Video Fit Mode"),
+                    options=[value for _, value in video_fit_modes],
+                    default_value=_saved_ui_choice(
+                        "video_fit_mode",
+                        [value for _, value in video_fit_modes],
+                        VideoFitMode.cover.value,
+                    ),
+                    key="video_fit_mode_select",
+                    format_func=lambda value: dict(
+                        (v, label) for label, v in video_fit_modes
+                    )[value],
+                    help=tr("Video Fit Mode Help"),
+                )
+                params.video_fit_mode = VideoFitMode(selected_fit_mode)
+                _set_runtime_config(
+                    "ui", "video_fit_mode", params.video_fit_mode.value
+                )
+
+                if params.video_source in {"local", "google_flow", "ai33_image", "grok_image", "mixed", "deepinfra_image"}:
+                    image_motion_labels = {
+                        ImageMotion.static.value: tr("Static Image"),
+                        ImageMotion.zoom.value: tr("Slow Zoom"),
+                    }
+                    params.image_motion = ImageMotion(
+                        stable_selectbox(
+                            tr("Image Motion"),
+                            options=list(image_motion_labels),
+                            default_value=_saved_ui_choice(
+                                "flow_image_motion" if params.video_source == "google_flow" else "image_motion", list(image_motion_labels), ImageMotion.static.value if params.video_source == "google_flow" else ImageMotion.zoom.value,
+                                # 生成任务持锁时，切换语言或素材来源会重建控件；
+                                # 此时必须恢复尚未落盘的最新选择，不能写回旧配置值。
+                                section=config.snapshot_config_with_pending(config.ui),
+                            ),
+                            key="flow_image_motion_select" if params.video_source == "google_flow" else "image_motion_select",
+                            format_func=image_motion_labels.get,
+                            help=tr("Image Motion Help"),
+                        )
+                    )
+                    _set_runtime_config("ui", "flow_image_motion" if params.video_source == "google_flow" else "image_motion", params.image_motion.value)
+
+                # MiniMax H3 的远端时长范围是 4～15 秒。选择秘塔时使用完整能力
+                # 范围，既避免 2/3 秒被按 4 秒计费，也让 WebUI 与 CLI、服务层一致。
+                if params.video_source == "infistar":
+                    # 每种模型先提供实测的固定规格；不把被 API 拒绝的时长发往付费接口。
+                    video_clip_durations = [infistar_video.MODELS.get(selected_infistar_model, {"seconds": 5})["seconds"]]
+                elif params.video_source == "metaso_minimax":
+                    video_clip_durations = list(
+                        range(
+                            metaso_minimax.DEFAULT_MIN_DURATION_SECONDS,
+                            metaso_minimax.DEFAULT_MAX_DURATION_SECONDS + 1,
+                        )
+                    )
+                elif params.video_source == "muapi":
+                    video_clip_durations = list(
+                        range(
+                            muapi.DEFAULT_MIN_DURATION_SECONDS,
+                            muapi.DEFAULT_MAX_DURATION_SECONDS + 1,
+                        )
+                    )
+                else:
+                    video_clip_durations = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+                params.video_clip_duration = stable_selectbox(
+                    tr("Clip Duration"),
+                    options=video_clip_durations,
+                    default_value=_saved_ui_choice(
+                        "video_clip_duration",
+                        video_clip_durations,
+                        5
+                        if params.video_source in {"metaso_minimax", "muapi"}
+                        else 3,
+                    ),
+                    key="video_clip_duration_select",
+                    disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
+                    help=tr("Clip Duration Help"),
+                )
+                _set_runtime_config(
+                    "ui", "video_clip_duration", params.video_clip_duration
+                )
+                clip_speed_key = localized_widget_key("video_clip_speed_slider")
+                # session_state 可能来自旧任务、API 参数或旧版页面状态。控件创建前
+                # 统一归一化，既保留合法选择，也确保 slider 始终收到 0.5～2.0
+                # 范围内的有限浮点数。
+                st.session_state[clip_speed_key] = utils.normalize_clip_speed(
+                    st.session_state.get(
+                        clip_speed_key,
+                        _saved_ui_number("video_clip_speed", 1.0, 0.5, 2.0),
+                    )
+                )
+                params.video_clip_speed = st.slider(
+                    tr("Clip Speed"),
+                    min_value=0.5,
+                    max_value=2.0,
+                    step=0.05,
+                    format="%.2fx",
+                    key=clip_speed_key,
+                    disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
+                    help=tr("Clip Speed Help"),
+                )
+                _set_runtime_config("ui", "video_clip_speed", params.video_clip_speed)
+                video_count_options = [1, 2, 3, 4, 5]
+                params.video_count = stable_selectbox(
+                    tr("Number of Videos Generated Simultaneously"),
+                    options=video_count_options,
+                    default_value=_saved_ui_choice(
+                        "video_count", video_count_options, 1
+                    ),
+                    key="video_count_select",
+                )
+                _set_runtime_config("ui", "video_count", params.video_count)
+
+                video_codec_options = [
+                    (tr("Default Video Encoder"), DEFAULT_VIDEO_CODEC_OPTION),
+                    ("libx264 (CPU)", "libx264"),
+                    ("NVIDIA NVENC (h264_nvenc)", "h264_nvenc"),
+                    ("AMD AMF (h264_amf)", "h264_amf"),
+                    ("Intel QSV (h264_qsv)", "h264_qsv"),
+                    ("Windows MediaFoundation (h264_mf)", "h264_mf"),
+                    ("macOS VideoToolbox (h264_videotoolbox)", "h264_videotoolbox"),
+                ]
+                saved_video_codec = config.app.get(
+                    "video_codec", DEFAULT_VIDEO_CODEC_OPTION
+                )
+                saved_video_codec_values = [item[1] for item in video_codec_options]
+                if saved_video_codec not in saved_video_codec_values:
+                    # 旧版本或手工配置可能留下无效值。UI 回到“默认”而不是替用户
+                    # 固定某个编码器，后端仍会按稳定策略解析为 libx264。
+                    saved_video_codec = DEFAULT_VIDEO_CODEC_OPTION
+                selected_video_codec = stable_selectbox(
+                    tr("Video Encoder"),
+                    options=saved_video_codec_values,
+                    default_value=saved_video_codec,
+                    key="video_encoder_select",
+                    format_func=lambda value: dict(
+                        (v, label) for label, v in video_codec_options
+                    )[value],
+                    help=tr("Video Encoder Help"),
+                )
+                if selected_video_codec == DEFAULT_VIDEO_CODEC_OPTION:
+                    # 默认模式不持久化具体编码器，让配置表达“跟随项目默认值”。
+                    _delete_runtime_config("app", "video_codec")
+                else:
+                    _set_runtime_config("app", "video_codec", selected_video_codec)
+
+                concurrency_options = [1, 2, 4, 6, 8]
+                if params.video_source in {"pexels", "pixabay", "coverr"}:
+                    selected_material_concurrency = stable_selectbox(
+                        tr("Material Concurrency"),
+                        options=concurrency_options,
                         default_value=_saved_ui_choice(
-                            "flow_image_motion" if params.video_source == "google_flow" else "image_motion", list(image_motion_labels), ImageMotion.static.value if params.video_source == "google_flow" else ImageMotion.zoom.value,
-                            # 生成任务持锁时，切换语言或素材来源会重建控件；
-                            # 此时必须恢复尚未落盘的最新选择，不能写回旧配置值。
-                            section=config.snapshot_config_with_pending(config.ui),
+                            "material_concurrency", concurrency_options, 1, config.app
                         ),
-                        key="flow_image_motion_select" if params.video_source == "google_flow" else "image_motion_select",
-                        format_func=image_motion_labels.get,
-                        help=tr("Image Motion Help"),
+                        key="material_concurrency_select",
+                        help=tr("Material Concurrency Help"),
                     )
-                )
-                _set_runtime_config("ui", "flow_image_motion" if params.video_source == "google_flow" else "image_motion", params.image_motion.value)
-
-            # MiniMax H3 的远端时长范围是 4～15 秒。选择秘塔时使用完整能力
-            # 范围，既避免 2/3 秒被按 4 秒计费，也让 WebUI 与 CLI、服务层一致。
-            if params.video_source == "infistar":
-                # 每种模型先提供实测的固定规格；不把被 API 拒绝的时长发往付费接口。
-                video_clip_durations = [infistar_video.MODELS.get(selected_infistar_model, {"seconds": 5})["seconds"]]
-            elif params.video_source == "metaso_minimax":
-                video_clip_durations = list(
-                    range(
-                        metaso_minimax.DEFAULT_MIN_DURATION_SECONDS,
-                        metaso_minimax.DEFAULT_MAX_DURATION_SECONDS + 1,
+                    _set_runtime_config(
+                        "app", "material_concurrency", selected_material_concurrency
                     )
-                )
-            elif params.video_source == "muapi":
-                video_clip_durations = list(
-                    range(
-                        muapi.DEFAULT_MIN_DURATION_SECONDS,
-                        muapi.DEFAULT_MAX_DURATION_SECONDS + 1,
-                    )
-                )
-            else:
-                video_clip_durations = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-            params.video_clip_duration = stable_selectbox(
-                tr("Clip Duration"),
-                options=video_clip_durations,
-                default_value=_saved_ui_choice(
-                    "video_clip_duration",
-                    video_clip_durations,
-                    5
-                    if params.video_source in {"metaso_minimax", "muapi"}
-                    else 3,
-                ),
-                key="video_clip_duration_select",
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
-                help=tr("Clip Duration Help"),
-            )
-            _set_runtime_config(
-                "ui", "video_clip_duration", params.video_clip_duration
-            )
-            clip_speed_key = localized_widget_key("video_clip_speed_slider")
-            # session_state 可能来自旧任务、API 参数或旧版页面状态。控件创建前
-            # 统一归一化，既保留合法选择，也确保 slider 始终收到 0.5～2.0
-            # 范围内的有限浮点数。
-            st.session_state[clip_speed_key] = utils.normalize_clip_speed(
-                st.session_state.get(
-                    clip_speed_key,
-                    _saved_ui_number("video_clip_speed", 1.0, 0.5, 2.0),
-                )
-            )
-            params.video_clip_speed = st.slider(
-                tr("Clip Speed"),
-                min_value=0.5,
-                max_value=2.0,
-                step=0.05,
-                format="%.2fx",
-                key=clip_speed_key,
-                disabled=params.video_source in {"mixed", "google_flow", "ai33_image", "grok_image", "deepinfra_image"},
-                help=tr("Clip Speed Help"),
-            )
-            _set_runtime_config("ui", "video_clip_speed", params.video_clip_speed)
-            video_count_options = [1, 2, 3, 4, 5]
-            params.video_count = stable_selectbox(
-                tr("Number of Videos Generated Simultaneously"),
-                options=video_count_options,
-                default_value=_saved_ui_choice(
-                    "video_count", video_count_options, 1
-                ),
-                key="video_count_select",
-            )
-            _set_runtime_config("ui", "video_count", params.video_count)
 
-            video_codec_options = [
-                (tr("Default Video Encoder"), DEFAULT_VIDEO_CODEC_OPTION),
-                ("libx264 (CPU)", "libx264"),
-                ("NVIDIA NVENC (h264_nvenc)", "h264_nvenc"),
-                ("AMD AMF (h264_amf)", "h264_amf"),
-                ("Intel QSV (h264_qsv)", "h264_qsv"),
-                ("Windows MediaFoundation (h264_mf)", "h264_mf"),
-                ("macOS VideoToolbox (h264_videotoolbox)", "h264_videotoolbox"),
-            ]
-            saved_video_codec = config.app.get(
-                "video_codec", DEFAULT_VIDEO_CODEC_OPTION
-            )
-            saved_video_codec_values = [item[1] for item in video_codec_options]
-            if saved_video_codec not in saved_video_codec_values:
-                # 旧版本或手工配置可能留下无效值。UI 回到“默认”而不是替用户
-                # 固定某个编码器，后端仍会按稳定策略解析为 libx264。
-                saved_video_codec = DEFAULT_VIDEO_CODEC_OPTION
-            selected_video_codec = stable_selectbox(
-                tr("Video Encoder"),
-                options=saved_video_codec_values,
-                default_value=saved_video_codec,
-                key="video_encoder_select",
-                format_func=lambda value: dict(
-                    (v, label) for label, v in video_codec_options
-                )[value],
-                help=tr("Video Encoder Help"),
-            )
-            if selected_video_codec == DEFAULT_VIDEO_CODEC_OPTION:
-                # 默认模式不持久化具体编码器，让配置表达“跟随项目默认值”。
-                _delete_runtime_config("app", "video_codec")
-            else:
-                _set_runtime_config("app", "video_codec", selected_video_codec)
-
-            concurrency_options = [1, 2, 4, 6, 8]
-            if params.video_source in {"pexels", "pixabay", "coverr"}:
-                selected_material_concurrency = stable_selectbox(
-                    tr("Material Concurrency"),
+                selected_clip_concurrency = stable_selectbox(
+                    tr("Clip Rendering Concurrency"),
                     options=concurrency_options,
                     default_value=_saved_ui_choice(
-                        "material_concurrency", concurrency_options, 1, config.app
+                        "video_clip_concurrency", concurrency_options, 1, config.app
                     ),
-                    key="material_concurrency_select",
-                    help=tr("Material Concurrency Help"),
+                    key="clip_rendering_concurrency_select",
+                    help=tr("Clip Rendering Concurrency Help"),
                 )
                 _set_runtime_config(
-                    "app", "material_concurrency", selected_material_concurrency
+                    "app", "video_clip_concurrency", selected_clip_concurrency
                 )
-
-            selected_clip_concurrency = stable_selectbox(
-                tr("Clip Rendering Concurrency"),
-                options=concurrency_options,
-                default_value=_saved_ui_choice(
-                    "video_clip_concurrency", concurrency_options, 1, config.app
-                ),
-                key="clip_rendering_concurrency_select",
-                help=tr("Clip Rendering Concurrency Help"),
-            )
-            _set_runtime_config(
-                "app", "video_clip_concurrency", selected_clip_concurrency
-            )
 
             if params.video_source == "loomloom":
                 _render_loomloom_video_settings(params)
