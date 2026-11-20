@@ -110,3 +110,127 @@ button:disabled {color:var(--mpt-muted) !important;}
 }
 /* Expanded Skill sections must keep the active palette as well as their text. */
 [data-testid="stExpander"] summary {background-color:var(--mpt-panel) !important;}
+
+/* Vertical workspace: presentation only, shared by light/dark/system themes. */
+[data-testid="stMainBlockContainer"] {
+    --mpt-section-accent: var(--mpt-accent);
+    max-width: 1280px !important;
+    margin-inline: auto;
+    padding-inline: clamp(0.8rem, 3vw, 2rem) !important;
+}
+/* Stack form groups and action columns; native radio/segmented options remain controls. */
+html body :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stHorizontalBlock"]:not(.st-key-top_bar *) {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.9rem !important;
+}
+html body :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stHorizontalBlock"]:not(.st-key-top_bar *) > [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+}
+.st-key-skills_workspace {--mpt-section-accent:#be185d;}
+.st-key-stage_script {--mpt-section-accent:#7c3aed;}
+.st-key-stage_video {--mpt-section-accent:#0284c7;}
+.st-key-stage_audio {--mpt-section-accent:#b45309;}
+.st-key-stage_subtitles {--mpt-section-accent:#059669;}
+.st-key-youtube_publish_workspace {--mpt-section-accent:#dc2626;}
+.st-key-production_queue {--mpt-section-accent:#0d9488;}
+:is(.st-key-skills_workspace,.st-key-stage_script,.st-key-stage_video,.st-key-stage_audio,
+    .st-key-stage_subtitles,.st-key-youtube_publish_workspace,.st-key-production_queue) {
+    border-color: color-mix(in srgb,var(--mpt-section-accent) 35%,var(--mpt-border)) !important;
+    scroll-margin-top: 1rem;
+}
+.mpt-stage-heading {
+    display:flex;
+    align-items:center;
+    gap:0.7rem;
+    padding:1.1rem 1.2rem;
+    margin-bottom:0.8rem;
+    border-left-width:8px;
+    border-radius:10px;
+    font-size:clamp(1.4rem,2vw,1.85rem);
+    line-height:1.3;
+    font-weight:800;
+    background:color-mix(in srgb,var(--mpt-stage-accent) 18%,var(--mpt-panel));
+}
+.mpt-stage-heading--sub {
+    margin-top:0.7rem;
+    font-size:clamp(1.15rem,1.6vw,1.4rem);
+    font-weight:750;
+    border-left-width:6px;
+}
+.mpt-stage-heading__number {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0.3rem 0.55rem;
+    border-radius:7px;
+    background:color-mix(in srgb,var(--mpt-stage-accent) 20%,var(--mpt-panel));
+    color:var(--mpt-text);
+    font-variant-numeric:tabular-nums;
+    flex-shrink:0;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stWidgetLabel"] p,
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stRadio"] > label p {
+    font-size:1.03rem !important;
+    font-weight:700 !important;
+    line-height:1.5 !important;
+    overflow-wrap:anywhere;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stCheckbox"] label p,
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stToggle"] label p {
+    font-weight:650 !important;
+    line-height:1.5 !important;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stExpander"] summary {
+    min-height:3.6rem;
+    padding:0.85rem 1rem !important;
+    border-left:5px solid var(--mpt-section-accent);
+    border-radius:7px;
+    background:color-mix(in srgb,var(--mpt-section-accent) 10%,var(--mpt-panel)) !important;
+    transition:background-color 150ms ease;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stExpander"] summary p {
+    font-size:1.08rem !important;
+    line-height:1.45 !important;
+    font-weight:750 !important;
+    overflow-wrap:anywhere;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stExpander"] summary:hover,
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stExpander"] details[open] > summary {
+    background:color-mix(in srgb,var(--mpt-section-accent) 18%,var(--mpt-panel)) !important;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) button[kind="secondary"]:not(:disabled):hover {
+    background:color-mix(in srgb,var(--mpt-section-accent) 12%,var(--mpt-panel)) !important;
+    border-color:var(--mpt-section-accent) !important;
+}
+:is([data-testid="stMain"],[data-testid="stDialog"]) button p {font-weight:600;}
+:is([data-testid="stMain"],[data-testid="stDialog"]) :is([data-testid="stTextInput"],[data-testid="stTextArea"],
+    [data-testid="stNumberInput"],[data-testid="stSelectbox"],[data-testid="stMultiSelect"]) {
+    margin-bottom:0.35rem;
+}
+@media (max-width:600px) {
+    .mpt-stage-heading {padding:0.85rem 0.7rem;gap:0.45rem;}
+    :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stExpander"] summary {padding:0.75rem 0.6rem !important;}
+}
+@media (prefers-reduced-motion:reduce) {
+    :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stExpander"] summary {transition:none;}
+}
+
+/* The subject uses a custom accessible label row instead of stWidgetLabel. */
+:is([data-testid="stMain"],[data-testid="stDialog"]) .st-key-video_subject_label_row [data-testid="stMarkdownContainer"] p {
+    font-size:1.03rem !important;
+    line-height:1.5 !important;
+    font-weight:700 !important;
+}
+/* Current Streamlit captions use stCaption; retain contrast in both palettes. */
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stCaption"],
+:is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stCaption"] p,
+:is([data-testid="stMain"],[data-testid="stDialog"]) .stCaption,
+:is([data-testid="stMain"],[data-testid="stDialog"]) .stCaption p {
+    color:var(--mpt-muted) !important;
+}
+
+:root {--mpt-section-accent:var(--mpt-accent);}

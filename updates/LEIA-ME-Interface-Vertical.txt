@@ -1,0 +1,37 @@
+MPT - INTERFACE VERTICAL
+
+Instalacao:
+1. Feche o MPT e o terminal que executa o aplicativo.
+2. Extraia este ZIP na pasta principal do MPT, onde ficam app, webui e storage.
+3. Aceite substituir os tres arquivos da pasta webui.
+4. Inicie o MPT novamente. Nao e necessario instalar dependencias.
+
+Atualizacao visual para a versao com a Skill e a integracao YouTube ja instaladas.
+Nao apague configuracoes, projetos ou autorizacoes.
+
+Mudancas:
+- Roteiro, video, audio e legendas em uma coluna, um bloco abaixo do outro.
+- Campos do canal, referencias e pesos editoriais da Skill em sequencia vertical.
+- Titulos principais maiores, numeracao destacada e cores por etapa.
+- Nomes dos campos e funcoes em negrito; paineis clicaveis destacados.
+- Espacamento e largura de leitura ajustados para desktop e celular.
+- Tema claro, escuro e seguir o sistema preservados em Aparencia.
+- Barra de navegacao superior permanece compacta; os blocos de trabalho sao verticais.
+
+Organizacao da Skill:
+00.1 Canal e permissoes
+00.2 Referencias
+00.3 Angulos e direcao visual
+00.4 Pesquisa e revisao
+00.5 Producao do video e thumbnail
+00.6 Postagem YouTube
+00.7 Angulos e selecao
+00.8 Fila e pacotes
+
+A atualizacao altera somente a apresentacao. Chaves de campos, configuracoes,
+provedores, roteiros, narracao, imagens, filas e publicacao nao foram alterados.
+Nenhum servico pago foi chamado nem video publicado durante a validacao.
+
+Validacao: 72 testes existentes aprovados. Interface real conferida com Playwright
+em desktop 1440px e celular 390px, nos temas claro e escuro. Sem rolagem horizontal
+nessas telas. Formularios da Skill e os quatro blocos principais em ordem vertical.
