@@ -93,7 +93,8 @@ from webui.deepinfra_recovery import render
 render({ID!r},24)
 ''').run()
     assert not app.exception and app.button[0].disabled
-    app.checkbox[0].check().run()
+    app.checkbox[0].uncheck()
+    app.checkbox[1].check().run()
     app.button[0].click().run()
     assert not app.exception and app.success
     assert json.loads((scene/'deepinfra-image.json').read_text())['status']=='retry_authorized'

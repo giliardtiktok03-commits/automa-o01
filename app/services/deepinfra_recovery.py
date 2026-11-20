@@ -43,7 +43,7 @@ def failures(task_id):
     return result
 
 
-def authorize(task_id,scene_id,request_id,limit,*,deepinfra_unlimited=False,grok_unlimited=False):
+def authorize(task_id,scene_id,request_id,limit,*,deepinfra_unlimited=False,grok_unlimited=False,visual_only=False):
     identity,path=directory(task_id)
     # Never modify the audio, manifest, previous media, or a running render.
     with FileLock(str(path/'mixed-resume.lock'),timeout=0),FileLock(str(path/'mixed-scenes.lock'),timeout=0):
@@ -58,6 +58,15 @@ def authorize(task_id,scene_id,request_id,limit,*,deepinfra_unlimited=False,grok
             if state.get('status')!='http_error' or state.get('request_id')!=request_id:
                 raise ValueError('A solicitação DeepInfra mudou; nenhuma autorização aplicada.')
             if len(state.get('attempt_history',[]))>=50:raise ValueError('Limite de tentativas por cena atingido; revise o projeto.')
+            if visual_only:
+                scene=next(s for s in project['manifest']['scenes'] if s['id']==scene_id)
+                params=project['params'].model_copy(update=scene.get('image_settings') or {})
+                params.deepinfra_model=state.get('model') or api.MODEL
+                old_prompt,_=mixed_materials.deepinfra_scene_prompt(scene,ledger.parent)
+                if api.request_fingerprint(params,old_prompt)!=state.get('fingerprint'):
+                    raise ValueError('O pedido salvo diverge do projeto; nenhuma alteração aplicada.')
+                state.update(retry_previous_fingerprint=state['fingerprint'],retry_prompt_mode='visual-v1',
+                    fingerprint=api.request_fingerprint(params,mixed_materials.image_prompt(scene,visual_only=True)))
             state.update(status='retry_authorized',retry_for=request_id,
                          retry_authorized_at=datetime.now(timezone.utc).isoformat())
             write_bytes_atomic(ledger,json.dumps(state,ensure_ascii=False,indent=2).encode())

@@ -1,0 +1,49 @@
+MPT — PROMPT VISUAL DEEPINFRA E TRATAMENTO DE MODERAÇÃO
+
+Instale sobre a atualização MPT-DeepInfra-Recuperacao-Windows.zip.
+Feche o MPT, faça backup dos arquivos substituídos e extraia este ZIP na pasta
+principal, preservando app e webui. Reinicie. Não há chaves/configurações,
+áudios, tarefas ou vídeos neste pacote. Sem novas dependências.
+
+O QUE MUDA
+Novas cenas DeepInfra recebem sua descrição visual, período, local e instruções
+de composição, sem a cópia automática do trecho de narração. O roteiro falado
+permanece intacto. Isso reduz referências a violência que não seriam mostradas.
+Não é uma remoção de palavras proibidas, nem desativa filtros de segurança.
+Uma descrição visual ainda pode ser recusada pelo serviço.
+
+Quando o erro retornado identifica explicitamente moderação e bloqueio por
+política de conteúdo, mesmo dentro de HTTP 500, o MPT registra a recusa e usa
+o cartão editorial já existente no pipeline. O cartão é uma alternativa textual,
+não uma imagem gerada da cena. O pedido recusado não é repetido automaticamente.
+Erros 500 genéricos sem esse diagnóstico continuam exigindo revisão: não serão
+classificados como moderação por suposição.
+Outros provedores mantêm seu formato de prompt atual. Não muda a narração,
+as fontes históricas, os bancos de vídeos, o zoom ou a publicação.
+
+RECUPERAR O PROJETO PARADO
+1. Abra Retomar projeto salvo e informe:
+   d2ce1b5f-6510-4797-a3b5-28d9859d3710
+2. Em DeepInfra · Recuperar imagem com erro HTTP, deixe marcada:
+   Usar somente a descrição visual, sem enviar a narração completa.
+3. Confira o consumo no painel DeepInfra. Autorize uma única nova solicitação
+   da cena 21 e clique em Liberar nova tentativa desta cena.
+4. Use um teto que inclua o novo pedido ou DeepInfra sem limite para a retomada.
+5. Clique em Retomar projeto salvo. O áudio e as 20 cenas prontas são reutilizados.
+Essa nova tentativa pode consumir saldo; a liberação não gera a imagem sozinha.
+O histórico e o fingerprint anterior ficam preservados no registro da imagem.
+Não apague/edite o manifesto nem os registros para forçar reenvios.
+
+COMPATIBILIDADE
+Imagens recebidas ou pendentes mantêm o prompt antigo para não invalidar seus
+registros. A conversão do pedido antigo com falha ocorre apenas na liberação
+explícita pela recuperação. Novos pedidos de cenas usam o modo visual-v1.
+Recusas e timeouts não são reenviados silenciosamente. Cada pedido adicional
+continua contando no limite de imagens.
+
+VALIDAÇÃO
+Testes locais cobrem: ausência de narração no prompt DeepInfra, compatibilidade
+de registros antigos, mudança autorizada de fingerprint, moderação 422/500,
+cartão editorial, cache, orçamento, preservação de mídia, montagem e narração.
+Nenhuma geração paga real foi executada aqui. Não houve publicação de vídeo
+nem merge na main. Não há garantia de aceitação de todo prompt pelo fornecedor.

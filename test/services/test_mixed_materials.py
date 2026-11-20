@@ -247,7 +247,7 @@ def test_full_pipeline_mixes_real_clips_without_shuffling(tmp_path, monkeypatch,
             before_submit()
         return Path(generate()[0].url), {"task_id": "test-id"}
     monkeypatch.setattr(mixed.ai33_provider, "generate", generate_ai33)
-    def generate_runware(params, prompt, directory, *, before_submit=None, existing_only=False):
+    def generate_runware(params, prompt, directory, *, before_submit=None, existing_only=False,prompt_mode=''):
         return generate_ai33(params, prompt, directory, before_submit=before_submit)
     monkeypatch.setattr(mixed.grok_image, "generate", generate_runware)
     def generate_flow(params, prompt, folder, scene_id, job_folder, *, before_submit=None):

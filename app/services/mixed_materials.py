@@ -499,14 +499,21 @@ def legacy_continuation(signature, manifest):
     return before == after
 
 
-def image_prompt(scene):
-    return (f"Illustrate this narration: {scene['text']}\n{scene['image_prompt']}\n"
-              f"Period: {scene['period']}. Location: {scene['location']}. "
+def image_prompt(scene,*,visual_only=False):
+    return ((f"Visual scene description: {scene['image_prompt']}\n" if visual_only else f"Illustrate this narration: {scene['text']}\n{scene['image_prompt']}\n")
+              + f"Period: {scene['period']}. Location: {scene['location']}. "
               + ("Historical reconstruction, no contemporary buildings, clothing, vehicles or machinery. "
                  if scene["context"] == "historical" else "")
               + "Depict the central subject and action literally, including human context when narrated. "
               "No unrelated animals or symbolic substitutes for human conditions. "
               "No captions, logos or text. This is an illustration, not archival evidence.")
+
+
+def deepinfra_scene_prompt(scene,directory):
+    ledger=Path(directory)/'deepinfra-image.json'
+    state=json.loads(ledger.read_text(encoding='utf-8')) if ledger.is_file() else None
+    mode=(state.get('retry_prompt_mode') or state.get('prompt_mode') or '') if state else 'visual-v1'
+    return image_prompt(scene,visual_only=mode=='visual-v1'),mode
 
 
 def prepare(task_id, params, script, audio_duration, subtitle_file=""):
@@ -698,6 +705,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                         if checkpoint.get('status')=='retry_authorized':
                             raise MixedError('Aumente o limite total de imagens para incluir a nova tentativa DeepInfra')
                     prompt = image_prompt(scene)
+                    if provider=='deepinfra':prompt,deepinfra_prompt_mode=deepinfra_scene_prompt(scene,job_dir)
                     try:
                         def mark_submitted():
                             if provider == 'deepinfra' and not images_unlimited(params) and manifest['image_requests'] >= params.mixed_max_images:
@@ -716,7 +724,7 @@ def _prepare(task_id, params, script, audio_duration, subtitle_file=""):
                             scene.pop("flow_waiting", None)
                         elif provider == "deepinfra":
                             generated, details = deepinfra_image.generate(job_params, prompt, job_dir,
-                                before_submit=mark_submitted, existing_only=resuming_deepinfra)
+                                before_submit=mark_submitted, existing_only=resuming_deepinfra,prompt_mode=deepinfra_prompt_mode)
                         elif provider == "grok":
                             generated, details = grok_image.generate(job_params, prompt, job_dir, before_submit=mark_submitted, existing_only=resuming_grok)
                         elif provider == "runware":

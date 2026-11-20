@@ -109,6 +109,15 @@ def _post(payload, key, timeout):
             with client.post(endpoint, headers={'Authorization': 'Bearer ' + key}, json=payload,
                              timeout=(15, timeout), allow_redirects=False, stream=True) as response:
                 if response.status_code != 200:
+                    # Gateways may wrap a policy refusal in HTTP 500. Inspect only a
+                    # bounded body; never persist or log upstream text/URLs/prompts.
+                    body=bytearray()
+                    for chunk in response.iter_content(8192):
+                        body.extend(chunk[:max(0,65536-len(body))])
+                        if len(body)>=65536:break
+                    message=bytes(body).decode('utf-8',errors='replace').lower()
+                    if 'blocked by content policy' in message and ('moderation' in message or 'safety checker' in message):
+                        raise DeepInfraRefusal('DeepInfra recusou a imagem por política de conteúdo; nenhuma repetição automática')
                     seconds = None
                     if response.status_code == 429:
                         seconds = _retry_seconds(response.headers.get('Retry-After'))
@@ -123,7 +132,24 @@ def _post(payload, key, timeout):
                 return b''.join(chunks)
 
 
-def generate(params, prompt, directory, *, before_submit=None, settings=None, existing_only=False):
+def request_payload(params,prompt):
+    aspect=getattr(params.video_aspect,'value',params.video_aspect)
+    sizes={'16:9':(1024,576),'9:16':(576,1024),'1:1':(512,512)}
+    if aspect not in sizes:raise DeepInfraError('Proporção não suportada pelo conector DeepInfra')
+    width,height=sizes[aspect]
+    if params.deepinfra_model in (FLUX_MODEL,P_IMAGE_MODEL):
+        payload=dict(model=params.deepinfra_model,prompt=prompt,n=1,size=f'{width}x{height}',response_format='b64_json')
+    else:
+        payload=dict(prompt=prompt,num_images=1,width=width,height=height,num_inference_steps=params.deepinfra_steps,guidance_scale=0)
+    return payload,width,height
+
+
+def request_fingerprint(params,prompt):
+    payload,_,_=request_payload(params,prompt)
+    return hashlib.sha256(json.dumps({'model':params.deepinfra_model,**payload},sort_keys=True).encode()).hexdigest()
+
+
+def generate(params, prompt, directory, *, before_submit=None, settings=None, existing_only=False,prompt_mode=''):
     settings = config.app if settings is None else settings
     # Old checkpoints did not contain model metadata and always used SDXL Turbo.
     previous_ledger = Path(directory) / 'deepinfra-image.json'
@@ -145,17 +171,8 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
         raise DeepInfraError('Configure a espera DeepInfra entre 30 e 1800 segundos') from None
     if not math.isfinite(timeout) or not 30 <= timeout <= 1800:
         raise DeepInfraError('Configure a espera DeepInfra entre 30 e 1800 segundos')
-    aspect = getattr(params.video_aspect, 'value', params.video_aspect)
-    sizes = {'16:9': (1024, 576), '9:16': (576, 1024), '1:1': (512, 512)}
-    if aspect not in sizes:
-        raise DeepInfraError('Proporção não suportada pelo conector DeepInfra')
-    width, height = sizes[aspect]
-    payload = dict(prompt=prompt, num_images=1, width=width, height=height,
-                   num_inference_steps=params.deepinfra_steps, guidance_scale=0)
-    if params.deepinfra_model in (FLUX_MODEL, P_IMAGE_MODEL):
-        payload = dict(model=params.deepinfra_model, prompt=prompt, n=1, size=f'{width}x{height}', response_format='b64_json')
-    spec = {'model': params.deepinfra_model, **payload}
-    fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
+    payload,width,height=request_payload(params,prompt)
+    fingerprint=request_fingerprint(params,prompt)
     folder = Path(directory)
     folder.mkdir(parents=True, exist_ok=True)
     ledger, image, raw = folder/'deepinfra-image.json', folder/'image.png', folder/'response.json'
@@ -177,16 +194,20 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
                 raise DeepInfraError('Registro DeepInfra ausente; geração não será reenviada')
             state = dict(version=2, model=params.deepinfra_model, provider='deepinfra_image', fingerprint=fingerprint,
                          status='submission_unconfirmed', request_id=str(uuid4()))
+            if prompt_mode:state['prompt_mode']=prompt_mode
         if not raw.is_file():
             _cooldown(api_key(settings))
             if state.get('status') == 'retry_authorized':
                 if state.get('http_status') not in RETRYABLE_HTTP or state.get('retry_for') != state.get('request_id'):
                     raise DeepInfraError('Autorização de nova tentativa DeepInfra inválida')
                 previous={key:state[key] for key in ('request_id','http_status','retry_authorized_at') if key in state}
+                if state.get('retry_previous_fingerprint'):previous['fingerprint']=state['retry_previous_fingerprint']
                 state['attempt_history']=[*state.get('attempt_history',[]),previous]
                 state.update(status='submission_unconfirmed',request_id=str(uuid4()))
+                if state.get('retry_prompt_mode'):state['prompt_mode']=state['retry_prompt_mode']
                 for key in ('retry_for','retry_authorized_at','http_status','retry_after_seconds'):
                     state.pop(key,None)
+                state.pop('retry_prompt_mode',None);state.pop('retry_previous_fingerprint',None)
             save(state)
             if before_submit:
                 before_submit()
@@ -196,6 +217,10 @@ def generate(params, prompt, directory, *, before_submit=None, settings=None, ex
                 write_bytes_atomic(raw, content)
                 state['status'] = 'received'
                 save(state)
+            except DeepInfraRefusal:
+                state.update(status='refused',refusal_reason='content_policy')
+                save(state)
+                raise
             except DeepInfraHTTPError as exc:
                 state.update(status='http_error', http_status=exc.status, retry_after_seconds=exc.retry_after)
                 save(state)

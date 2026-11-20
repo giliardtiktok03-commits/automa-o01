@@ -88,6 +88,7 @@ def test_missing_checkpoint_cannot_submit_on_recovery(setup,tmp_path):
 
 def test_official_http_contract_has_no_retry_or_redirect():
     response = Mock(status_code=503)
+    response.iter_content.return_value=[]
     response.__enter__ = Mock(return_value=response)
     response.__exit__ = Mock(return_value=None)
     session = Mock()
