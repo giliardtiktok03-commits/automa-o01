@@ -438,6 +438,10 @@ def parse_voice_name(name: str):
     return name
 
 
+def is_ai33_voice(voice_name: str) -> bool:
+    return str(voice_name or '').startswith('ai33:')
+
+
 def is_azure_v2_voice(voice_name: str):
     voice_name = parse_voice_name(voice_name)
     if ":" not in voice_name and voice_name.endswith("-V2"):
@@ -530,6 +534,8 @@ def is_azure_v1_voice(voice_name: str | None) -> bool:
         return False
     name = str(voice_name).strip()
     if is_no_voice(name):
+        return False
+    if is_ai33_voice(name):
         return False
     if is_azure_v2_voice(name):
         return False
@@ -665,6 +671,10 @@ def _single_tts(
     voxcpm_prompt_audio: bytes | None = None,
     voxcpm_prompt_text: str = "",
 ) -> Union[SubMaker, None]:
+    if is_ai33_voice(voice_name):
+        from app.services.ai33.tts import synthesize
+        return synthesize(text, voice_name, voice_rate, voice_file, voice_volume)
+
     if is_no_voice(voice_name):
         duration_seconds = estimate_no_voice_duration(text)
         if not generate_silent_audio(duration_seconds, voice_file):

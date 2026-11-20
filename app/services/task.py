@@ -627,6 +627,9 @@ def generate_audio(
             voice_preview,
         )
         if reusable_preview:
+            if voice.is_ai33_voice(params.voice_name):
+                from app.services.ai33.tts import adopt_preview
+                adopt_preview(reusable_preview[0], reusable_preview[2])
             return reusable_preview
 
         logger.info("no custom audio file provided, using TTS to generate audio.")
@@ -642,7 +645,13 @@ def generate_audio(
         if voxcpm_prompt_audio is not None:
             tts_kwargs["voxcpm_prompt_audio"] = voxcpm_prompt_audio
             tts_kwargs["voxcpm_prompt_text"] = voxcpm_prompt_text
-        sub_maker = voice.tts(**tts_kwargs)
+        try:
+            sub_maker = voice.tts(**tts_kwargs)
+        except Exception as exc:
+            from app.services.ai33.client import AI33Error
+            if not isinstance(exc, AI33Error):raise
+            _mark_task_failed(task_id, "audio", str(exc))
+            return None, None, None
         if sub_maker is None:
             _mark_task_failed(
                 task_id,
@@ -697,6 +706,26 @@ def generate_subtitle(task_id, params, video_script, sub_maker, audio_file, *, c
     if not subtitle_provider:
         logger.info("subtitle provider is empty, skip subtitle generation")
         return ""
+
+    if voice.is_ai33_voice(getattr(params, "voice_name", "")) and subtitle_provider == "edge":
+        from app.services.ai33.tts import transcript_for
+        from app.services.ai33.client import AI33Error
+        if getattr(params, "subtitle_display_mode", "sentence") == "word_by_word":
+            logger.warning("AI33PRO returned sentence captions; select Whisper explicitly for word-level subtitles")
+            return ""
+        try:
+            content = transcript_for(audio_file, sub_maker)
+        except AI33Error as exc:
+            logger.warning(str(exc))
+            return ""
+        if not content:
+            logger.warning("AI33PRO did not return valid timed captions; select Whisper explicitly if needed")
+            return ""
+        with staged_subtitle_file(final_subtitle_path) as staged:
+            from app.utils.atomic_files import write_bytes_atomic
+            write_bytes_atomic(staged, content)
+            os.replace(staged, final_subtitle_path)
+        return final_subtitle_path
 
     if sub_maker is None and subtitle_provider != "whisper":
         # 自定义音频不会经过 TTS，因此没有 Edge/Azure 等 TTS 返回的

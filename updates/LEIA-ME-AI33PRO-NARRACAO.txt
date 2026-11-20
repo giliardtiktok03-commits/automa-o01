@@ -1,0 +1,69 @@
+MPT — NARRAÇÃO DO ROTEIRO VIA API AI33PRO
+Atualização de 20/11/2026. Aplicar sobre a versão personalizada atual do MPT.
+
+INSTALAÇÃO
+1. Feche o MPT e faça uma cópia de segurança dos arquivos substituídos.
+2. Extraia MPT-AI33PRO-Narracao-Windows.zip na pasta principal do MPT,
+   mantendo as pastas app e webui. Aceite substituir os seis arquivos de código.
+3. Reinicie o MPT. Não precisa reinstalar dependências nesta atualização.
+O pacote não inclui chaves, config.toml, tarefas, vídeos ou contas do Google.
+
+PRIMEIRO TESTE CURTO NO BLOCO 03 — CONFIGURAÇÕES DE ÁUDIO
+- Modo de narração: Automática.
+- Serviço de voz: AI33PRO · Narração por API.
+- Informe sua chave no campo de senha do MPT. Reutiliza ai33_api_key,
+  a mesma configuração já existente para imagens. Não envie a chave no chat.
+- Clique em Carregar vozes AI33PRO. Pode buscar English para o canal em inglês.
+- Escolha a voz ou cole o Voice ID completo retornado pelo painel/API.
+  Não invente um ID; é necessário o prefixo elevenlabs_, minimax_, etc.
+- Use primeiro a opção de prévia curta já existente no bloco de áudio.
+  Gerar a prévia também pode consumir créditos. Abrir a tela não gera voz.
+- Ouça e confira a duração antes de enviar um roteiro longo.
+
+VOZ AUTOMÁTICA NA SKILL — SEM CONECTAR O YOUTUBE
+No Espaço da Skill, abra Produção · narração, imagens, legendas e música:
+1. Entrega de cada ângulo: Pacote + narração.
+2. Origem da voz do canal: AI33PRO · API de narração.
+3. Carregue o catálogo e selecione uma voz real.
+4. Ajuste velocidade e legendas. Salve as preferências da Skill para este canal.
+5. Inicie a pesquisa/seleção/fila pelo fluxo existente.
+A voz é fixa por canal. Cada ângulo aprovado envia somente seu roteiro à API.
+Descrição, tags e briefings não entram no texto falado. Não há seleção aleatória
+de voz nesta fase. As preferências são congeladas por lote; mudar depois afeta
+novos lotes. Pacote + narração desativa a postagem e dispensa conexão Google.
+
+RETOMADA E CUSTOS
+- O ID remoto é salvo em audio-ai33-tts.json, ao lado de audio.mp3.
+- Retomar o mesmo projeto consulta o ID existente; não reenvia o roteiro.
+- Prévia AI33 é mantida em storage/ai33-tts/previews para preservar o ID.
+  Prévia completa compatível pode ser reaproveitada no fluxo atual.
+- Não apague o registro para tentar novamente: pode causar geração duplicada.
+- Se um envio não confirmar ID, o MPT bloqueia reenvio automático. Confira o
+  histórico no painel AI33 antes de decidir criar outra solicitação.
+- Teto local padrão: 50.000 caracteres por nova solicitação. Ajustável na tela
+  de vozes, até o máximo documentado de 1.000.000. Não é um limite monetário.
+- Velocidade AI33: 0,5 a 1,5. O seletor geral mantém os valores existentes
+  dentro dessa faixa. Créditos reais são registrados quando a API os informar.
+- A conta precisa permitir acesso à API e possuir créditos. Não há preço fixo
+  embutido: confira as condições e o saldo atuais no painel do fornecedor.
+
+ÁUDIO E LEGENDAS
+O áudio baixado é convertido em MP3 e decodificado integralmente antes de ser
+aceito. A duração é medida no arquivo real. Solicita-se transcrição no mesmo
+pedido; se houver SRT válido, será salvo em audio-ai33.srt.
+Na Skill, a opção Edge utiliza a temporização retornada pelo provedor de voz,
+inclusive o SRT da AI33. Se essa voz não devolver SRT utilizável, escolha
+Whisper explicitamente. Não são inventados tempos de palavras. Legendas
+palavra a palavra exigem Whisper. Para testar somente a voz, pode desativar
+Gerar legendas antes de iniciar o lote.
+
+VALIDAÇÃO E LIMITAÇÕES
+Contrato consultado na documentação pública oficial https://ai33.pro/api-docs:
+GET /v3/voices; POST /v3/text-to-speech (multipart); GET /v1/task/{id}.
+Base https://api.ai33.pro; autenticação xi-api-key.
+Testes locais usam respostas simuladas e áudio real criado/decodificado pelo
+FFmpeg. A geração paga autenticada não foi executada aqui: deve ser validada
+no seu Windows com sua conta e uma prévia curta.
+Outros provedores, roteiro, imagens e montagem continuam usando seus fluxos.
+Efeitos sonoros não fazem parte desta atualização. Nenhum vídeo foi publicado
+e esta alteração não foi mesclada na main.

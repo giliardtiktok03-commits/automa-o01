@@ -7272,6 +7272,9 @@ def _get_voice_preview_provider_signature(tts_server: str) -> dict:
     服务地址、区域或凭证发生变化时都必须重新生成试听，否则界面可能继续播放
     旧 Provider 配置下的音频，让用户误判当前设置已经生效。
     """
+    if tts_server == "ai33pro":
+        from app.services.ai33.provider import api_key
+        return {"credential": _credential_signature(api_key())}
     if tts_server == "azure-tts-v2":
         return {
             "speech_region": config.azure.get("speech_region", ""),
@@ -7348,6 +7351,11 @@ def _synthesize_voice_preview(
 
     temp_dir = utils.storage_dir("temp", create=True)
     audio_file = os.path.join(temp_dir, f"tmp-voice-{str(uuid4())}.mp3")
+    if selected_tts_server == "ai33pro":
+        identity = hashlib.sha256(json.dumps([content,voice_name,float(voice_rate),float(voice_volume)]).encode()).hexdigest()
+        target = Path(utils.storage_dir("ai33-tts/previews", create=True)) / identity
+        target.mkdir(parents=True,exist_ok=True)
+        audio_file = str(target / "audio.mp3")
     logger.info(
         f"generating {preview_type} voice preview: "
         f"voice={voice_name}, rate={voice_rate}, volume={voice_volume}, "
@@ -7408,7 +7416,7 @@ def _synthesize_voice_preview(
     finally:
         # 浏览器播放器使用内存字节，文件读取完即可清理，避免频繁试听积累临时文件。
         try:
-            os.remove(audio_file)
+            if selected_tts_server != "ai33pro":os.remove(audio_file)
         except FileNotFoundError:
             pass
         except OSError as exc:
@@ -8235,6 +8243,7 @@ def _render_audio_settings(panel, params):
                 ("mimo-tts", "Xiaomi MiMo TTS"),
                 ("minimax-tts", "MiniMax TTS"),
                 ("elevenlabs", "ElevenLabs TTS"),
+                ("ai33pro", "AI33PRO · Narração por API"),
                 ("chatterbox", "Chatterbox TTS"),
                 ("kokoro", "Kokoro TTS"),
                 ("fish_audio", "Fish Audio TTS"),
@@ -8270,6 +8279,12 @@ def _render_audio_settings(panel, params):
 
             # MiniMax 只复用下方通用“配音声音”选择器。Provider 配置函数负责
             # 刷新远端音色并返回友好文案，不再额外渲染 Voice ID 和音色下拉框。
+            ai33_voices = []
+            ai33_labels = {}
+            if tts_mode_enabled and selected_tts_server == "ai33pro":
+                from webui.ai33_tts import render as render_ai33_tts
+                selected_ai33, ai33_labels = render_ai33_tts(_set_runtime_config)
+                ai33_voices = [selected_ai33] if selected_ai33 else []
             minimax_voices = []
             minimax_voice_labels = {}
             if tts_mode_enabled and selected_tts_server == "minimax-tts":
@@ -8283,6 +8298,8 @@ def _render_audio_settings(panel, params):
             if not tts_mode_enabled:
                 # 上传音频和无配音模式不加载远程音色，减少无意义的网络请求和界面噪音。
                 filtered_voices = []
+            elif selected_tts_server == "ai33pro":
+                filtered_voices = ai33_voices
             elif selected_tts_server == "siliconflow":
                 # 获取硅基流动的声音列表
                 filtered_voices = voice.get_siliconflow_voices()
@@ -8332,6 +8349,7 @@ def _render_audio_settings(panel, params):
                             filtered_voices.append(v)
 
             def _friendly(v):
+                if voice.is_ai33_voice(v):return ai33_labels.get(v,v)
                 if voice.is_no_voice(v):
                     return tr("No Voice Selected")
                 if voice.is_elevenlabs_voice(v):
@@ -8810,6 +8828,7 @@ def _render_audio_settings(panel, params):
             uploaded_audio_file = None
             voice_volume_options = [0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 4.0, 5.0]
             voice_rate_options = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.8, 2.0]
+            if selected_tts_server == "ai33pro":voice_rate_options = [v for v in voice_rate_options if v <= 1.5]
 
             if tts_mode_enabled:
                 voice_control_cols = st.columns(2)

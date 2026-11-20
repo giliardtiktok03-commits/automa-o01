@@ -174,6 +174,8 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None,panels=None):
         submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
         if save or submit:
             try:
+                if production_options['mode']!='editorial' and not production_options['voice_name']:
+                    raise ValueError('Selecione uma voz válida da AI33PRO antes de salvar ou iniciar a produção.')
                 options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,automatic_top_n=int(top_n),
                     thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy,production=production_options,publication=publication_options)
                 if save:
@@ -204,9 +206,19 @@ def _production_options(defaults,channel_id,*,login_mode=False):
         concept=st.selectbox('Conceito usado para gerar a thumbnail',[1,2,3],index=defaults.thumbnail_concept-1,key='director_thumb_concept_'+channel_id,disabled=not thumbnail)
         st.caption('Cada ângulo terá sua própria imagem 1280 × 720. A opção usa a chave DeepInfra já configurada e pode consumir saldo. Os três briefings continuam no pacote.')
         if mode=='editorial':return defaults.model_copy(update={'mode':mode,'generate_thumbnail':thumbnail,'thumbnail_concept':concept}).model_dump()
-        voice=st.text_input('Voz da narração (identificador do MPT)',value=defaults.voice_name,key='director_voice_'+channel_id)
-        st.caption('Use o identificador de uma voz já configurada no MPT. Exemplo em inglês: en-US-ChristopherNeural-Male. Credenciais continuam nas configurações existentes.')
-        rate=st.number_input('Velocidade da voz',min_value=0.5,max_value=2.0,value=float(defaults.voice_rate),step=0.05,key='director_voice_rate_'+channel_id)
+        engine=st.selectbox('Origem da voz do canal',['mpt','ai33pro'],index=1 if defaults.voice_name.startswith('ai33:') else 0,
+            format_func=lambda x:'AI33PRO · API de narração' if x=='ai33pro' else 'Outra voz já configurada no MPT',key='director_voice_engine_'+channel_id)
+        if engine=='ai33pro':
+            from webui.ai33_tts import render as render_ai33_voice,save_local
+            voice,_=render_ai33_voice(save_local,
+                key_prefix='director_ai33_'+channel_id,default_voice=defaults.voice_name if defaults.voice_name.startswith('ai33:') else '',set_default=False)
+            st.caption('A voz é fixa por canal e salva no lote. O roteiro aprovado é enviado sem descrição, tags ou briefing de thumbnail.')
+        else:
+            saved_voice=defaults.voice_name if not defaults.voice_name.startswith('ai33:') else 'en-US-ChristopherNeural-Male'
+            voice=st.text_input('Voz da narração (identificador do MPT)',value=saved_voice,key='director_voice_'+channel_id)
+            st.caption('Use o identificador de uma voz já configurada no MPT. Credenciais continuam nas configurações existentes.')
+        maximum=1.5 if engine=='ai33pro' else 2.0
+        rate=st.number_input('Velocidade da voz',min_value=0.5,max_value=maximum,value=min(float(defaults.voice_rate),maximum),step=0.05,key='director_voice_rate_'+channel_id)
         subtitles=st.checkbox('Gerar legendas',value=defaults.subtitle_enabled,key='director_subtitles_'+channel_id)
         provider=st.selectbox('Temporização das legendas',['edge','whisper'],index=['edge','whisper'].index(defaults.subtitle_provider),key='director_subtitle_provider_'+channel_id)
         st.caption('Edge usa a temporização retornada pela voz. Vozes sem essa temporização precisam do Whisper configurado no MPT.')
@@ -236,12 +248,16 @@ def _production_options(defaults,channel_id,*,login_mode=False):
             values.update(video_source=source,use_wikimedia=commons,use_pexels=pexels,use_pixabay=pixabay,deepinfra_model=model,
                 deepinfra_unlimited=unlimited,image_limit=int(limit),visual_validation=validation,
                 font_name=font,music_enabled=music,music_volume=volume)
-        return VideoProduction.model_validate(values).model_dump()
+        # Keep the form editable before the first catalog selection; validate on save.
+        return VideoProduction.model_validate(values).model_dump() if voice else values
 
 
 def _publication_options(defaults,production,channel_id):
     from app.services.youtube_publish.store import Store
     with st.expander('Pacote da Skill → Postagem automática youtube',expanded=defaults.mode!='off'):
+        if production['mode']!='video':
+            st.caption('Entrega sem vídeo: postagem desativada. É possível testar a narração sem conectar o Google.')
+            return {'mode':'off'}
         modes=['off','prepare','automatic']
         mode=st.selectbox('Destino do pacote produzido',modes,index=modes.index(defaults.mode),
             format_func=lambda m:{'off':'Somente entregar os arquivos (padrão)',
