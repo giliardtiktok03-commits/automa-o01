@@ -1,0 +1,25 @@
+CORRECAO DOS CREDITOS WIKIMEDIA COMMONS - WINDOWS
+
+Atualizacao incremental para a versao MPT-Commons-Licencas-Creditos-Windows.
+
+1. Feche o MPT, incluindo o terminal que executa o aplicativo.
+2. Extraia este ZIP na pasta principal do MPT, onde estao app e webui.
+   Aceite substituir os tres arquivos. Nao apague storage ou configuracoes.
+3. Inicie o MPT novamente e abra Wikimedia Commons - Teste independente.
+4. No resultado do teste salvo, clique em Concluir creditos do clipe salvo
+   (na interface, o texto inclui acentos). Nao precisa executar outro teste.
+5. Ao concluir, baixe commons-publication-review.json e
+   youtube-description-with-credits.txt.
+
+A recuperacao usa o mesmo ID e verifica os hashes da imagem e do clipe.
+Nao faz nova busca, download, renderizacao ou publicacao.
+Se a recuperacao falhar, baixe commons-publication-review.json e commons-test.json
+para analisar o novo diagnostico tecnico. Nao remova a imagem nem o clipe.
+
+Validacao: 160 testes aprovados, 3 ignorados. Recuperacao local de um clipe real
+com caminhos relativos no formato Windows; sem rede nem renderizacao.
+A falha original nao registrou a excecao tecnica. Esta correcao normaliza
+caminhos, acrescenta diagnostico seguro e permite tentar a etapa de creditos.
+A instalacao Windows do usuario ainda precisa ser validada.
+
+Nao altera outros provedores nem faz merge na main.

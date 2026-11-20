@@ -25,6 +25,14 @@ def result(task_id):
         elif report.get('state')=='failed':st.error(report.get('error','Falha no teste'))
         elif report.get('state')=='needs_review':st.warning('Nenhuma fotografia passou pelos critérios deste teste. Confira o JSON ou experimente uma consulta mais específica.')
         elif report.get('state')=='completed':st.success('Teste concluído. Nada foi publicado.')
+        if report.get('error_type'):st.caption('Detalhe técnico: '+report['error_type']+' · '+str(report.get('error_stage','')))
+        if report.get('clip') and report.get('download'):
+            if st.button('Concluir créditos do clipe salvo',key='commons_probe_repair',disabled=report.get('state') in {'queued','running'}):
+                try:
+                    probe.submit_repair(task_id)
+                    st.rerun()
+                except ValueError as exc:st.warning(str(exc))
+            st.caption('Reutiliza a imagem e o vídeo já salvos. Não faz nova busca, download ou renderização.')
         st.button('Atualizar teste Commons',key='commons_probe_refresh')
         if report.get('candidates'):
             st.table([{'Arquivo':r['candidate']['title'],'Classificação do teste':r['classification'],'Usado no clipe':r['used_in_test']} for r in report['candidates']])

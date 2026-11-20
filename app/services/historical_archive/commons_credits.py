@@ -1,7 +1,9 @@
 """Bind used Commons images to real render files and the final video, then credit."""
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath, PurePosixPath
+import os
+import traceback
 from filelock import FileLock
 from app.utils.atomic_files import write_bytes_atomic
 from .contracts import ArchiveError
@@ -35,12 +37,47 @@ def has_commons(folder):
         for scene in data.get('scenes',{}).values() for i in scene.get('candidates',[]))
 
 
+def relative_name(value):
+    if not isinstance(value,str) or not value or ':' in value:raise ArchiveError('Caminho de auditoria inválido')
+    path=PureWindowsPath(value) if '\\' in value else PurePosixPath(value)
+    if path.is_absolute() or getattr(path,'drive','') or '..' in path.parts:
+        raise ArchiveError('Caminho de auditoria fora do projeto')
+    return '/'.join(path.parts)
+
+
+def path_key(value):
+    return os.path.normcase(relative_name(value))
+
+
+def project_file(root,value):
+    return local(root,relative_name(value))
+
+
+def entry_for(records,name):
+    matches=[v for k,v in records.items() if path_key(k)==path_key(name)]
+    if len(matches)>1:raise ArchiveError('Auditoria contém caminhos duplicados para o mesmo vídeo')
+    return matches[0] if matches else None
+
+
+def error_report(folder,video,exc):
+    reason=str(exc) if isinstance(exc,ArchiveError) else 'Falha na conferência de créditos ('+type(exc).__name__+'); consulte o diagnóstico técnico'
+    original=exc
+    visited=set()
+    while original.__cause__ is not None and id(original) not in visited:
+        visited.add(id(original));original=original.__cause__
+    frames=[{'file':Path(f.filename).name,'function':f.name,'line':f.lineno} for f in traceback.extract_tb(original.__traceback__)[-8:]]
+    put(Path(folder)/'commons-publication-review.json',{'status':'NEEDS_REVIEW','checked_at':now(),
+        'reason':reason,'error_type':type(original).__name__,'error_stage':'commons_credits',
+        'technical_frames':frames,'published':False,'automatic_publication':False})
+    return reason
+
+
 def record_use(folder,item,output,params):
     if not output or params is None:
         return None  # Legacy records remain preserved, but won't pass publication reconciliation.
     folder=Path(folder);root=folder.parent.resolve();output=Path(output).resolve()
     if not output.is_relative_to(root) or not output.is_file():raise ArchiveError('Cena Commons fora do projeto ou ausente')
-    return {'render_file':str(output.relative_to(root)),'render_sha256':digest(output),
+    return {'render_file':output.relative_to(root).as_posix(),'render_sha256':digest(output),
         'recorded_at':now(),'modifications':['Converted to RGB PNG',
         'Image motion: '+str(getattr(params.image_motion,'value',params.image_motion)),
         'Fit mode: '+str(getattr(params.video_fit_mode,'value',params.video_fit_mode)),
@@ -69,24 +106,26 @@ def _bind_final(task_id,video,parts):
     if not rows:return None
     root=folder.parent.resolve();video=Path(video).resolve()
     if not video.is_relative_to(root):raise ArchiveError('Vídeo Commons fora do projeto')
-    parts={str(Path(p).resolve()):digest(p) for p in parts}
+    parts={Path(p).resolve():digest(p) for p in parts}
     bindings=[]
     for key,item in rows:
         proof=item.get('commons_render_use')
         if not proof:continue
-        output=local(root,proof['render_file'])
-        if str(output) not in parts:continue  # Other chapters/outputs do not belong to this video.
-        if proof['render_sha256']!=parts[str(output)]:raise ArchiveError('Cena Commons alterada antes da montagem final')
-        bindings.append({'scene_key':key,'candidate_id':item['id'],'render_file':proof['render_file'],
+        output=project_file(root,proof['render_file'])
+        if output not in parts:continue  # Other chapters/outputs do not belong to this video.
+        if proof['render_sha256']!=parts[output]:raise ArchiveError('Cena Commons alterada antes da montagem final')
+        bindings.append({'scene_key':key,'candidate_id':item['id'],'render_file':relative_name(proof['render_file']),
             'render_sha256':proof['render_sha256']})
     # An untracked legacy use cannot be silently declared licensed.
     if not bindings and any(not item.get('commons_render_use') for _,item in rows):
         raise ArchiveError('Uso Commons sem comprovante de renderização; revisão necessária')
-    record={'video_file':str(video.relative_to(root)),'video_sha256':digest(video),'checked_at':now(),
-        'bindings':bindings,'parts':[{'file':str(Path(p).relative_to(root)),'sha256':s} for p,s in parts.items()],
+    record={'video_file':video.relative_to(root).as_posix(),'video_sha256':digest(video),'checked_at':now(),
+        'bindings':bindings,'parts':[{'file':p.relative_to(root).as_posix(),'sha256':s} for p,s in parts.items()],
         'automatic_publication':False}
     with FileLock(str(folder/'commons-final-media.lock'),timeout=60):
         data=load(folder/'commons-final-media.json',{'version':1,'videos':{}})
+        for old_name in list(data['videos']):
+            if path_key(old_name)==path_key(record['video_file']):del data['videos'][old_name]
         data['videos'][record['video_file']]=record;put(folder/'commons-final-media.json',data)
     return record
 
@@ -96,31 +135,30 @@ def bind_final(task_id,video,parts):
         record=_bind_final(task_id,video,parts)
         if record and record['bindings']:prepare_description(video,'')
         return record
-    except (ArchiveError,OSError,ValueError) as exc:
+    except Exception as exc:
         from .service import paths
         folder,_=paths(task_id)
-        reason=str(exc) if isinstance(exc,ArchiveError) else 'Não foi possível reconciliar os arquivos da montagem Commons'
-        put(folder/'commons-publication-review.json',{'status':'NEEDS_REVIEW','checked_at':now(),
-            'reason':reason,'published':False,'automatic_publication':False})
-        raise ArchiveError(reason) from None
+        reason=error_report(folder,video,exc)
+        raise ArchiveError(reason) from exc
+
 
 
 def prepare_description(video,description,limit=5000):
     folder=locate(video)
     if folder is None:return description
     root=folder.parent.resolve();video=Path(video).resolve()
-    report={'checked_at':now(),'video_file':str(video.relative_to(root)),'published':False,'automatic_publication':False}
+    report={'checked_at':now(),'video_file':video.relative_to(root).as_posix(),'published':False,'automatic_publication':False}
     try:
         if not has_commons(folder):return description
         if not isinstance(description,str):raise ArchiveError('Descrição inválida; revisão necessária')
         records=load(folder/'commons-final-media.json',{}).get('videos',{})
-        record=records.get(str(video.relative_to(root)))
+        record=entry_for(records,video.relative_to(root).as_posix())
         if not record or record['video_sha256']!=digest(video):raise ArchiveError('Vídeo final sem comprovante ou alterado após a montagem')
         for part in record['parts']:
-            if digest(local(root,part['file']))!=part['sha256']:raise ArchiveError('Material de montagem alterado; créditos exigem revisão')
+            if digest(project_file(root,part['file']))!=part['sha256']:raise ArchiveError('Material de montagem alterado; créditos exigem revisão')
         all_items={(k,i['id']):i for k,i in used(folder)}
-        part_names={p['file'] for p in record['parts']}
-        expected={(k,i['id']) for k,i in used(folder) if (i.get('commons_render_use') or {}).get('render_file') in part_names}
+        part_names={path_key(p['file']) for p in record['parts']}
+        expected={(k,i['id']) for k,i in used(folder) if (i.get('commons_render_use') or {}).get('render_file') and path_key(i['commons_render_use']['render_file']) in part_names}
         actual={(b['scene_key'],b['candidate_id']) for b in record['bindings']}
         if expected!=actual:raise ArchiveError('A lista final de imagens diverge dos créditos vinculados')
         if not record['bindings']:
@@ -133,9 +171,9 @@ def prepare_description(video,description,limit=5000):
             item=all_items.get((binding['scene_key'],binding['candidate_id']))
             if not item:raise ArchiveError('Créditos divergem da lista de imagens usada no vídeo')
             proof=item.get('commons_render_use') or {}
-            if proof.get('render_file')!=binding['render_file'] or proof.get('render_sha256')!=binding['render_sha256']:
+            if path_key(proof.get('render_file',''))!=path_key(binding['render_file']) or proof.get('render_sha256')!=binding['render_sha256']:
                 raise ArchiveError('Comprovante de uso da imagem divergente')
-            source=local(folder,item['downloaded_file'])
+            source=project_file(folder,item['downloaded_file'])
             if digest(source)!=item['sha256']:raise ArchiveError('Imagem Commons alterada ou ausente')
             c=ArchiveCandidate(**item['candidate']);decision=classify(c)
             if decision['classification']!='AUTO_APPROVED':raise ArchiveError('Imagem Commons requer revisão: '+decision['reason'])
@@ -158,14 +196,17 @@ def prepare_description(video,description,limit=5000):
                 'Changes: '+'; '.join(mods)])
         block='\n'.join(lines)
         # Idempotent for an unchanged generated block; never delete arbitrary user text.
-        previous=load(folder/'commons-description-block.json',{}).get(str(video.relative_to(root)))
+        previous=entry_for(load(folder/'commons-description-block.json',{}),video.relative_to(root).as_posix())
         base=description
         if previous and base.endswith('\n\n'+previous):base=base[:-(len(previous)+2)]
         if HEADER in base:raise ArchiveError('Bloco de créditos pré-existente precisa ser reconciliado; nenhum texto SEO foi removido')
         combined=base.rstrip()+'\n\n'+block
         if len(combined.encode('utf-8'))>limit:raise ArchiveError('Descrição e créditos excedem o limite do YouTube; revise sem remover atribuições obrigatórias')
         with FileLock(str(folder/'commons-description.lock'),timeout=60):
-            blocks=load(folder/'commons-description-block.json',{});blocks[str(video.relative_to(root))]=block
+            blocks=load(folder/'commons-description-block.json',{})
+            for old_name in list(blocks):
+                if path_key(old_name)==path_key(video.relative_to(root).as_posix()):del blocks[old_name]
+            blocks[video.relative_to(root).as_posix()]=block
             put(folder/'commons-description-block.json',blocks)
         write_bytes_atomic(folder/'historical-image-credits.txt',block.encode('utf-8'))
         write_bytes_atomic(folder/'youtube-description-with-credits.txt',combined.encode('utf-8'))
@@ -173,7 +214,6 @@ def prepare_description(video,description,limit=5000):
             license_checks=[{'record_id':c.record_id,'classification':d['classification'],'checked_at':d['checked_at']} for c,d,_ in chosen])
         put(folder/'commons-publication-review.json',report)
         return combined
-    except (ArchiveError,OSError,KeyError,TypeError) as exc:
-        reason=str(exc) if isinstance(exc,ArchiveError) else 'Arquivo de auditoria/mídia ausente ou inválido; revisão necessária'
-        report.update(status='NEEDS_REVIEW',reason=reason);put(folder/'commons-publication-review.json',report)
-        raise ArchiveError(reason) from None
+    except Exception as exc:
+        reason=error_report(folder,video,exc)
+        raise ArchiveError(reason) from exc

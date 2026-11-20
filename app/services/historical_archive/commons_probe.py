@@ -111,9 +111,12 @@ def run(task_id,query,make_clip=True):
             if make_clip:
                 report['stage']='Gerando clipe de 4 segundos';save(task_id,report)
                 report['clip']=render_clip(source,target/'commons-test-clip.mp4')
+                report['stage']='Vinculando imagem ao clipe';save(task_id,report)
                 service.mark_used(provenance,output=target/'commons-test-clip.mp4',params=VideoParams(video_subject=query,video_aspect='16:9',video_fit_mode='contain',image_motion='static'))
                 from .commons_credits import bind_final,prepare_description
-                bind_final(task_id,target/'commons-test-clip.mp4',[target/'commons-test-clip.mp4'])
+                report['stage']='Conferindo auditoria e gerando créditos';save(task_id,report)
+                binding=bind_final(task_id,target/'commons-test-clip.mp4',[target/'commons-test-clip.mp4'])
+                if not binding or not binding.get('bindings'):raise ArchiveError('Nenhuma imagem foi vinculada ao clipe; confira o relatório de revisão')
                 report['description_with_credits']=prepare_description(target/'commons-test-clip.mp4','Local Wikimedia Commons integration test.')
                 record_id=next(i['candidate']['record_id'] for i in service.snapshot()['scenes']['scene_001']['candidates'] if i['id']==provenance['archive_candidate_id'])
                 for row in report['candidates']:
@@ -121,7 +124,12 @@ def run(task_id,query,make_clip=True):
                 report['modifications']=['RGB normalization','Fit inside 16:9 canvas with padding','Static 4-second test clip']
             report.update(state='completed',stage='Teste concluído')
     except Exception as exc:
-        report.update(state='failed',stage='Teste interrompido',error=str(exc) if isinstance(exc,ArchiveError) else 'Falha no teste local; confira FFmpeg e o diagnóstico salvo')
+        failed_stage=report.get('stage')
+        report.update(state='failed',stage='Teste interrompido',error_stage=failed_stage,error_type=type(exc).__name__,
+            error=str(exc) if isinstance(exc,ArchiveError) else 'Falha no teste ('+type(exc).__name__+'); confira o relatório técnico')
+        if report.get('clip'):
+            from .commons_credits import error_report
+            error_report(target,target/'commons-test-clip.mp4',exc)
     save(task_id,report)
     return report
 
@@ -134,6 +142,47 @@ def submit(query,make_clip=True):
         task_id='commons-test-'+uuid4().hex
         save(task_id,{'task_id':task_id,'query':query,'state':'queued','stage':'Aguardando início','published':False})
         _jobs[task_id]=_pool.submit(run,task_id,query,make_clip)
+    return task_id
+
+
+def repair_credits(task_id):
+    """Reuse the verified saved clip and image. No network or rendering calls."""
+    from .commons_credits import bind_final,prepare_description,digest,project_file,error_report
+    target=folder(task_id);report=read(task_id)
+    try:
+        with FileLock(str(target/'commons-test.lock'),timeout=0):
+            report.update(state='running',stage='Concluindo créditos do clipe salvo');save(task_id,report)
+            clip=artifact(task_id,'commons-test-clip.mp4')
+            if report.get('clip',{}).get('sha256')!=digest(clip):
+                raise ArchiveError('O clipe salvo mudou; não é seguro gerar créditos automaticamente')
+            source=project_file(target,report.get('download',{}).get('file',''))
+            if digest(source)!=report.get('download',{}).get('sha256'):
+                raise ArchiveError('A imagem salva mudou; restaure o arquivo original antes de concluir os créditos')
+            record=bind_final(task_id,clip,[clip])
+            if not record or not record.get('bindings'):raise ArchiveError('Não foi possível vincular uma imagem ao clipe salvo')
+            report['description_with_credits']=prepare_description(clip,'Local Wikimedia Commons integration test.')
+            manifest=json.loads((target/'manifest.json').read_text(encoding='utf-8'))
+            ids={i['candidate']['record_id'] for scene in manifest['scenes'].values() for i in scene.get('candidates',[])
+                if i.get('used') and i['candidate']['provider']=='wikimedia'}
+            for row in report.get('candidates',[]):row['used_in_test']=row['candidate']['record_id'] in ids
+            report.update(state='completed',stage='Créditos concluídos sem novo download ou renderização',
+                credits_checked_at=datetime.now(timezone.utc).isoformat(),published=False)
+            for key in ('error','error_type','error_stage'):report.pop(key,None)
+    except Exception as exc:
+        reason=error_report(target,target/'commons-test-clip.mp4',exc)
+        report.update(state='failed',stage='Não foi possível concluir os créditos',error=reason,
+            error_type=type(exc).__name__,error_stage='repair_credits',published=False)
+    save(task_id,report)
+    return report
+
+
+def submit_repair(task_id):
+    report=read(task_id)
+    if not report.get('clip') or not report.get('download'):raise ArchiveError('Este teste ainda não tem clipe e imagem salvos')
+    with _guard:
+        if any(not future.done() for future in _jobs.values()):raise ArchiveError('Já há um teste Commons em execução')
+        report.update(state='queued',stage='Aguardando conclusão dos créditos');save(task_id,report)
+        _jobs[task_id]=_pool.submit(repair_credits,task_id)
     return task_id
 
 
