@@ -33,7 +33,7 @@ def video_file(value):
     return p.resolve()
 
 
-def metadata(title,description,tags,privacy,made_for_kids):
+def metadata(title,description,tags,privacy,made_for_kids,contains_synthetic_media=None):
     if not isinstance(title,str) or not 1<=len(title.strip())<=100 or any(c in title for c in '<>\x00'):
         raise PublishError('Título do YouTube deve ter de 1 a 100 caracteres, sem < ou >')
     if not isinstance(description,str) or not description.strip() or len(description.encode())>5000 or any(c in description for c in '<>\x00'):
@@ -42,8 +42,12 @@ def metadata(title,description,tags,privacy,made_for_kids):
     if not isinstance(tags,list) or any(not isinstance(t,str) or not t.strip() or any(c in t for c in '<>\x00') for t in tags):raise PublishError('Tags inválidas')
     tags=list(dict.fromkeys(t.strip() for t in tags))
     if sum(len(t)+(2 if ' ' in t else 0) for t in tags)+max(0,len(tags)-1)>500:raise PublishError('Tags excedem o limite de 500 caracteres')
+    disclosure={}
+    if contains_synthetic_media is not None:
+        if not isinstance(contains_synthetic_media,bool):raise PublishError('Declaração de conteúdo sintético precisa ser verdadeira ou falsa')
+        disclosure['containsSyntheticMedia']=contains_synthetic_media
     return {'snippet':{'title':title.strip(),'description':description,'tags':tags,'categoryId':'27'},
-            'status':{'privacyStatus':privacy,'selfDeclaredMadeForKids':made_for_kids}}
+            'status':{'privacyStatus':privacy,'selfDeclaredMadeForKids':made_for_kids,**disclosure}}
 
 
 def save_thumbnail(raw,store=None):
@@ -117,11 +121,11 @@ def remote_error(response,job,store):
     raise PublishError(job['error'])
 
 
-def prepare(channel,video,title,description,tags,thumbnail,privacy='private',made_for_kids=False,*,automatic=False,store=None):
+def prepare(channel,video,title,description,tags,thumbnail,privacy='private',made_for_kids=False,*,automatic=False,store=None,contains_synthetic_media=None):
     store=store or Store();channel_key(channel);account=store.connection(channel)
     if not account.get('connected'):raise PublishError('Conecte o canal primeiro')
     path=video_file(video);thumb=thumbnail_file(thumbnail,store)
-    body=metadata(title,description,tags,privacy,made_for_kids)
+    body=metadata(title,description,tags,privacy,made_for_kids,contains_synthetic_media)
     from app.services.historical_archive.commons_credits import locate,has_commons,prepare_description
     folder=locate(path)
     if automatic and folder is not None and has_commons(folder):raise PublishError('Vídeos com Commons continuam exigindo revisão e envio manual')
@@ -158,6 +162,13 @@ def execute(key,store=None,session_factory=None,verifier=None):
             if job.get('retry_after',0)>time.time():raise PublishError('Aguarde a renovação da cota/espera antes de retomar')
             # Recheck locally before any Google request, even for a saved upload session.
             path=video_file(job['video'])
+            if job.get('source_package'):
+                source=path.parent/'youtube-package.json'
+                if source.is_symlink() or not source.is_file() or digest(source)!=job['source_package']['sha256']:
+                    raise PublishError('O pacote editorial vinculado mudou; revise a postagem')
+
+            if job.get('review_required') and not job.get('review_approved'):
+                raise PublishError('Revise o pacote deste vídeo e confirme a revisão no histórico antes de enviar')
             if digest(path)!=job['video_sha256'] or path.stat().st_size!=job['video_bytes']:raise PublishError('O vídeo mudou após preparar a postagem')
             thumb=thumbnail_file(job['thumbnail'],store)
             if not job.get('qa'):
@@ -170,7 +181,8 @@ def execute(key,store=None,session_factory=None,verifier=None):
             job['metadata']['snippet']['description']=prepare_description(path,job['metadata']['snippet']['description'])
             account=store.connection(job['channel_id'])
             if not account.get('connected') or account.get('youtube_channel_id')!=job['youtube_channel_id']:raise PublishError('Conexão do canal mudou; confira a autorização')
-            if job['automatic'] and not account.get('auto_upload'):raise PublishError('Envio automático foi desativado para este canal')
+            auto_setting='skill_auto_upload' if job.get('origin')=='director_package' else 'auto_upload'
+            if job['automatic'] and not account.get(auto_setting):raise PublishError('Envio automático foi desativado para este canal')
             session_path=store.root/'private'/(key+'.session.json')
             saved=read(session_path,{})
             if not job.get('video_id') and not saved and job.get('upload_started'):
@@ -242,10 +254,14 @@ def execute(key,store=None,session_factory=None,verifier=None):
         raise PublishError(job['error'] if job else 'Falha local na postagem') from None
 
 
-def submit(key,store=None):
+def submit(key,store=None,*,reviewed=False):
     store=store or Store();job=store.job(key)
     if not job:raise PublishError('Postagem não encontrada')
     if job.get('retry_after',0)>time.time():raise PublishError('Aguarde a renovação da cota/espera antes de retomar')
+    if job.get('review_required') and not job.get('review_approved'):
+        if not reviewed:raise PublishError('Confirme a revisão deste pacote antes de enviar')
+        with FileLock(str(store.root/'jobs'/(key+'.worker.lock')),timeout=10):
+            job=store.job(key);job['review_approved']=True;store.save_job(job)
     def run():
         try:execute(key,store)
         except Exception:pass  # Safe error is already persisted; never log OAuth/session data.
@@ -264,7 +280,7 @@ def after_generation(params,videos):
         store=Store();account=store.connection(snapshot['channel_id'])
         if account.get('youtube_channel_id')!=snapshot['youtube_channel_id']:raise PublishError('Canal de destino mudou após o início da geração')
         job=prepare(snapshot['channel_id'],videos[0],params.video_subject,snapshot['description'],snapshot['tags'],
-            snapshot['thumbnail'],snapshot['privacy'],snapshot['made_for_kids'],automatic=True,store=store)
+            snapshot['thumbnail'],snapshot['privacy'],snapshot['made_for_kids'],automatic=True,store=store,contains_synthetic_media=snapshot.get('contains_synthetic_media'))
         submit(job['id'],store)
         return {'job_id':job['id'],'state':job['state']}
     except Exception as exc:

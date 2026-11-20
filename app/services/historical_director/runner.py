@@ -52,6 +52,14 @@ def run(job,repo,item):
 
 
 def check_research_options(request,snapshot):
+    if request.publication.mode!='off':
+        from app.services.youtube_publish.store import Store
+        from app.services.autopilot.recovery import RecoveryBlocked
+        account=Store().connection(snapshot.channel.channel_id)
+        if not account.get('connected') or account.get('youtube_channel_id')!=request.publication.youtube_channel_id:
+            raise RecoveryBlocked('Conecte o canal autorizado deste lote antes de iniciar a pesquisa')
+        if request.publication.mode=='automatic' and not account.get('skill_auto_upload'):
+            raise RecoveryBlocked('Autorize o envio automático da Skill no bloco Postagem automática youtube antes de iniciar o lote')
     if snapshot.channel.research_backend!='openai' and request.thumbnail_reference_enabled and request.thumbnails:
         from app.services.autopilot.recovery import RecoveryBlocked
         raise RecoveryBlocked('A análise visual de referências exige API OpenAI. Desative essa análise para usar pesquisa pública sem chave OpenAI')

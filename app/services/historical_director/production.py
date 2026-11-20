@@ -135,7 +135,14 @@ def deliverables(result,context):
               'scope':'editorial_package','published':False}), 'quality_report.json':encode(result['quality_report'])}
     if result['thumbnail_reference_analysis']['status']=='analyzed':
         data['thumbnail_reference_analysis.json']=encode(result['thumbnail_reference_analysis'])
+    if result.get('thumbnail_image'):
+        data['thumbnail_image_report.json']=encode(result['thumbnail_image'])
+    if result.get('publication_package'):
+        data['youtube-package.json']=encode(result['publication_package']['packet'])
+    if result.get('publication'):
+        data['publication_report.json']=encode(result['publication'])
     if result.get('media'):
+
         data['media_report.json']=encode(result['media'])
     return {name:text.encode('utf-8') for name,text in data.items()}
 
@@ -204,5 +211,25 @@ def run(job,repo,context):
             try:result['metadata']['description']=prepare_description(video,result['metadata']['description'])
             except ValueError as exc:raise RecoveryBlocked(str(exc)) from None
         result['deliverables']=ed.step(controlled,job['task_id'],'director_media_export',lambda:export(job['task_id'],result,context_export),remote=False)
+    if request.production.generate_thumbnail or request.publication.mode!='off':
+        from app.services.historical_director import publication
+        if request.production.generate_thumbnail:
+            thumb=ed.step(controlled,job['task_id'],'director_thumbnail_image',
+                lambda:publication.thumbnail(job['task_id'],snapshot,result,request.production))
+            publication.verify_thumbnail(job['task_id'],thumb)
+            result['thumbnail_image']=thumb
+        if request.publication.mode!='off':
+            short_title=ed.step(controlled,job['task_id'],'director_youtube_title',lambda:publication.youtube_title(snapshot,result),remote=len(result['title'])>100)
+            packet=ed.step(controlled,job['task_id'],'director_publication_package',
+                lambda:publication.make_package(job['task_id'],snapshot,result,request,short_title['title']),remote=False)
+            result['publication_package']=packet
+            posted=ed.step(controlled,job['task_id'],'director_publication_prepare',
+                lambda:publication.prepare(job['task_id'],packet,request),remote=False)
+            result['publication']=posted
+        result['deliverables']=ed.step(controlled,job['task_id'],'director_publication_export',lambda:export(job['task_id'],result,context_export),remote=False)
+        repo.check_director_control(job['task_id'])
+        if request.publication.mode=='automatic' and result['publication']['mode']=='automatic':
+            from app.services.youtube_publish.service import submit
+            submit(result['publication']['job_id'])
     repo.check_director_control(job['task_id'])
     return result

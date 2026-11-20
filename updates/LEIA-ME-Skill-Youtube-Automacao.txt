@@ -1,0 +1,77 @@
+SKILL -> VIDEO -> POSTAGEM AUTOMATICA YOUTUBE
+
+INSTALACAO
+1. Feche o MPT e seu terminal.
+2. Extraia este ZIP na raiz do seu MPT, substituindo os arquivos incluidos.
+   Esta atualizacao inclui o modulo YouTube direto anterior e a nova ligacao com a Skill.
+   Requer o MPT customizado com Historical Documentary Director e Commons que ja usamos.
+3. Execute INSTALAR-YOUTUBE.bat se ainda nao instalou a dependencia OAuth.
+4. Reinicie o MPT. Nao apague storage, configuracoes, projetos ou autorizacoes existentes.
+
+PRIMEIRO TESTE - SEM PUBLICACAO PUBLICA AUTOMATICA
+1. No bloco 05 - Postagem automatica youtube, conecte o canal ao Google.
+   Use projeto proprio no Google Cloud, YouTube Data API v3 e cliente OAuth do tipo
+   Aplicativo para computador. Configure o consentimento e seu usuario de teste.
+   JSON OAuth deve ser carregado no MPT, nao enviado no chat.
+2. Selecione Privado, configure o publico e a declaracao de conteudo sintetico.
+   Deixe a opcao Conteudo feito para criancas desmarcada se esse for o perfil do canal.
+   Marque a declaracao de conteudo alterado/sintetico quando aplicavel ao material.
+   Salve as configuracoes deste canal. A descricao/thumb manuais nao sao usadas pela Skill.
+3. No bloco da Skill, em Producao, escolha video completo e a voz ja configurada no MPT.
+   Essa voz e salva por canal e congelada no lote. Nao precisa escolher novamente por video.
+4. Ative Gerar thumbnail final com DeepInfra a partir do briefing e escolha o conceito
+   1, 2 ou 3. Cada angulo usa seu proprio briefing; a imagem final sera JPG 1280 x 720.
+   Usa a chave DeepInfra existente e pode consumir saldo. Modelos e provedores existentes
+   foram preservados. Nao gera tres imagens: gera uma a partir do conceito selecionado.
+5. Em Pacote da Skill -> Postagem automatica youtube, escolha Preparar postagem completa
+   para revisao no bloco 05. Salve as preferencias da Skill para este canal.
+6. Execute um novo lote. Ao concluir, o historico do bloco 05 recebera a postagem com
+   os dados e a thumbnail desse video, sem copiar e colar os campos.
+7. Revise o video, a thumbnail, os metadados e os creditos. Marque a confirmacao de revisao
+   e clique Enviar / retomar postagem para o primeiro teste privado.
+
+DEPOIS DA VALIDACAO PRIVADA
+- No bloco 05, autorize o envio automatico de videos completos da Skill e salve.
+- Na Skill, escolha Enviar automaticamente depois de concluir o video.
+- Novos lotes usam a autorizacao do canal e seus proprios pacotes por angulo.
+- As configuracoes sao congeladas por lote. Alterar preferencias depois nao muda o destino,
+  a privacidade ou as declaracoes de um lote que ja iniciou.
+- Lotes antigos permanecem com postagem e thumbnail final desativadas por padrao.
+
+O QUE ESTA CONECTADO
+- Titulo proprio do angulo. Se exceder 100 caracteres, gera uma versao curta com o provedor
+  editorial escolhido e revisa a fidelidade a pesquisa. Roteiro e titulo original nao mudam.
+- Descricao com referencias e hashtags; tags, thumbnail e video correspondentes ao angulo.
+- containsSyntheticMedia separado de selfDeclaredMadeForKids na API do YouTube.
+- Comprovantes de hash do video, thumbnail e pacote antes do envio.
+- Historico duravel e upload retomavel, sem criar outro video quando apenas a thumbnail falha.
+- Geracao de thumbnail registrada como etapa: retomada reaproveita a imagem concluida.
+- Respostas ambiguas de geracao/envio exigem revisao; nao autoriza nova cobranca cegamente.
+
+COMMONS E REVISAO
+- Videos com Commons continuam exigindo revisao manual. Mesmo no modo automatico,
+  o pacote fica preparado no historico com envio automatico desativado para esse video.
+- Referencias do roteiro e creditos de imagens permanecem separados.
+- Hashtags sao inseridas antes do bloco gerenciado de creditos, preservando SEO e atribuicoes.
+- Descricao excedendo o limite nao e truncada para esconder creditos: o envio e bloqueado.
+- A verificacao tecnica e a revisao editorial reduzem falhas; ainda valide o primeiro video
+  e a primeira thumbnail reais antes de escolher publicacao publica automatica.
+
+NARRACAO AI33PRO
+Nesta copia do codigo, o adaptador AI33PRO existente e de imagens.
+A voz fixa por canal e o fluxo de narracao do MPT ja sao reaproveitados pela Skill,
+mas a narracao pela API AI33PRO ainda requer um adaptador especifico e validacao.
+Esta atualizacao nao adiciona uma integracao TTS AI33PRO nem troca suas vozes atuais.
+
+LIMITES E ACESSO GOOGLE
+- OAuth externo no modo de teste pode exigir nova autorizacao apos 7 dias.
+- Projetos API nao auditados podem ter os uploads restritos a privados.
+- Cotas do projeto e limites do canal continuam valendo; nenhuma restricao foi contornada.
+- Tokens e URLs privadas ficam em storage/youtube_publish/private. Nao compartilhe essa pasta.
+- Upload-Post, outros provedores e a main foram preservados. Nenhum video foi enviado neste ambiente.
+
+VALIDACAO
+206 testes aprovados: pacotes por angulo, integridade, retomada, publico e conteudo sintetico,
+revisao Commons, identidade de lotes antigos, thumbnail, interface, AUTOPILOT e Upload-Post.
+Chamadas pagas/Google simuladas nos testes. Nenhuma thumbnail paga foi gerada e nenhum
+upload real foi executado. A validacao real depende das chaves e autorizacao no Windows.

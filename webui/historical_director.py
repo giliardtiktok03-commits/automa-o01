@@ -36,7 +36,7 @@ def render(params,repository,*,autostart=True,on_settings=None):
     active=bool(params is not None and params.skills_enabled and SKILL_ID in params.skill_ids)
     with st.expander('Historical Documentary Director · Espaço da Skill',expanded=active,key='director_panel'):
         st.caption('Canal → referências → ângulos → pesquisa → seleção → fila e pacotes. Tudo neste bloco da Skill.')
-        st.caption('Entrega por canal: pacote editorial, narração ou vídeo 16:9. Publicação permanece desligada.')
+        st.caption('Entrega por canal: pacote editorial, narração ou vídeo 16:9. A postagem é opcional e exige autorização própria.')
         if autostart and repository.enabled():worker.ensure_started()
         if active:
             profile=_channel_setup(repository,params)
@@ -161,13 +161,14 @@ def _new_batch(repo,profile,*,autostart=True,on_settings=None):
         new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
     st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo terá sua própria pesquisa e revisão. Modo do canal: '+{'public_login':'pesquisa pública + login ChatGPT/Codex (limites da conta)','public_coarena':'pesquisa pública + Coarena (cota/API Coarena)','openai':'API OpenAI (pode consumir saldo)'}[getattr(profile,'research_backend','openai')]+'.')
     production_options=_production_options(defaults.production,channel_id,login_mode=getattr(profile,'research_backend','openai')!='openai')
+    publication_options=_publication_options(defaults.publication,production_options,channel_id)
     save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
     ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
     submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
     if save or submit:
         try:
             options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,automatic_top_n=int(top_n),
-                thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy,production=production_options)
+                thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy,production=production_options,publication=publication_options)
             if save:
                 repo.save_director_profile(channel_id,options);st.success('Preferências salvas somente para este canal.')
             if submit:
@@ -192,19 +193,22 @@ def _production_options(defaults,channel_id,*,login_mode=False):
         labels={'editorial':'Somente pacote editorial','narration':'Pacote + narração','video':'Pacote + narração + vídeo completo'}
         mode=st.selectbox('Entrega de cada ângulo',modes,index=modes.index(defaults.mode),format_func=labels.get,key='director_output_'+channel_id)
         st.caption('Estas opções ficam salvas por canal e congeladas no lote. Alterações valem para novos lotes. A geração começa depois da aprovação editorial automática.')
-        if mode=='editorial':return defaults.model_copy(update={'mode':mode}).model_dump()
+        thumbnail=st.checkbox('Gerar thumbnail final com DeepInfra a partir do briefing',value=defaults.generate_thumbnail,key='director_generate_thumb_'+channel_id)
+        concept=st.selectbox('Conceito usado para gerar a thumbnail',[1,2,3],index=defaults.thumbnail_concept-1,key='director_thumb_concept_'+channel_id,disabled=not thumbnail)
+        st.caption('Cada ângulo terá sua própria imagem 1280 × 720. A opção usa a chave DeepInfra já configurada e pode consumir saldo. Os três briefings continuam no pacote.')
+        if mode=='editorial':return defaults.model_copy(update={'mode':mode,'generate_thumbnail':thumbnail,'thumbnail_concept':concept}).model_dump()
         voice=st.text_input('Voz da narração (identificador do MPT)',value=defaults.voice_name,key='director_voice_'+channel_id)
         st.caption('Use o identificador de uma voz já configurada no MPT. Exemplo em inglês: en-US-ChristopherNeural-Male. Credenciais continuam nas configurações existentes.')
         rate=st.number_input('Velocidade da voz',min_value=0.5,max_value=2.0,value=float(defaults.voice_rate),step=0.05,key='director_voice_rate_'+channel_id)
         subtitles=st.checkbox('Gerar legendas',value=defaults.subtitle_enabled,key='director_subtitles_'+channel_id)
         provider=st.selectbox('Temporização das legendas',['edge','whisper'],index=['edge','whisper'].index(defaults.subtitle_provider),key='director_subtitle_provider_'+channel_id)
         st.caption('Edge usa a temporização retornada pela voz. Vozes sem essa temporização precisam do Whisper configurado no MPT.')
-        values={**defaults.model_dump(),'mode':mode,'voice_name':voice,'voice_rate':rate,'subtitle_enabled':subtitles,'subtitle_provider':provider}
+        values={**defaults.model_dump(),'mode':mode,'voice_name':voice,'voice_rate':rate,'subtitle_enabled':subtitles,'subtitle_provider':provider,'generate_thumbnail':thumbnail,'thumbnail_concept':concept}
         if mode=='video':
             source=st.selectbox('Origem das cenas',['mixed','deepinfra_image'],index=['mixed','deepinfra_image'].index(defaults.video_source),
                 format_func=lambda x:'Bancos de vídeo + DeepInfra quando necessário' if x=='mixed' else 'Somente imagens DeepInfra',key='director_media_source_'+channel_id)
             commons=st.checkbox('Usar Wikimedia Commons após os bancos, antes da IA',value=defaults.use_wikimedia,key='director_commons_'+channel_id)
-            st.caption('Com Commons: Pexels → Pixabay → Coverr → Commons → IA, usando apenas bancos configurados. Créditos e auditoria são gerados com o vídeo; publicação automática permanece desligada.')
+            st.caption('Com Commons: Pexels → Pixabay → Coverr → Commons → IA, usando apenas bancos configurados. Créditos e auditoria são gerados com o vídeo. Vídeos que usarem Commons exigem revisão manual antes do envio.')
             pexels=st.checkbox('Usar Pexels',value=defaults.use_pexels,key='director_pexels_'+channel_id)
             pixabay=st.checkbox('Usar Pixabay',value=defaults.use_pixabay,key='director_pixabay_'+channel_id)
             models=['stabilityai/sdxl-turbo','black-forest-labs/FLUX-1-schnell','PrunaAI/p-image']
@@ -221,11 +225,36 @@ def _production_options(defaults,channel_id,*,login_mode=False):
             font=st.selectbox('Fonte das legendas',fonts,index=fonts.index(defaults.font_name),key='director_font_'+channel_id)
             music=st.checkbox('Usar música da biblioteca local do MPT',value=defaults.music_enabled,key='director_music_'+channel_id)
             volume=st.number_input('Volume da música',min_value=0.0,max_value=1.0,value=float(defaults.music_volume),step=0.05,key='director_music_volume_'+channel_id)
-            st.caption('Saída 16:9. Zoom e montagem usam o fluxo existente. Esta fase usa música local e não gera efeitos sonoros ou thumbnail final; o pacote inclui os três briefings de thumbnail.')
+            st.caption('Saída 16:9. Zoom e montagem usam o fluxo existente. Esta fase usa música local e não gera efeitos sonoros. A thumbnail final é opcional; o pacote sempre inclui três briefings.')
             values.update(video_source=source,use_wikimedia=commons,use_pexels=pexels,use_pixabay=pixabay,deepinfra_model=model,
                 deepinfra_unlimited=unlimited,image_limit=int(limit),visual_validation=validation,
                 font_name=font,music_enabled=music,music_volume=volume)
         return VideoProduction.model_validate(values).model_dump()
+
+
+def _publication_options(defaults,production,channel_id):
+    from app.services.youtube_publish.store import Store
+    with st.expander('Pacote da Skill → Postagem automática youtube',expanded=defaults.mode!='off'):
+        modes=['off','prepare','automatic']
+        mode=st.selectbox('Destino do pacote produzido',modes,index=modes.index(defaults.mode),
+            format_func=lambda m:{'off':'Somente entregar os arquivos (padrão)',
+                'prepare':'Preparar postagem completa para revisão no bloco 05',
+                'automatic':'Enviar automaticamente depois de concluir o vídeo'}[m],key='director_publication_'+channel_id)
+        cfg=Store().connection(channel_id)
+        if mode=='off':return {'mode':'off'}
+        st.caption('Título, descrição, referências, tags, hashtags e thumbnail virão deste ângulo. Não reutiliza os metadados manuais do canal.')
+        if not cfg.get('connected'):st.warning('Conecte este canal ao Google no bloco 05 antes de iniciar o lote.')
+        else:st.caption('Destino: '+cfg.get('youtube_channel_name','')+' · '+cfg.get('youtube_channel_id',''))
+        if production['mode']!='video' or not production['generate_thumbnail']:
+            st.warning('Selecione vídeo completo e ative a geração da thumbnail final acima.')
+        if mode=='automatic' and not cfg.get('skill_auto_upload'):
+            st.warning('Autorize o envio automático de pacotes da Skill nas preferências deste canal, no bloco 05.')
+        st.caption('Privacidade: '+cfg.get('privacy','private')+' · Conteúdo infantil: '+('sim' if cfg.get('made_for_kids',False) else 'não')+
+            ' · Conteúdo sintético: '+('sim' if cfg.get('contains_synthetic_media',True) else 'não'))
+        st.caption('As opções são congeladas por lote. Commons continua exigindo revisão e envio manual. A primeira validação deve usar a opção Preparar e privacidade privada.')
+        return {'mode':mode,'youtube_channel_id':cfg.get('youtube_channel_id','') if cfg.get('connected') else '',
+            'privacy':cfg.get('privacy','private'),'made_for_kids':cfg.get('made_for_kids',False),
+            'contains_synthetic_media':cfg.get('contains_synthetic_media',True)}
 
 
 def _select(repo,batch,result):
@@ -333,13 +362,23 @@ def _item(repo,item,batch):
     st.write(('**Análise**' if item['role']=='analysis' else f"**{item['position']}. {item['title']}**")+' · '+LABELS.get(item['state'],item['state']))
     stages=repo.stages(item['task_id'])
     current=next((s['name'] for s in stages.values() if s['state']=='running'),None)
-    stage_labels={'director_narration':'Gerando narração e legendas','director_video':'Selecionando cenas e montando vídeo','director_media_export':'Salvando relatório de mídia'}
+    stage_labels={'director_narration':'Gerando narração e legendas','director_video':'Selecionando cenas e montando vídeo','director_media_export':'Salvando relatório de mídia','director_thumbnail_image':'Gerando thumbnail final',
+        'director_youtube_title':'Preparando título para YouTube','director_publication_package':'Vinculando pacote ao vídeo',
+        'director_publication_prepare':'Preparando postagem YouTube','director_publication_export':'Exportando pacote de postagem'}
     if current:st.caption('Etapa: '+stage_labels.get(current,current)+' · '+str(int(time.time()-item['created']))+' s desde o envio')
     if item['error']:st.warning(item['error'])
     if item['role']=='production' and item['state']=='completed' and item['result']:
         result=json.loads(item['result'])
         st.caption('Entregáveis: '+result['deliverables']['directory'])
         _media_result(result,item['task_id'])
+        if result.get('thumbnail_image'):
+            from app.services.historical_director.publication import verify_thumbnail
+            try:
+                image=verify_thumbnail(item['task_id'],result['thumbnail_image'])
+                st.image(str(image),caption='Thumbnail deste ângulo',width=320)
+                st.download_button('Baixar thumbnail final',image.read_bytes(),file_name='youtube-thumbnail.jpg',key='director_thumb_download_'+item['task_id'])
+            except (ValueError,OSError) as exc:st.warning(str(exc))
+        if result.get('publication'):st.info('Postagem vinculada ao pacote. Acompanhe o estado e o link no histórico do bloco 05.')
         try:
             st.download_button('Baixar pacote completo (.zip)',production.archive(result),file_name='historical-'+item['task_id']+'.zip',mime='application/zip',key='director_package_'+item['task_id'])
         except (ValueError,OSError) as exc:st.error(str(exc))
@@ -370,7 +409,7 @@ def _item(repo,item,batch):
 def _media_result(result,task_id):
     media=result.get('media')
     if not media:return
-    st.caption('Mídia salva em storage/tasks/'+task_id+' · publicação desligada')
+    st.caption('Mídia salva em storage/tasks/'+task_id+' · consulte a postagem no bloco 05')
     if not st.checkbox('Mostrar prévia da mídia',key='director_media_preview_'+task_id):return
     from app.services.historical_director import video_production as bridge
     try:
@@ -382,5 +421,5 @@ def _media_result(result,task_id):
             if bridge.receipt(folder,final['file'])!={k:final[k] for k in ('file','bytes','sha256')}:
                 raise ValueError('Vídeo final alterado')
             st.video(str(folder/final['file']))
-            st.caption('Vídeo salvo em '+str(folder/final['file'])+' · decodificação verificada · não publicado')
+            st.caption('Vídeo salvo em '+str(folder/final['file'])+' · decodificação verificada · postagem no bloco 05')
     except (ValueError,OSError) as exc:st.error(str(exc))

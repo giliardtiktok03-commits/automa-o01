@@ -167,7 +167,7 @@ def test_legacy_editorial_batch_identity_survives_new_default_options(setup):
     import hashlib
     repo,snapshot=setup
     request=Request(title='Legacy documentary')
-    old_request=request.model_dump(exclude={'production'})
+    old_request=request.model_dump(exclude={'production','publication'})
     old_snapshot=snapshot.model_dump()
     old_snapshot['channel'].pop('research_backend',None)
     expected=hashlib.sha256(json.dumps({'request':old_request,'snapshot':old_snapshot},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
@@ -176,3 +176,20 @@ def test_legacy_editorial_batch_identity_survives_new_default_options(setup):
     assert repo.create_director_batch(request,snapshot)==(batch,False)
     request.production=VideoProduction(mode='video')
     assert repo.create_director_batch(request,snapshot)[1]
+
+
+def test_new_thumbnail_stage_survives_journal_reopen_without_paid_repeat(setup,monkeypatch):
+    from app.services.historical_director import publication,production
+    from app.services.autopilot import editorial
+    from app.services import deepinfra_image
+    from PIL import Image
+    repo,snapshot,task_id,options=job(setup,monkeypatch)
+    result={'thumbnail_concepts':{'concepts':[{'prompt_en':'Accurate historical scene, 16:9, no text','negative_prompt':'No modern objects'}]*3}}
+    def generate(prompt,directory,**kwargs):
+        image=Path(directory)/'thumbnail.png';Image.new('RGB',(1280,720),'navy').save(image)
+        return image,{'model':'PrunaAI/p-image'}
+    paid=Mock(side_effect=generate);monkeypatch.setattr(deepinfra_image,'generate_thumbnail',paid)
+    first=editorial.step(production.ControlledStages(repo,task_id),task_id,'director_thumbnail_image',lambda:publication.thumbnail(task_id,snapshot,result,options))
+    second=editorial.step(production.ControlledStages(Repository(repo.path),task_id),task_id,'director_thumbnail_image',lambda:publication.thumbnail(task_id,snapshot,result,options))
+    assert first==second and paid.call_count==1
+    publication.verify_thumbnail(task_id,second)

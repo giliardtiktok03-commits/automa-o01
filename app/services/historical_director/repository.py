@@ -60,12 +60,16 @@ class DirectorRepositoryMixin:
         from app.services.historical_director import images
         for ref in request.thumbnails:images.read(ref)
         identity_request=request.model_dump()
+        if request.publication.mode=='off':identity_request.pop('publication',None)
+
         # Preserve pre-video batch identities when the new options are untouched.
         from app.models.historical_director import VideoProduction
         if request.production == VideoProduction():
             identity_request.pop('production')
         elif not request.production.use_wikimedia:
             identity_request['production'].pop('use_wikimedia',None)
+        if 'production' in identity_request and not request.production.generate_thumbnail:
+            for key in ('generate_thumbnail','thumbnail_concept'):identity_request['production'].pop(key,None)
         identity_snapshot=snapshot.model_dump()
         if getattr(snapshot.channel,'research_backend','openai')=='openai':
             identity_snapshot['channel'].pop('research_backend',None)

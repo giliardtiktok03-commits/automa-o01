@@ -39,8 +39,22 @@ class VideoProduction(Record):
     image_limit: int = Field(default=120, ge=0, le=120)
     deepinfra_unlimited: bool = False
     visual_validation: bool = True
+    generate_thumbnail: bool = False
+    thumbnail_concept: int = Field(default=1, ge=1, le=3)
     music_enabled: bool = False
     music_volume: float = Field(default=0.15, ge=0, le=1, allow_inf_nan=False)
+
+
+class PublicationOptions(Record):
+    mode: Literal['off','prepare','automatic'] = 'off'
+    youtube_channel_id: str = Field(default='', max_length=24)
+    privacy: Literal['private','unlisted','public'] = 'private'
+    made_for_kids: StrictBool = False
+    contains_synthetic_media: StrictBool = True
+
+
+class YouTubeTitle(Record):
+    title: str = Field(min_length=1, max_length=100)
 
 
 class Request(Record):
@@ -59,8 +73,9 @@ class Request(Record):
     vision_model: str = Field(default='gpt-4.1-mini', min_length=1, max_length=160)
     max_image_mb: int = Field(default=10, ge=1, le=20)
     on_failure: Literal['pause_queue', 'skip'] = 'pause_queue'
-    publish_mode: Literal['off'] = 'off'  # Fail closed until media/YouTube QA is connected.
+    publish_mode: Literal['off'] = 'off'  # Legacy field; optional publication is controlled by publication.mode.
     production: VideoProduction = Field(default_factory=VideoProduction)
+    publication: PublicationOptions = Field(default_factory=PublicationOptions)
 
     @model_validator(mode='after')
     def controls(self):
@@ -70,6 +85,12 @@ class Request(Record):
             raise ValueError('Autorize explicitamente múltiplos vídeos no modo automático')
         if len({x.image_id for x in self.thumbnails}) != len(self.thumbnails):
             raise ValueError('Thumbnails de referência repetidas')
+        if self.publication.mode!='off':
+            import re
+            if self.production.mode!='video' or not self.production.generate_thumbnail:
+                raise ValueError('Postagem da Skill exige vídeo completo e geração de thumbnail ativados')
+            if not re.fullmatch(r'UC[\w-]{22}',self.publication.youtube_channel_id):
+                raise ValueError('Conecte o canal ao Google no bloco Postagem automática youtube')
         return self
 
 

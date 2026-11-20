@@ -26,13 +26,21 @@ def history(channel):
     for job in jobs:
         with st.expander(job['metadata']['snippet']['title']+' · '+job['state']):
             st.caption('Projeto: '+Path(job['video']).parent.name)
+            if job.get('origin')=='director_package':st.caption('Pacote da Skill · '+job.get('angle_id','')+' · metadados e thumbnail próprios deste vídeo')
             if job.get('url'):st.link_button('Abrir vídeo no YouTube',job['url'])
             if job.get('error'):st.warning(job['error'])
             if job.get('video_bytes') and not job.get('video_id'):st.progress(min(1.,job.get('offset',0)/job['video_bytes']))
             st.download_button('Baixar registro da postagem',data=__import__('json').dumps(job,ensure_ascii=False,indent=2),
                 file_name='youtube-publication.json',key='yt_record_'+job['id'])
-            if job['state']!='completed' and st.button('Enviar / retomar postagem',key='yt_resume_'+job['id']):
-                try:service.submit(job['id'],store);st.info('Postagem encaminhada à fila. O resultado será atualizado aqui.')
+            reviewed=not job.get('review_required') or job.get('review_approved',False)
+            if job['state']!='completed' and job.get('origin')=='director_package':
+                st.json(job['metadata'])
+                thumbnail=Path(job['video']).parent/'youtube-thumbnail.jpg'
+                if thumbnail.is_file():st.image(str(thumbnail),caption='Thumbnail deste vídeo',width=320)
+            if job['state']!='completed' and job.get('review_required'):
+                reviewed=st.checkbox('Revisei este vídeo, a thumbnail, os direitos e os créditos do pacote',value=job.get('review_approved',False),key='yt_review_'+job['id'])
+            if job['state']!='completed' and st.button('Enviar / retomar postagem',key='yt_resume_'+job['id'],disabled=not reviewed):
+                try:service.submit(job['id'],store,reviewed=reviewed);st.info('Postagem encaminhada à fila. O resultado será atualizado aqui.')
                 except PublishError as exc:st.warning(str(exc))
     st.button('Atualizar postagens',key='yt_history_refresh')
 
@@ -75,6 +83,7 @@ def render(params,heading=None):
                 index=['private','unlisted','public'].index(cfg.get('privacy','private')),
                 format_func=lambda k:{'private':'Privado — recomendado para o primeiro teste','unlisted':'Não listado','public':'Público'}[k],key='yt_privacy'+suffix)
             kids=st.checkbox('Conteúdo feito para crianças',value=cfg.get('made_for_kids',False),key='yt_kids'+suffix)
+            synthetic=st.checkbox('Contém conteúdo alterado ou sintético que deve ser declarado ao YouTube',value=cfg.get('contains_synthetic_media',True),key='yt_synthetic'+suffix)
             uploaded=st.file_uploader('Thumbnail JPG ou PNG — até 2 MB',type=['jpg','jpeg','png'],key='yt_thumbnail'+suffix)
             thumb=cfg.get('thumbnail','')
             if uploaded:
@@ -83,26 +92,34 @@ def render(params,heading=None):
             if thumb:st.caption('Thumbnail selecionada e salva para este canal.')
             auto=st.checkbox('Enviar automaticamente após gerar um novo vídeo neste canal',value=cfg.get('auto_upload',False),
                 disabled=not cfg.get('connected'),key='yt_auto'+suffix)
-            st.caption('O título automático será o título da nova geração. Descrição, tags e thumbnail vêm destes campos: revise para cada vídeo. Recuperações antigas e a fila editorial do AUTOPILOT não passam a publicar automaticamente nesta primeira etapa. Vídeos com Commons exigem envio manual após revisão.')
+            skill_auto=st.checkbox('Autorizar envio automático de vídeos completos da Skill',value=cfg.get('skill_auto_upload',False),disabled=not cfg.get('connected'),key='yt_skill_auto'+suffix)
+            st.caption('A Skill precisa estar no modo Enviar automaticamente para usar essa autorização. Cada ângulo carrega seu pacote e thumbnail, sem os campos manuais acima. Commons exige revisão manual.')
+            st.caption('O título automático será o título da nova geração. Descrição, tags e thumbnail vêm destes campos: revise para cada vídeo. Recuperações antigas não passam a publicar automaticamente. A fila da Skill usa uma autorização separada abaixo. Vídeos com Commons exigem envio manual após revisão.')
             if st.button('Salvar configurações de postagem deste canal',key='yt_save'):
                 if auto and (not description.strip() or not thumb):st.warning('Para ativar, informe descrição e thumbnail.')
                 else:
-                    cfg={**cfg,'description':description,'tags':tags,'privacy':privacy,'made_for_kids':kids,'thumbnail':thumb,'auto_upload':auto}
+                    cfg={**cfg,'description':description,'tags':tags,'privacy':privacy,'made_for_kids':kids,'thumbnail':thumb,'auto_upload':auto,'skill_auto_upload':skill_auto,'contains_synthetic_media':synthetic}
                     store.save_connection(channel,cfg);st.success('Configurações salvas para este canal.')
             # Capture persisted settings only: queued projects never change destination on rerun.
             cfg=store.connection(channel)
             if cfg.get('connected') and cfg.get('auto_upload') and all(k in cfg for k in ('description','tags','thumbnail','privacy','made_for_kids')):
                 params.youtube_publication={k:cfg[k] for k in ('youtube_channel_id','description','tags','thumbnail','privacy','made_for_kids','auto_upload')}
                 params.youtube_publication['channel_id']=channel
+                params.youtube_publication['contains_synthetic_media']=cfg.get('contains_synthetic_media',True)
             st.markdown('**3 · Validar e enviar um vídeo já gerado**')
             files=sorted([p for p in Path(utils.task_dir()).glob('*/final-*.mp4') if p.is_file() and not p.is_symlink()],key=lambda p:p.stat().st_mtime,reverse=True)[:100]
             if files:
+                linked=[]
+                for path in files:
+                    packet=path.parent/'youtube-package.json'
+                    if packet.is_file():linked.append(path)
+                if linked:st.info('Há vídeos com pacote da Skill. As postagens preparadas automaticamente aparecem no histórico abaixo; não é necessário copiar seus metadados para estes campos manuais.')
                 selected=st.selectbox('Vídeo final salvo',files,format_func=lambda p:p.parent.name+' / '+p.name,key='yt_video')
                 st.caption('Preparar verifica metadados e créditos, sem enviar. Enviar / retomar, no histórico, inicia o upload com a privacidade escolhida. A verificação técnica completa ocorre antes do envio.')
                 reviewed=st.checkbox('Revisei o vídeo, os direitos de uso e os dados desta postagem',key='yt_reviewed')
                 if st.button('Preparar postagem — sem enviar',key='yt_prepare',disabled=not (cfg.get('connected') and reviewed)):
                     try:
-                        job=service.prepare(channel,selected,title,description,tags,thumb,privacy,kids,store=store)
+                        job=service.prepare(channel,selected,title,description,tags,thumb,privacy,kids,store=store,contains_synthetic_media=synthetic)
                         st.success('Postagem salva: '+job['state']+'. Confira o histórico abaixo para enviar.')
                     except (ValueError,OSError) as exc:st.warning(str(exc))
                 notice=selected.parent/'youtube-publication-status.json'

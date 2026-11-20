@@ -104,5 +104,5 @@ def disconnect(channel,store=None):
     store=store or Store()
     if status(channel).get('state') in {'starting','waiting'}:raise PublishError('Aguarde a conexão em andamento terminar antes de desconectar')
     with FileLock(str(store.secret_path(channel))+'.lock',timeout=30):store.secret_path(channel).unlink(missing_ok=True)
-    old=store.connection(channel);store.save_connection(channel,{**old,'connected':False,'auto_upload':False})
+    old=store.connection(channel);store.save_connection(channel,{**old,'connected':False,'auto_upload':False,'skill_auto_upload':False})
     with _guard:_pending.pop(channel,None)
