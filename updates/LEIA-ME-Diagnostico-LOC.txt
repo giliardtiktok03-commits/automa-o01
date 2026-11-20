@@ -1,0 +1,21 @@
+MPT - Diagnostico de acesso Library of Congress (LOC)
+
+Atualizacao incremental para o MPT com o gerenciador Commons e a correcao de creditos.
+1. Feche o MPT e seu terminal.
+2. Extraia este ZIP na raiz do MPT e substitua os dois arquivos em app/services/historical_archive.
+3. Reinicie o aplicativo. Aguarde ao menos 5 minutos desde o ultimo bloqueio
+   (ou mais, caso o servidor tenha indicado Retry-After). Nao apague os arquivos de espera.
+4. Ative a LOC e execute Testar as 3 APIs LOC - sem video, uma unica vez.
+5. Envie diagnostic-report.json e diagnostic-report.md novos.
+
+O diagnostico diferencia HTTP 403 de HTTP 429, registra sinais de desafio
+antiautomacao e informa se a identificacao padrao do projeto foi enviada.
+Nao salva cookies, tokens, cabecalhos completos nem paginas de bloqueio.
+Nao modifica os limites oficiais, nao imita um navegador, nao troca servicos para
+contornar bloqueios e nao desbloqueia a LOC.
+IIIF e OCR continuam nao testados se a pesquisa inicial falhar.
+
+Validacao: 102 testes aprovados. Uma consulta real neste ambiente recebeu HTTP 403
+com desafio antiautomacao detectado. A identificacao padrao do MPT foi preservada.
+Os outros provedores nao receberam alteracoes especificas.
+Nao gera nem publica videos e nao faz merge na main.

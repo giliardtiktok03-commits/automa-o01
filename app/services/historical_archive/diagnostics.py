@@ -42,6 +42,10 @@ class DiagnosticRecorder:
             if stage=='request':
                 summary['requests']+=1
                 summary['blocked_attempt']=False
+            if service in SERVICES:
+                for key in ('client_identification','user_agent_present','response_format','edge_service',
+                            'retry_after_present','block_kind','challenge_detected','inspected_body_bytes'):
+                    if key in fields:summary[key]=fields[key]
             if stage=='http_response':
                 code=fields.get('http_status')
                 if code is not None:summary['http_statuses']=list(dict.fromkeys(summary['http_statuses']+[code]))
@@ -64,4 +68,8 @@ class DiagnosticRecorder:
                    'HTTP status, semantic service status and rights are separate. Untested does not mean passed.','']
             for name,entry in data['services'].items():
                 lines.append(f"- {name}: {entry['status']} | requests={entry['requests']} | HTTP={entry['http_statuses']} | {entry.get('reason','')}")
+                if name in SERVICES:
+                    details={key:entry[key] for key in ('client_identification','user_agent_present','response_format',
+                             'edge_service','retry_after_present','block_kind','challenge_detected') if key in entry}
+                    if details:lines.append('  Evidence: '+json.dumps(details,ensure_ascii=False))
             write_bytes_atomic(self.folder/'diagnostic-report.md','\n'.join(lines).encode())

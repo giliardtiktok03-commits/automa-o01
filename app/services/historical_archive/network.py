@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 import requests
 from app.utils.atomic_files import write_bytes_atomic
-from .contracts import ArchiveError, ArchiveDisabled
+from .contracts import ArchiveSettings, ArchiveError, ArchiveDisabled
 from .diagnostics import safe_request
 from loguru import logger
 
@@ -44,6 +44,34 @@ def loc_bucket(provider,url):
     if provider=='loc_image' or path.startswith('/image-services/') or path.endswith(('.jpg','.jpeg','.png','.tif','.tiff','.jp2','.webp')):
         return 'loc_image'
     return 'loc_json'
+
+
+def loc_response_evidence(response):
+    """Persist categories only; never raw headers, cookies, body or challenge tokens."""
+    headers={str(k).lower():str(v) for k,v in response.headers.items()}
+    content=headers.get('content-type','').split(';',1)[0].strip().lower()
+    kind={'application/json':'json','text/html':'html','text/plain':'text','image/jpeg':'image',
+          'image/png':'image','application/xml':'xml','text/xml':'xml'}.get(content,'other_or_missing')
+    edge='cloudflare' if headers.get('server','').lower()=='cloudflare' else 'other_or_missing'
+    evidence={'response_format':kind,'edge_service':edge,'retry_after_present':bool(headers.get('retry-after'))}
+    if response.status_code!=403:return evidence
+    challenge=headers.get('cf-mitigated','').lower()=='challenge'
+    inspected=0
+    if kind=='html' and not challenge:
+        try:
+            chunks=[]
+            for chunk in response.iter_content(2048):
+                if not isinstance(chunk,bytes):break
+                take=chunk[:8192-inspected];chunks.append(take);inspected+=len(take)
+                if inspected>=8192:break
+            prefix=b''.join(chunks).lower()
+            challenge=(b'/cdn-cgi/challenge-platform/' in prefix or b'cf-chl-' in prefix or
+                       (edge=='cloudflare' and b'<title>just a moment' in prefix))
+        except requests.RequestException:
+            pass  # The original HTTP 403 remains the evidence, even if its body fails.
+    evidence.update(block_kind='anti_automation_challenge' if challenge else 'access_denied',
+                    challenge_detected=challenge,inspected_body_bytes=inspected)
+    return evidence
 
 
 class Transport:
@@ -146,15 +174,30 @@ class Transport:
                 if not bucket.startswith('loc_'):
                     interval=max(self.settings.request_interval_seconds,getattr(self.settings,provider+'_interval_seconds',0))
                     _NEXT[bucket]=time.monotonic()+interval
-                self.record(bucket,'request','started',method='GET',request=safe_request(url,params))
+                request_details={}
+                if bucket.startswith('loc_'):
+                    agent={'User-Agent':self.settings.user_agent,**(headers or {})}.get('User-Agent','')
+                    request_details={'client_identification':'project_default' if agent==ArchiveSettings.model_fields['user_agent'].default else 'custom',
+                                     'user_agent_present':bool(agent)}
+                self.record(bucket,'request','started',method='GET',request=safe_request(url,params),**request_details)
                 started=time.monotonic()
                 try:
                     with requests.get(url,params=params,headers={'User-Agent':self.settings.user_agent,**(headers or {})},timeout=(5,self.settings.request_timeout_seconds),stream=True,allow_redirects=False) as response:
-                        self.record(bucket,'http_response','received',http_status=response.status_code,elapsed_seconds=round(time.monotonic()-started,3))
+                        evidence=loc_response_evidence(response) if bucket.startswith('loc_') else {}
+                        self.record(bucket,'http_response','received',http_status=response.status_code,elapsed_seconds=round(time.monotonic()-started,3),**evidence)
                         if response.status_code==429 or (bucket.startswith('loc_') and response.status_code==403) or (response.status_code==503 and response.headers.get('Retry-After')):
                             self._record_cooldown(bucket,response)
-                            self.record(bucket,'response_block','blocked',http_status=response.status_code,reason='Bloqueio/rate limit; Retry-After respeitado')
-                            raise ArchiveError('Rate limit/bloqueio temporário; Retry-After preservado, sem insistência nem troca de serviço LOC')
+                            if bucket.startswith('loc_'):
+                                if response.status_code==403:
+                                    reason=('HTTP 403: proteção antiautomação detectada' if evidence.get('challenge_detected') else
+                                            'HTTP 403: acesso negado; causa não confirmada')
+                                    reason+='; bloqueio não comprova excesso de requisições nem duração temporária'
+                                elif response.status_code==429:reason='HTTP 429: limite de requisições informado pelo serviço'
+                                else:reason='HTTP 503: serviço indisponível com Retry-After'
+                                reason+='; bloqueio: espera local e Retry-After respeitados, sem novas tentativas ou troca de serviço LOC'
+                            else:reason='Bloqueio/rate limit; Retry-After respeitado'
+                            self.record(bucket,'response_block','blocked',http_status=response.status_code,reason=reason,**evidence)
+                            raise ArchiveError(reason)
                         if response.status_code in (500,502,503,504) and attempt<self.settings.max_retries:
                             self.pause(2**attempt+random.random())
                             continue
