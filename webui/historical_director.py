@@ -39,8 +39,12 @@ def render(params,repository,*,autostart=True,on_settings=None):
         st.caption('Entrega por canal: pacote editorial, narração ou vídeo 16:9. A postagem é opcional e exige autorização própria.')
         if autostart and repository.enabled():worker.ensure_started()
         if active:
-            profile=_channel_setup(repository,params)
-            if profile is not None:_new_batch(repository,profile,autostart=autostart,on_settings=on_settings)
+            with st.container(key='director_configuration_grid'):
+                columns=st.columns(4)
+            names=['channel','references','editorial','production']
+            panels=[column.container(border=True,key='director_'+name+'_panel') for column,name in zip(columns,names)]
+            with panels[0]:profile=_channel_setup(repository,params)
+            if profile is not None:_new_batch(repository,profile,autostart=autostart,on_settings=on_settings,panels=panels)
         else:
             st.info('Para criar novos pacotes, ative as Skills editoriais e selecione Historical Documentary Director acima. Os lotes já enviados continuam disponíveis abaixo.')
         _batches(repository,autostart)
@@ -111,77 +115,81 @@ def _channel_setup(repo,params):
     return profile
 
 
-def _new_batch(repo,profile,*,autostart=True,on_settings=None):
+def _new_batch(repo,profile,*,autostart=True,on_settings=None,panels=None):
     channel_id=profile.channel_id
     saved=repo.director_profile(channel_id)
     defaults=Request(title='Defaults',**saved)
-    section(2,'Referências')
-    title=st.text_input('Título de referência',max_chars=300,key='director_reference_title_'+channel_id)
-    source_mode=st.radio('Roteiro de referência (opcional)',['Colar texto','Enviar arquivo'],horizontal=True,key='director_reference_mode_'+channel_id)
-    pasted=st.text_area('Colar roteiro de referência',max_chars=120000,height=160,key='director_reference_text_'+channel_id) if source_mode=='Colar texto' else ''
-    script_file=st.file_uploader('Arquivo de referência TXT ou MD (UTF-8)',type=['txt','md'],max_upload_size=1,key='director_reference_file_'+channel_id) if source_mode=='Enviar arquivo' else None
-    visual=st.checkbox('Analisar thumbnails de referência',value=defaults.thumbnail_reference_enabled,key='director_visual_'+channel_id)
-    with st.expander('Limite dos arquivos de referência'):
-        max_mb=st.number_input('Limite por thumbnail (MB)',min_value=1,max_value=20,value=defaults.max_image_mb,key='director_image_mb_'+channel_id)
-    uploaded=st.file_uploader('Até 3 thumbnails de referência (JPG, PNG, WebP)',type=['jpg','jpeg','png','webp'],accept_multiple_files=True,max_upload_size=int(max_mb),key='director_thumbnails_'+channel_id)
-    st.caption('O roteiro serve para análise, não como prova factual. Use o X para remover arquivos. Com análise visual desligada, as imagens não são enviadas ao modelo.')
-    if len(uploaded or [])>3:st.error('Envie no máximo 3 thumbnails de referência')
-    elif uploaded:
-        for f in uploaded:
+    if panels is None:panels=[st.container() for _ in range(4)]
+    with panels[1]:
+        section(2,'Referências')
+        title=st.text_input('Título de referência',max_chars=300,key='director_reference_title_'+channel_id)
+        source_mode=st.radio('Roteiro de referência (opcional)',['Colar texto','Enviar arquivo'],horizontal=True,key='director_reference_mode_'+channel_id)
+        pasted=st.text_area('Colar roteiro de referência',max_chars=120000,height=160,key='director_reference_text_'+channel_id) if source_mode=='Colar texto' else ''
+        script_file=st.file_uploader('Arquivo de referência TXT ou MD (UTF-8)',type=['txt','md'],max_upload_size=1,key='director_reference_file_'+channel_id) if source_mode=='Enviar arquivo' else None
+        visual=st.checkbox('Analisar thumbnails de referência',value=defaults.thumbnail_reference_enabled,key='director_visual_'+channel_id)
+        with st.expander('Limite dos arquivos de referência'):
+            max_mb=st.number_input('Limite por thumbnail (MB)',min_value=1,max_value=20,value=defaults.max_image_mb,key='director_image_mb_'+channel_id)
+        uploaded=st.file_uploader('Até 3 thumbnails de referência (JPG, PNG, WebP)',type=['jpg','jpeg','png','webp'],accept_multiple_files=True,max_upload_size=int(max_mb),key='director_thumbnails_'+channel_id)
+        st.caption('O roteiro serve para análise, não como prova factual. Use o X para remover arquivos. Com análise visual desligada, as imagens não são enviadas ao modelo.')
+        if len(uploaded or [])>3:st.error('Envie no máximo 3 thumbnails de referência')
+        elif uploaded:
+            for f in uploaded:
+                try:
+                    ref=images.store(f.getvalue(),max_mb=int(max_mb));st.image(images.read(ref),width=220,caption=f.name)
+                except ValueError as exc:st.error(str(exc))
+    with panels[2]:
+        section(3,'Ângulos e direção visual')
+        angle_enabled=st.checkbox('Angle Intelligence — propor novos ângulos',value=defaults.angle_enabled,key='director_angle_enabled_'+channel_id)
+        mode='manual';multiple=False;top_n=1
+        if angle_enabled:
+            mode=st.radio('Seleção de ângulos',['manual','automatic'],index=['manual','automatic'].index(defaults.selection_mode),horizontal=True,
+                format_func=lambda x:'Manual' if x=='manual' else 'Automática',key='director_mode_'+channel_id)
+            if mode=='automatic':
+                multiple=st.checkbox('Autorizar múltiplos vídeos no modo automático',value=defaults.automatic_multiple,key='director_multiple_'+channel_id)
+                if multiple:top_n=st.number_input('Quantidade no automático',min_value=1,max_value=5,value=defaults.automatic_top_n,key='director_top_n_'+channel_id)
+        st.caption('Sem mudança de ângulo: mantém o título original e cria um pacote. No automático: um pacote por padrão; múltiplos exigem autorização explícita.')
+        with st.expander('Perfil editorial e visual do canal'):
+            central=st.text_area('Ângulo central do canal',value=defaults.central_angle,max_chars=1000,key='director_central_'+channel_id)
+            identity=st.text_area('Identidade visual do canal',value=defaults.visual_identity,max_chars=1500,key='director_identity_'+channel_id)
+        section(4,'Pesquisa e revisão')
+        if on_settings is not None:
+            st.button('Configurar acesso aos provedores',key='director_provider_access',on_click=on_settings,args=('llm',))
+        with st.expander('Avançado · análise visual, pesos e tratamento de falhas'):
+            vision_model=st.text_input('Modelo OpenAI com visão para referências',value=defaults.vision_model,key='director_vision_model_'+channel_id)
+            st.caption('Pesos editoriais: devem somar 100. Não representam probabilidade de viralização.')
+            weights={}
+            for name,label in [('curiosity','Curiosidade'),('originality','Originalidade'),('thumbnail','Thumbnail'),('retention','Retenção'),('sources','Fontes verificáveis')]:
+                weights[name]=st.number_input(label,min_value=0,max_value=100,value=getattr(defaults.weights,name),key='director_weight_'+channel_id+'_'+name)
+            policy=st.selectbox('Quando um item falhar',['pause_queue','skip'],index=['pause_queue','skip'].index(defaults.on_failure),
+                format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
+            new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
+        st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo terá sua própria pesquisa e revisão. Modo do canal: '+{'public_login':'pesquisa pública + login ChatGPT/Codex (limites da conta)','public_coarena':'pesquisa pública + Coarena (cota/API Coarena)','openai':'API OpenAI (pode consumir saldo)'}[getattr(profile,'research_backend','openai')]+'.')
+    with panels[3]:
+        section(5,'Produção do vídeo e thumbnail')
+        production_options=_production_options(defaults.production,channel_id,login_mode=getattr(profile,'research_backend','openai')!='openai')
+        section(6,'Postagem YouTube')
+        publication_options=_publication_options(defaults.publication,production_options,channel_id)
+        save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
+        ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
+        submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
+        if save or submit:
             try:
-                ref=images.store(f.getvalue(),max_mb=int(max_mb));st.image(images.read(ref),width=220,caption=f.name)
-            except ValueError as exc:st.error(str(exc))
-    section(3,'Ângulos e direção visual')
-    angle_enabled=st.checkbox('Angle Intelligence — propor novos ângulos',value=defaults.angle_enabled,key='director_angle_enabled_'+channel_id)
-    mode='manual';multiple=False;top_n=1
-    if angle_enabled:
-        mode=st.radio('Seleção de ângulos',['manual','automatic'],index=['manual','automatic'].index(defaults.selection_mode),horizontal=True,
-            format_func=lambda x:'Manual' if x=='manual' else 'Automática',key='director_mode_'+channel_id)
-        if mode=='automatic':
-            multiple=st.checkbox('Autorizar múltiplos vídeos no modo automático',value=defaults.automatic_multiple,key='director_multiple_'+channel_id)
-            if multiple:top_n=st.number_input('Quantidade no automático',min_value=1,max_value=5,value=defaults.automatic_top_n,key='director_top_n_'+channel_id)
-    st.caption('Sem mudança de ângulo: mantém o título original e cria um pacote. No automático: um pacote por padrão; múltiplos exigem autorização explícita.')
-    with st.expander('Perfil editorial e visual do canal'):
-        central=st.text_area('Ângulo central do canal',value=defaults.central_angle,max_chars=1000,key='director_central_'+channel_id)
-        identity=st.text_area('Identidade visual do canal',value=defaults.visual_identity,max_chars=1500,key='director_identity_'+channel_id)
-    section(4,'Pesquisa e revisão')
-    if on_settings is not None:
-        st.button('Configurar acesso aos provedores',key='director_provider_access',on_click=on_settings,args=('llm',))
-    with st.expander('Avançado · análise visual, pesos e tratamento de falhas'):
-        vision_model=st.text_input('Modelo OpenAI com visão para referências',value=defaults.vision_model,key='director_vision_model_'+channel_id)
-        st.caption('Pesos editoriais: devem somar 100. Não representam probabilidade de viralização.')
-        weights={}
-        for name,label in [('curiosity','Curiosidade'),('originality','Originalidade'),('thumbnail','Thumbnail'),('retention','Retenção'),('sources','Fontes verificáveis')]:
-            weights[name]=st.number_input(label,min_value=0,max_value=100,value=getattr(defaults.weights,name),key='director_weight_'+channel_id+'_'+name)
-        policy=st.selectbox('Quando um item falhar',['pause_queue','skip'],index=['pause_queue','skip'].index(defaults.on_failure),
-            format_func=lambda x:'Pausar fila de documentários (padrão)' if x=='pause_queue' else 'Registrar falha e pular para o próximo',key='director_failure_'+channel_id)
-        new_version=st.checkbox('Criar uma nova versão explícita do lote, mesmo com referências iguais',key='director_new_version_'+channel_id)
-    st.caption('A pesquisa busca fontes e confere os trechos. Cada ângulo terá sua própria pesquisa e revisão. Modo do canal: '+{'public_login':'pesquisa pública + login ChatGPT/Codex (limites da conta)','public_coarena':'pesquisa pública + Coarena (cota/API Coarena)','openai':'API OpenAI (pode consumir saldo)'}[getattr(profile,'research_backend','openai')]+'.')
-    section(5,'Produção do vídeo e thumbnail')
-    production_options=_production_options(defaults.production,channel_id,login_mode=getattr(profile,'research_backend','openai')!='openai')
-    section(6,'Postagem YouTube')
-    publication_options=_publication_options(defaults.publication,production_options,channel_id)
-    save=st.button('Salvar preferências da Skill para este canal',key='director_save_profile_'+channel_id)
-    ready=SKILL_ID in profile.skill_ids and profile.auto_editorial
-    submit=st.button('Pesquisar referência e analisar ângulos',type='primary',disabled=not ready,key='director_submit_'+channel_id)
-    if save or submit:
-        try:
-            options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,automatic_top_n=int(top_n),
-                thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy,production=production_options,publication=publication_options)
-            if save:
-                repo.save_director_profile(channel_id,options);st.success('Preferências salvas somente para este canal.')
-            if submit:
-                request=Request(title=title,reference_script=pasted if source_mode=='Colar texto' else reference_text(script_file),
-                    thumbnails=images.upload([f.getvalue() for f in uploaded or []],max_mb=int(max_mb)),**options)
-                snapshot=editorial.prepare(profile)
-                from app.services.historical_director import runner as director_runner
-                if hasattr(director_runner,'check_research_options'):director_runner.check_research_options(request,snapshot)
-                batch,created=repo.create_director_batch(request,snapshot,new_version=new_version)
-                repo.set_enabled(True)
-                st.session_state['autopilot_worker_pending_enabled']=True
-                if autostart:worker.ensure_started()
-                st.success('Pesquisa enviada para execução. Acompanhe a seleção e a fila abaixo.' if created else 'Este lote já existe; acompanhe abaixo. Nenhuma análise duplicada foi criada.')
-        except (ValueError,OSError) as exc:st.error(str(exc))
+                options=dict(angle_enabled=angle_enabled,selection_mode=mode,automatic_multiple=multiple,automatic_top_n=int(top_n),
+                    thumbnail_reference_enabled=visual,central_angle=central,visual_identity=identity,weights=weights,vision_model=vision_model,max_image_mb=int(max_mb),on_failure=policy,production=production_options,publication=publication_options)
+                if save:
+                    repo.save_director_profile(channel_id,options);st.success('Preferências salvas somente para este canal.')
+                if submit:
+                    request=Request(title=title,reference_script=pasted if source_mode=='Colar texto' else reference_text(script_file),
+                        thumbnails=images.upload([f.getvalue() for f in uploaded or []],max_mb=int(max_mb)),**options)
+                    snapshot=editorial.prepare(profile)
+                    from app.services.historical_director import runner as director_runner
+                    if hasattr(director_runner,'check_research_options'):director_runner.check_research_options(request,snapshot)
+                    batch,created=repo.create_director_batch(request,snapshot,new_version=new_version)
+                    repo.set_enabled(True)
+                    st.session_state['autopilot_worker_pending_enabled']=True
+                    if autostart:worker.ensure_started()
+                    st.success('Pesquisa enviada para execução. Acompanhe a seleção e a fila abaixo.' if created else 'Este lote já existe; acompanhe abaixo. Nenhuma análise duplicada foi criada.')
+            except (ValueError,OSError) as exc:st.error(str(exc))
 
 
 def _production_options(defaults,channel_id,*,login_mode=False):
@@ -306,55 +314,61 @@ def _select(repo,batch,result):
 def _batches(repo,autostart=True):
     from webui.autopilot import render_worker_control
     batches=repo.director_batches(limit=10)
-    section(7,'Ângulos e seleção')
-    pending_selection=[batch for batch in batches if batch['state']=='selection' and batch['analysis']]
-    if not pending_selection:st.caption('As propostas aparecerão aqui após a pesquisa e a revisão. No modo automático, a seleção é enviada à fila diretamente.')
-    for batch in pending_selection:
-        request=Request.model_validate_json(batch['request'])
-        with st.expander('Selecionar ângulos · '+request.title,expanded=True,key='director_selection_'+batch['batch_id']):
-            _select(repo,batch,json.loads(batch['analysis']))
-    section(8,'Fila e pacotes')
-    render_worker_control(repo,autostart=autostart)
-    if not batches:st.caption('Nenhum lote enviado. Comece pelas referências e pelo botão de pesquisa acima.')
-    for batch in batches:
-        request=Request.model_validate_json(batch['request'])
-        with st.expander(request.title+' · '+LABELS.get(batch['state'],batch['state']),key='director_batch_'+batch['batch_id']):
-            st.caption('Lote '+batch['batch_id']+' · '+json.loads(batch['snapshot'])['channel']['name'])
-            if batch['error']:st.warning(batch['error'])
-            if batch['analysis']:
-                result=json.loads(batch['analysis'])
-                st.download_button('Exportar análise e IDs (.json)',json.dumps({'batch':batch,'analysis':result},ensure_ascii=False,indent=2),
-                    file_name='historical-analysis-'+batch['batch_id']+'.json',mime='application/json',key='director_analysis_download_'+batch['batch_id'])
-            items=repo.director_items(batch['batch_id'])
-            production_items=[i for i in items if i['role']=='production']
-            completed=sum(i['state']=='completed' for i in production_items)
-            st.caption(f'Pacotes concluídos: {completed}/{len(production_items)} · produção de um item por vez')
-            if batch['state']!='completed':
-                if st.button('Iniciar fila / Retomar',key='director_resume_'+batch['batch_id']):
-                    try:
-                        repo.resume_director(batch['batch_id']);repo.set_enabled(True)
-                        st.session_state['autopilot_worker_pending_enabled']=True
-                        if autostart:worker.ensure_started()
-                        st.rerun()
-                    except ValueError as exc:st.error(str(exc))
-                if st.button('Pausar após a etapa atual',key='director_pause_'+batch['batch_id']):
-                    repo.pause_director(batch['batch_id']);st.rerun()
-                if st.button('Encerrar lote / Cancelar pendentes',key='director_cancel_batch_'+batch['batch_id']):
-                    repo.cancel_director_batch(batch['batch_id']);st.rerun()
-            pending=[i for i in production_items if i['state']=='queued']
-            if len(pending)>1:
-                labels={i['task_id']:i['title'] for i in pending};key='director_pending_order_'+batch['batch_id']
-                prior=st.session_state.get(key,list(labels))
-                st.session_state[key]=[x for x in prior if x in labels]+[x for x in labels if x not in prior]
-                order=st.multiselect('Ordem dos itens pendentes',list(labels),format_func=lambda x:labels[x],key=key)
-                if st.button('Salvar ordem dos pendentes',key='director_reorder_'+batch['batch_id']):
-                    try:repo.reorder_director(batch['batch_id'],order);st.rerun()
-                    except ValueError as exc:st.error(str(exc))
-            for item in items:
-                _item(repo,item,batch)
+    with st.container(key='director_results_grid'):
+        selection_col,queue_col=st.columns(2)
+    selection_panel=selection_col.container(border=True)
+    queue_panel=queue_col.container(border=True)
+    with selection_panel:
+        section(7,'Ângulos e seleção')
+        pending_selection=[batch for batch in batches if batch['state']=='selection' and batch['analysis']]
+        if not pending_selection:st.caption('As propostas aparecerão aqui após a pesquisa e a revisão. No modo automático, a seleção é enviada à fila diretamente.')
+        for batch in pending_selection:
+            request=Request.model_validate_json(batch['request'])
+            with st.expander('Selecionar ângulos · '+request.title,expanded=True,key='director_selection_'+batch['batch_id']):
+                _select(repo,batch,json.loads(batch['analysis']))
+    with queue_panel:
+        section(8,'Fila e pacotes')
+        render_worker_control(repo,autostart=autostart)
+        if not batches:st.caption('Nenhum lote enviado. Comece pelas referências e pelo botão de pesquisa acima.')
+        for batch in batches:
+            request=Request.model_validate_json(batch['request'])
+            with st.expander(request.title+' · '+LABELS.get(batch['state'],batch['state']),key='director_batch_'+batch['batch_id']):
+                st.caption('Lote '+batch['batch_id']+' · '+json.loads(batch['snapshot'])['channel']['name'])
+                if batch['error']:st.warning(batch['error'])
+                if batch['analysis']:
+                    result=json.loads(batch['analysis'])
+                    st.download_button('Exportar análise e IDs (.json)',json.dumps({'batch':batch,'analysis':result},ensure_ascii=False,indent=2),
+                        file_name='historical-analysis-'+batch['batch_id']+'.json',mime='application/json',key='director_analysis_download_'+batch['batch_id'])
+                items=repo.director_items(batch['batch_id'])
+                production_items=[i for i in items if i['role']=='production']
+                completed=sum(i['state']=='completed' for i in production_items)
+                st.caption(f'Pacotes concluídos: {completed}/{len(production_items)} · produção de um item por vez')
+                if batch['state']!='completed':
+                    if st.button('Iniciar fila / Retomar',key='director_resume_'+batch['batch_id']):
+                        try:
+                            repo.resume_director(batch['batch_id']);repo.set_enabled(True)
+                            st.session_state['autopilot_worker_pending_enabled']=True
+                            if autostart:worker.ensure_started()
+                            st.rerun()
+                        except ValueError as exc:st.error(str(exc))
+                    if st.button('Pausar após a etapa atual',key='director_pause_'+batch['batch_id']):
+                        repo.pause_director(batch['batch_id']);st.rerun()
+                    if st.button('Encerrar lote / Cancelar pendentes',key='director_cancel_batch_'+batch['batch_id']):
+                        repo.cancel_director_batch(batch['batch_id']);st.rerun()
+                pending=[i for i in production_items if i['state']=='queued']
+                if len(pending)>1:
+                    labels={i['task_id']:i['title'] for i in pending};key='director_pending_order_'+batch['batch_id']
+                    prior=st.session_state.get(key,list(labels))
+                    st.session_state[key]=[x for x in prior if x in labels]+[x for x in labels if x not in prior]
+                    order=st.multiselect('Ordem dos itens pendentes',list(labels),format_func=lambda x:labels[x],key=key)
+                    if st.button('Salvar ordem dos pendentes',key='director_reorder_'+batch['batch_id']):
+                        try:repo.reorder_director(batch['batch_id'],order);st.rerun()
+                        except ValueError as exc:st.error(str(exc))
+                for item in items:
+                    _item(repo,item,batch)
 
-    from webui.autopilot import render_editorial_results
-    render_editorial_results(repo,director=True)
+        from webui.autopilot import render_editorial_results
+        render_editorial_results(repo,director=True)
 
 
 def _item(repo,item,batch):

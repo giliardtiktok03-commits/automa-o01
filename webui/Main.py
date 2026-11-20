@@ -9918,12 +9918,10 @@ def _render_application():
     skills_panel = st.container(key="skills_workspace")
     skill_worker_control = render_channel_skills(skills_panel, params, _set_runtime_config, _stage_heading, on_settings=_open_settings_dialog)
 
-    # One vertical reading order on every screen; widget keys/settings are unchanged.
+    # Tall work panels side by side on desktop, responsive on narrow screens.
     with st.container(key="main_settings_grid"):
-        left_panel = st.container(key="script_workspace")
-        middle_panel = st.container(key="video_workspace")
-        audio_panel = st.container(key="audio_workspace")
-        right_panel = st.container(key="subtitles_workspace")
+        panel = st.columns(4)
+    left_panel, middle_panel, audio_panel, right_panel = panel
 
     _render_script_settings(left_panel, params)
 

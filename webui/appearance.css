@@ -114,21 +114,9 @@ button:disabled {color:var(--mpt-muted) !important;}
 /* Vertical workspace: presentation only, shared by light/dark/system themes. */
 [data-testid="stMainBlockContainer"] {
     --mpt-section-accent: var(--mpt-accent);
-    max-width: 1280px !important;
+    max-width: none !important;
     margin-inline: auto;
     padding-inline: clamp(0.8rem, 3vw, 2rem) !important;
-}
-/* Stack form groups and action columns; native radio/segmented options remain controls. */
-html body :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stHorizontalBlock"]:not(.st-key-top_bar *) {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 0.9rem !important;
-}
-html body :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stHorizontalBlock"]:not(.st-key-top_bar *) > [data-testid="stColumn"] {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    flex: 1 1 auto !important;
 }
 .st-key-skills_workspace {--mpt-section-accent:#be185d;}
 .st-key-stage_script {--mpt-section-accent:#7c3aed;}
@@ -150,14 +138,14 @@ html body :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stH
     margin-bottom:0.8rem;
     border-left-width:8px;
     border-radius:10px;
-    font-size:clamp(1.4rem,2vw,1.85rem);
+    font-size:clamp(1.2rem,1.4vw,1.6rem);
     line-height:1.3;
     font-weight:800;
     background:color-mix(in srgb,var(--mpt-stage-accent) 18%,var(--mpt-panel));
 }
 .mpt-stage-heading--sub {
     margin-top:0.7rem;
-    font-size:clamp(1.15rem,1.6vw,1.4rem);
+    font-size:clamp(1.05rem,1.15vw,1.3rem);
     font-weight:750;
     border-left-width:6px;
 }
@@ -234,3 +222,42 @@ html body :is([data-testid="stMain"],[data-testid="stDialog"]) [data-testid="stH
 }
 
 :root {--mpt-section-accent:var(--mpt-accent);}
+
+/* Work panels are columns on desktop; only the contents inside each panel flow vertically. */
+.st-key-director_channel_panel {--mpt-section-accent:#2563eb;}
+.st-key-director_references_panel {--mpt-section-accent:#7c3aed;}
+.st-key-director_editorial_panel {--mpt-section-accent:#d97706;}
+.st-key-director_production_panel {--mpt-section-accent:#059669;}
+.st-key-yt_connection_panel {--mpt-section-accent:#2563eb;}
+.st-key-yt_metadata_panel {--mpt-section-accent:#7c3aed;}
+.st-key-yt_video_panel {--mpt-section-accent:#059669;}
+.st-key-yt_history_panel {--mpt-section-accent:#dc2626;}
+:is(.st-key-director_channel_panel,.st-key-director_references_panel,.st-key-director_editorial_panel,
+    .st-key-director_production_panel,.st-key-yt_connection_panel,.st-key-yt_metadata_panel,
+    .st-key-yt_video_panel,.st-key-yt_history_panel) {
+    border-color:color-mix(in srgb,var(--mpt-section-accent) 45%,var(--mpt-border)) !important;
+}
+@media (min-width:768px) and (max-width:1199px) {
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid)
+    > div[data-testid="stHorizontalBlock"],
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid)
+    > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] {flex-wrap:wrap !important;}
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid)
+    > div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid)
+    > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        flex:1 1 calc(50% - 1rem) !important;min-width:calc(50% - 1rem) !important;width:calc(50% - 1rem) !important;
+    }
+}
+@media (max-width:767px) {
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid,.st-key-director_results_grid)
+    > div[data-testid="stHorizontalBlock"],
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid,.st-key-director_results_grid)
+    > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] {flex-direction:column !important;}
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid,.st-key-director_results_grid)
+    > div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    :is(.st-key-main_settings_grid,.st-key-director_configuration_grid,.st-key-youtube_configuration_grid,.st-key-director_results_grid)
+    > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        flex:1 1 auto !important;min-width:0 !important;width:100% !important;max-width:100% !important;
+    }
+}

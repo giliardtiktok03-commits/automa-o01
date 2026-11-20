@@ -1,0 +1,36 @@
+MPT - PAINEIS VERTICAIS LADO A LADO
+
+Esta atualizacao corrige a interpretacao anterior: os paineis ficam lado a lado
+no desktop, como na imagem de referencia. O conteudo dentro de cada painel segue
+na vertical. Substitui a atualizacao de coluna unica.
+
+INSTALACAO
+1. Feche o MPT e o terminal.
+2. Extraia este ZIP na pasta principal do MPT e substitua os quatro arquivos webui.
+3. Reinicie o MPT. Nao precisa instalar dependencias nem apagar configuracoes.
+Funciona com a versao da Skill + YouTube instalada, com ou sem o ultimo ZIP visual.
+
+ORGANIZACAO
+Skill - primeira linha:
+[Canal] [Referencias] [Angulos e pesquisa] [Producao e postagem]
+Resultados abaixo:
+[Selecao de angulos] [Fila e pacotes]
+
+Editor principal:
+[Roteiro] [Video] [Audio] [Legendas]
+
+YouTube:
+[Conectar canal] [Dados da postagem] [Video salvo] [Historico]
+
+- Titulos maiores, numeros e funcoes destacados, cores por painel.
+- Tema claro, escuro e seguir sistema preservados.
+- Desktop: quatro paineis lado a lado. Telas intermediarias: duas colunas.
+  Celular: paineis empilhados para manter legibilidade.
+- Nenhuma alteracao nos provedores, roteiros, audio, filas ou regras de postagem.
+- Configuracoes e autorizacoes existentes sao preservadas.
+
+VALIDACAO
+72 testes existentes aprovados. Conferencia real no navegador em desktop 1920px,
+modo escuro e celular 390px: paineis lado a lado no desktop, empilhados no celular,
+sem rolagem horizontal ou erros Streamlit nas telas verificadas.
+Nenhuma chamada paga, geracao de video ou publicacao durante os testes.
